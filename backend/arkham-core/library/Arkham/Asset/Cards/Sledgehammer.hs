@@ -14,7 +14,11 @@ sledgehammer :: AssetCard Sledgehammer
 sledgehammer = asset Sledgehammer Cards.sledgehammer
 
 instance HasAbilities Sledgehammer where
-  getAbilities (Sledgehammer a) = [restrictedAbility a 1 ControlsThis fightAction_, restrictedAbility a 2 ControlsThis (ActionAbility [#fight] (ActionCost 2))]
+
+  getAbilities (Sledgehammer a) =
+    [ restrictedAbility a 1 ControlsThis fightAction_
+    , restrictedAbility a 2 ControlsThis (ActionAbility [#fight] (ActionCost 2))
+    ]
 
 instance RunMessage Sledgehammer where
   runMessage msg a@(Sledgehammer attrs) = case msg of
@@ -29,3 +33,4 @@ instance RunMessage Sledgehammer where
       pushAll [skillTestModifiers source iid [DamageDealt 2, SkillModifier #combat 2], chooseFight]
       pure a
     _ -> Sledgehammer <$> runMessage msg attrs
+
