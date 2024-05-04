@@ -798,6 +798,7 @@ allAssets =
     , --- guardian/mystic [eote]
       SomeAssetCard brandOfCthugha1
     , SomeAssetCard brandOfCthugha4
+    , SomeAssetCard cyclopeanHammer5
     , --- guardian/survivor [eote]
       SomeAssetCard sledgehammer
     , SomeAssetCard sledgehammer4

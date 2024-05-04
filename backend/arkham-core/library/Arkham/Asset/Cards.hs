@@ -236,6 +236,7 @@ allPlayerAssetCards =
       , crystallineElderSign3
       , crystallizerOfDreams
       , curseOfAeons3
+      , cyclopeanHammer5
       , daisysToteBag
       , daisysToteBagAdvanced
       , darioElAmin
@@ -5110,6 +5111,14 @@ brandOfCthugha4 =
     , cdSlots = [#arcane]
     }
 
+cyclopeanHammer5 :: CardDef
+cyclopeanHammer5 =
+  (multiClassAsset "08093" "Cyclopean Hammer" 5 [Guardian, Mystic])
+    { cdSkills = [#willpower, #willpower, #combat, #combat]
+    , cdCardTraits = setFromList [Item, Relic, Weapon, Melee]
+    , cdSlots = [#hand, #hand]
+    , cdLevel = Just 5
+    }
 
 sledgehammer :: CardDef
 sledgehammer =
@@ -5125,6 +5134,7 @@ sledgehammer4 =
     { cdSkills = [#combat, #combat, #combat]
     , cdCardTraits = setFromList [Item, Tool, Weapon, Melee]
     , cdSlots = [#hand, #hand]
+    , cdLevel = Just 4
     }
 
 pocketTelescope :: CardDef
