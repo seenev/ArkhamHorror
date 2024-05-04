@@ -1083,7 +1083,6 @@ runGameMessage msg g = case msg of
           , getModifiers (CardTarget card)
           , getModifiers iid
           ]
-    investigator' <- getInvestigator iid
     let
       isFast = case card of
         PlayerCard pc ->
@@ -1092,27 +1091,17 @@ runGameMessage msg g = case msg of
             `elem` allModifiers
         _ -> False
       isPlayAction = if isFast then NotPlayAction else IsPlayAction
-      actions = case cdActions (toCardDef card) of
-        [] -> [Action.Play | not isFast]
-        as -> as
     activeCost <- createActiveCostForCard iid card isPlayAction windows'
-
-    actionCost <-
-      if isFast
-        then pure Cost.Free
-        else Cost.ActionCost <$> getActionCost (toAttrs investigator') actions
-
-    let activeCost' = addActiveCostCost actionCost activeCost
 
     let historyItem = mempty {historyPlayedCards = [card]}
         turn = isJust $ view turnPlayerInvestigatorIdL g
         setTurnHistory = if turn then turnHistoryL %~ insertHistory iid historyItem else id
 
-    push $ CreatedCost $ activeCostId activeCost'
+    push $ CreatedCost $ activeCostId activeCost
     pure
       $ g
       & activeCostL
-      %~ insertMap (activeCostId activeCost') activeCost'
+      %~ insertMap (activeCostId activeCost) activeCost
       & (phaseHistoryL %~ insertHistory iid historyItem)
       & setTurnHistory
   PlayCard iid card mtarget payment windows' False -> do
