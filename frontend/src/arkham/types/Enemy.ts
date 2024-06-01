@@ -21,8 +21,8 @@ export type Enemy = {
   placement: Placement;
   keys: ArkhamKey[];
   modifiers: Modifier[];
-  fight: number;
-  evade: number;
+  fight: number | null;
+  evade: number | null;
   healthDamage: number;
   sanityDamage: number;
   health: GameValue | null;
@@ -43,8 +43,8 @@ export const enemyDecoder = JsonDecoder.object<Enemy>({
   id: JsonDecoder.string,
   cardId: JsonDecoder.string,
   cardCode: JsonDecoder.string,
-  fight: JsonDecoder.number,
-  evade: JsonDecoder.number,
+  fight: JsonDecoder.nullable(JsonDecoder.number),
+  evade: JsonDecoder.nullable(JsonDecoder.number),
   healthDamage: JsonDecoder.number,
   sanityDamage: JsonDecoder.number,
   health: JsonDecoder.failover(null, gameValueDecoder),
