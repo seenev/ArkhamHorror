@@ -8,6 +8,7 @@ import Arkham.Discover
 import Arkham.Effect.Runner
 import Arkham.Investigate
 import Arkham.Matcher hiding (RevealChaosToken)
+import Arkham.Message qualified as Msg
 import Arkham.Prelude
 
 newtype EyeOfChaos = EyeOfChaos AssetAttrs
@@ -44,8 +45,8 @@ eyeOfChaosEffect = cardEffect EyeOfChaosEffect Cards.eyeOfChaos
 instance RunMessage EyeOfChaosEffect where
   runMessage msg e@(EyeOfChaosEffect attrs) = case msg of
     RevealChaosToken _ iid token | InvestigatorTarget iid == attrs.target -> do
-      case attrs.source of
-        AbilitySource (AssetSource assetId) 1 ->
+      let
+        handleIt assetId = do
           when (token.face == #curse) do
             lids <- select $ ConnectedLocation <> LocationWithDiscoverableCluesBy (InvestigatorWithId iid)
             stillInPlay <- selectAny $ AssetWithId assetId
@@ -54,12 +55,12 @@ instance RunMessage EyeOfChaosEffect where
             pushAll
               $ [ chooseOrRunOne
                   player
-                  $ [Label "Place 1 Charge on Eye of Chaos" [AddUses assetId Charge 1] | stillInPlay]
+                  $ [Label "Place 1 Charge on Eye of Chaos" [AddUses attrs.source assetId Charge 1] | stillInPlay]
                   <> [ Label
                         "Discover 1 clues at a connecting location"
                         [ chooseOne
                             player
-                            [ targetLabel lid' [toMessage $ discover iid lid' attrs 1]
+                            [ targetLabel lid' [Msg.DiscoverClues iid $ discover lid' attrs 1]
                             | lid' <- lids
                             ]
                         ]
@@ -67,6 +68,9 @@ instance RunMessage EyeOfChaosEffect where
                 | stillInPlay || notNull lids
                 ]
               <> [disable attrs]
+      case attrs.source of
+        AbilitySource (AssetSource assetId) 1 -> handleIt assetId
+        AbilitySource (ProxySource (CardIdSource _) (AssetSource assetId)) 1 -> handleIt assetId
         _ -> error "wrong source"
       pure e
     SkillTestEnds _ _ -> do

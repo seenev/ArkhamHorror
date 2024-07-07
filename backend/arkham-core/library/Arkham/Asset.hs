@@ -785,34 +785,57 @@ allAssets =
       SomeAssetCard downTheRabbitHole
     , SomeAssetCard dragonPole
     , SomeAssetCard closeTheCircle1
+    , SomeAssetCard astronomicalAtlas3
+    , SomeAssetCard healingWords3
     , SomeAssetCard grounded3
+    , SomeAssetCard trueMagickReworkingReality5
     , --- survivor [eote]
       SomeAssetCard shortSupply
     , SomeAssetCard schoffnersCatalogue
     , SomeAssetCard bandages
     , SomeAssetCard bangleOfJinxes1
+    , SomeAssetCard fireExtinguisher3
     , SomeAssetCard plucky3
     , --- guardian/seeker [eote]
       SomeAssetCard medicalStudent
     , SomeAssetCard michaelLeigh5
+    , --- guardian/rogue [eote]
+      SomeAssetCard oldShotgun2
+    , SomeAssetCard quickdrawHolster4
     , --- guardian/mystic [eote]
       SomeAssetCard brandOfCthugha1
+    , SomeAssetCard nkosiMabatiEnigmaticWarlock3
     , SomeAssetCard brandOfCthugha4
     , SomeAssetCard cyclopeanHammer5
     , --- guardian/survivor [eote]
       SomeAssetCard sledgehammer
+    , SomeAssetCard protectiveGear2
     , SomeAssetCard sledgehammer4
     , --- seeker/rogue [eote]
       SomeAssetCard pocketTelescope
     , SomeAssetCard eonChart1
     , SomeAssetCard geneBeauregard3
     , SomeAssetCard eonChart4
+    , --- seeker/mystic [eote]
+      SomeAssetCard divination1
+    , SomeAssetCard divination4
+    , --- seeker/survivor [eote]
+      SomeAssetCard professorWilliamWebbFinderOfHiddenConnections
+    , SomeAssetCard icePick1
+    , SomeAssetCard professorWilliamWebbFinderOfHiddenConnections2
+    , SomeAssetCard icePick3
+    , --- rogue/mystic [eote]
+      SomeAssetCard blur1
+    , SomeAssetCard blur4
     , --- rogue/survivor [eote]
       SomeAssetCard unscrupulousLoan3
     , SomeAssetCard preciousMementoFromAFormerLife4
     , SomeAssetCard preciousMementoFromAFutureLife4
     , --- mystic/survivor [eote]
       SomeAssetCard talismanOfProtection
+    , SomeAssetCard earthlySerenity1
+    , SomeAssetCard enchantedBow2
+    , SomeAssetCard earthlySerenity4
     , --- guardian/mystic/survivor [eote]
       SomeAssetCard prophetic3
     , --- guardian/seeker/mystic [eote]
@@ -825,15 +848,24 @@ allAssets =
       SomeAssetCard antiquary3
     , --- neutral [eote]
       SomeAssetCard inTheThickOfIt
+    , SomeAssetCard heavyFurs
     , SomeAssetCard sledDog
     , SomeAssetCard rodOfAnimalism1
     , -- The Scarlet Keys
-      --- guardian [tsk]
-      -- , SomeAssetCard runicAxe
-      SomeAssetCard guardDog2
+      --- signature
+      SomeAssetCard bonesaw
+    , SomeAssetCard woundedBystanderOnDeathsDoorstep
+    , SomeAssetCard grapplingHook
+    , SomeAssetCard darrellsKodak
+    , SomeAssetCard bonnieWalshLoyalAssistant
+    , --- guardian [tsk]
+      SomeAssetCard huntersArmor
+    , SomeAssetCard runicAxe
+    , SomeAssetCard guardDog2
     , SomeAssetCard handcuffs2
     , --- seeker [tsk]
-      SomeAssetCard empiricalHypothesis
+      SomeAssetCard alchemicalDistillation
+    , SomeAssetCard empiricalHypothesis
     , SomeAssetCard fingerprintKit4
     , --- rogue [tsk]
       SomeAssetCard chuckFergus2

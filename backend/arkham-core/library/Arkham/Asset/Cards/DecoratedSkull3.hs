@@ -43,10 +43,10 @@ getUsesPaid _ = 0
 instance RunMessage DecoratedSkull3 where
   runMessage msg a@(DecoratedSkull3 attrs) = case msg of
     UseThisAbility _ (isSource attrs -> True) 1 -> do
-      push $ AddUses (toId attrs) Charge 1
+      push $ AddUses (attrs.ability 1) (toId attrs) Charge 1
       pure a
     UseCardAbility iid (isSource attrs -> True) 2 _ (getUsesPaid -> n) -> do
-      drawing <- drawCards iid (toAbilitySource attrs 2) n
+      let drawing = drawCards iid (toAbilitySource attrs 2) n
       pushAll [drawing, TakeResources iid n (toAbilitySource attrs 2) False]
       pure a
     _ -> DecoratedSkull3 <$> runMessage msg attrs

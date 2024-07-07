@@ -29,7 +29,6 @@ data Source
   | ActiveCostSource ActiveCostId
   | ActDeckSource
   | ActSource ActId
-  | AfterSkillTestSource
   | AgendaDeckSource
   | AgendaSource AgendaId
   | AgendaMatcherSource AgendaMatcher
@@ -77,7 +76,20 @@ _AssetSource = prism' AssetSource $ \case
   _ -> Nothing
 
 instance HasField "asset" Source (Maybe AssetId) where
-  getField = preview _AssetSource
+  getField = \case
+    AssetSource aid -> Just aid
+    ProxySource (CardIdSource _) s -> s.asset
+    ProxySource s _ -> s.asset
+    AbilitySource s _ -> s.asset
+    _ -> Nothing
+
+instance HasField "treachery" Source (Maybe TreacheryId) where
+  getField = \case
+    TreacherySource aid -> Just aid
+    ProxySource (CardIdSource _) s -> s.treachery
+    ProxySource s _ -> s.treachery
+    AbilitySource s _ -> s.treachery
+    _ -> Nothing
 
 $(deriveJSON defaultOptions ''Source)
 
@@ -106,6 +118,9 @@ instance Sourceable Source where
 instance Sourceable a => Sourceable (a `With` b) where
   toSource (a `With` _) = toSource a
   isSource (a `With` _) = isSource a
+
+instance Sourceable CardId where
+  toSource = CardIdSource
 
 instance Sourceable TreacheryId where
   toSource = TreacherySource

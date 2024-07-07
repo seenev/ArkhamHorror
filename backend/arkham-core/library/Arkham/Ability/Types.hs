@@ -8,6 +8,7 @@ import Arkham.Ability.Limit
 import Arkham.Ability.Type
 import Arkham.Card.CardCode
 import Arkham.Card.EncounterCard
+import Arkham.Cost
 import Arkham.Criteria (Criterion)
 import Arkham.Json
 import Arkham.Matcher
@@ -32,8 +33,12 @@ data Ability = Ability
   , abilityDisplayAsAction :: Bool
   , abilityDelayAdditionalCosts :: Bool
   , abilityBasic :: Bool
+  , abilityAdditionalCosts :: [Cost]
   }
   deriving stock (Show, Ord, Data)
+
+instance HasCost Ability where
+  overCost f ab = ab {Arkham.Ability.Types.abilityType = overCost f (abilityType ab)}
 
 instance HasField "source" Ability Source where
   getField = abilitySource
@@ -102,14 +107,28 @@ instance FromJSON Ability where
     abilityDisplayAsAction <- o .: "displayAsAction"
     abilityDelayAdditionalCosts <- o .:? "delayAdditionalCosts" .!= False
     abilityBasic <- o .:? "basic" .!= False
+    abilityAdditionalCosts <- o .:? "additionalCosts" .!= []
     pure Ability {..}
 
 newtype DifferentAbility = DifferentAbility Ability
   deriving newtype (Show, ToJSON, FromJSON)
 
 instance Eq DifferentAbility where
-  (DifferentAbility a) == (DifferentAbility b) = case abilityIndex a of
-    100 -> abilityIndex b == 100
-    101 -> abilityIndex b == 101
-    102 -> abilityIndex b == 102
-    _ -> (abilityCardCode a == abilityCardCode b) && (abilityIndex a == abilityIndex b)
+  (DifferentAbility a) == (DifferentAbility b) =
+    case abilityIndex a of
+      100 -> abilityIndex b == 100 && sameSource
+      101 -> abilityIndex b == 101 && sameSource
+      102 -> abilityIndex b == 102 && sameSource
+      _ -> (abilityCardCode a == abilityCardCode b) && (abilityIndex a == abilityIndex b)
+   where
+    sameSource = case abilitySource a of
+      EnemySource _ -> case abilitySource b of
+        EnemySource _ -> True
+        _ -> False
+      LocationSource _ -> case abilitySource b of
+        LocationSource _ -> True
+        _ -> False
+      InvestigatorSource _ -> case abilitySource b of
+        InvestigatorSource _ -> True
+        _ -> False
+      _ -> error $ "Unhandled samesource in DifferentAbility: " <> show (abilitySource a, abilitySource b)

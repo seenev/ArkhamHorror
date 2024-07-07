@@ -13,6 +13,7 @@ import Arkham.Helpers.Modifiers
 import Arkham.Investigator.Cards qualified as Cards
 import Arkham.Investigator.Runner
 import Arkham.Matcher
+import Arkham.Message qualified as Msg
 import Arkham.Projection
 import Arkham.Skill.Cards qualified as Cards
 
@@ -65,9 +66,8 @@ instance RunMessage JeromeDavids where
       push $ CancelNext (toSource attrs) RevelationMessage
       pure i
     ResolveChaosToken _drawnToken ElderSign iid | iid == toId attrs -> do
-      push $ discoverAtYourLocation iid ElderSign 1
+      push $ Msg.DiscoverClues iid $ discoverAtYourLocation ElderSign 1
       pure i
-    DrawStartingHand iid | attrs `is` iid -> pure i
     InvestigatorMulligan iid | attrs `is` iid -> do
       push $ FinishedWithMulligan iid
       pure i
@@ -80,5 +80,5 @@ instance RunMessage JeromeDavids where
       pushAll [RemoveCardFromHand iid cardId, RemovedFromGame card]
       pure i
     Do (DiscardCard iid _ _) | attrs `is` iid -> pure i
-    DrawCards cardDraw | attrs `is` cardDraw.investigator -> pure i
+    DrawCards iid cardDraw | iid == attrs.id && cardDraw.isPlayerDraw -> pure i
     _ -> JeromeDavids <$> runMessage msg attrs

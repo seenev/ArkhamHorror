@@ -21,6 +21,8 @@ import Arkham.Classes.RunMessage.Internal
 import Arkham.Deck qualified as Deck
 import Arkham.DeckBuilding.Adjustment
 import Arkham.Discard
+import Arkham.Discover
+import Arkham.Draw.Types
 import Arkham.Helpers
 import Arkham.Id
 import Arkham.Investigator.Cards
@@ -123,6 +125,7 @@ data instance Field Investigator :: Type -> Type where
   InvestigatorKeys :: Field Investigator (Set ArkhamKey)
   InvestigatorPlayerId :: Field Investigator PlayerId
   InvestigatorBondedCards :: Field Investigator [Card]
+  InvestigatorDrawing :: Field Investigator (Maybe (CardDraw Message))
   InvestigatorLog :: Field Investigator CampaignLog
   InvestigatorUnhealedHorrorThisRound :: Field Investigator Int
   InvestigatorMeta :: Field Investigator Value
@@ -191,6 +194,7 @@ instance FromJSON (SomeField Investigator) where
     "InvestigatorKeys" -> pure $ SomeField InvestigatorKeys
     "InvestigatorPlayerId" -> pure $ SomeField InvestigatorPlayerId
     "InvestigatorBondedCards" -> pure $ SomeField InvestigatorBondedCards
+    "InvestigatorDrawing" -> pure $ SomeField InvestigatorDrawing
     "InvestigatorLog" -> pure $ SomeField InvestigatorLog
     "InvestigatorUnhealedHorrorThisRound" -> pure $ SomeField InvestigatorUnhealedHorrorThisRound
     "InvestigatorMeta" -> pure $ SomeField InvestigatorMeta
@@ -259,6 +263,8 @@ data InvestigatorAttrs = InvestigatorAttrs
     investigatorLog :: CampaignLog
   , -- internal tracking
     investigatorDiscarding :: Maybe (HandDiscard Message)
+  , investigatorDiscover :: Maybe Discover
+  , investigatorDrawing :: Maybe (CardDraw Message)
   , -- deck building
     investigatorDeckBuildingAdjustments :: [DeckBuildingAdjustment]
   }
@@ -375,6 +381,8 @@ instance FromJSON InvestigatorAttrs where
     investigatorKeys <- o .: "keys"
     investigatorLog <- o .:? "log" .!= mempty
     investigatorDiscarding <- o .: "discarding"
+    investigatorDiscover <- o .:? "discover"
+    investigatorDrawing <- o .:? "drawing"
     investigatorDeckBuildingAdjustments <- o .:? "deckBuildingAdjustments" .!= mempty
     investigatorBeganRoundAt <- o .:? "beganRoundAt"
 
@@ -443,6 +451,10 @@ instance HasField "ability" InvestigatorAttrs (Int -> Source) where
   getField this = toAbilitySource this
 
 data Investigator = forall a. IsInvestigator a => Investigator a
+
+instance AsId Investigator where
+  type IdOf Investigator = InvestigatorId
+  asId = toId
 
 instance HasField "placement" Investigator Placement where
   getField (Investigator a) = attr investigatorPlacement a

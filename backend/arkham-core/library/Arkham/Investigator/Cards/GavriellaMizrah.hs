@@ -13,6 +13,7 @@ import Arkham.Helpers.Modifiers
 import Arkham.Investigator.Cards qualified as Cards
 import Arkham.Investigator.Runner
 import Arkham.Matcher
+import Arkham.Message qualified as Msg
 import Arkham.Projection
 import Arkham.Treachery.Cards qualified as Cards
 
@@ -60,13 +61,12 @@ instance HasChaosTokenValue GavriellaMizrah where
 instance RunMessage GavriellaMizrah where
   runMessage msg i@(GavriellaMizrah attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ discoverAtYourLocation iid (toAbilitySource attrs 1) 1
+      push $ Msg.DiscoverClues iid $ discoverAtYourLocation (attrs.ability 1) 1
       pure i
     ResolveChaosToken _ ElderSign iid | attrs `is` iid -> do
       pushAll
         [HealHorror (toTarget attrs) (toSource attrs) 1, HealDamage (toTarget attrs) (toSource attrs) 1]
       pure i
-    DrawStartingHand iid | attrs `is` iid -> pure i
     InvestigatorMulligan iid | iid == toId attrs -> do
       push $ FinishedWithMulligan iid
       pure i
@@ -79,5 +79,5 @@ instance RunMessage GavriellaMizrah where
       pushAll [RemoveCardFromHand iid cardId, RemovedFromGame card]
       pure i
     Do (DiscardCard iid _ _) | attrs `is` iid -> pure i
-    DrawCards cardDraw | attrs `is` cardDraw.investigator -> pure i
+    DrawCards iid cardDraw | iid == attrs.id && cardDraw.isPlayerDraw -> pure i
     _ -> GavriellaMizrah <$> runMessage msg attrs

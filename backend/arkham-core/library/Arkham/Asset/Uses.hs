@@ -1,35 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Arkham.Asset.Uses where
+module Arkham.Asset.Uses (module Arkham.Asset.Uses, module Arkham.Token) where
 
 import Arkham.Prelude
+import Arkham.Token
 
-import Data.Aeson.TH
-
-data UseType
-  = Ammo
-  | Supply
-  | Secret
-  | Charge
-  | Try
-  | Bounty
-  | Whistle
-  | Resource
-  | Key
-  | Lock
-  | Evidence
-  | Offering
-  | Leyline
-  | Aether
-  deriving stock (Show, Eq, Ord, Data)
-
-$(deriveJSON defaultOptions ''UseType)
-
-deriving anyclass instance ToJSONKey UseType
-deriving anyclass instance FromJSONKey UseType
+type UseType = Token
 
 data Uses n = NoUses | Uses UseType n | UsesWithLimit UseType n n
-  deriving stock (Show, Eq, Ord, Data)
+  deriving stock (Show, Eq, Ord, Data, Functor)
 
 use :: Uses Int -> Uses Int
 use = useN 1

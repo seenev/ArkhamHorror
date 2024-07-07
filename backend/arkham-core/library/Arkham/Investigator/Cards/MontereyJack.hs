@@ -28,7 +28,7 @@ instance HasAbilities MontereyJack where
         attrs
         1
         (Self <> youExist (oneOf [can.draw.cards, can.gain.resources, DistanceFromRoundStart (atLeast 1)]))
-        $ ReactionAbility (RoundEnds #when) Free
+        $ freeReaction (RoundEnds #when)
     ]
 
 instance HasChaosTokenValue MontereyJack where
@@ -62,4 +62,4 @@ instance RunMessage MontereyJack where
           $ [Label "Gain 1 resource" [x] | x <- toList mGainResources]
           <> [Label "Draw 1 card" [x] | x <- toList mDrawCards]
       pure i
-    _ -> MontereyJack <$> lift (runMessage msg attrs)
+    _ -> MontereyJack <$> liftRunMessage msg attrs

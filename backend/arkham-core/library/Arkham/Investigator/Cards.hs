@@ -65,6 +65,12 @@ allInvestigatorCards =
       , montereyJack
       , lilyChen
       , bobJenkins
+      , carsonSinclair
+      , vincentLee
+      , kymaniJones
+      , aminaZidane
+      , darrellSimmons
+      , charlieKane
       , nathanielCho
       , harveyWalters
       , winifredHabbamock
@@ -423,6 +429,54 @@ bobJenkins =
     ("Bob Jenkins" <:> "The Salesman")
     Survivor
     [Entrepreneur]
+
+carsonSinclair :: CardDef
+carsonSinclair =
+  investigator
+    "09001"
+    ("Carson Sinclair" <:> "The Butler")
+    Guardian
+    [Assistant]
+
+vincentLee :: CardDef
+vincentLee =
+  investigator
+    "09004"
+    ("Vincent Lee" <:> "The Doctor")
+    Seeker
+    [Medic]
+
+kymaniJones :: CardDef
+kymaniJones =
+  investigator
+    "09008"
+    ("Kymani Jones" <:> "The Security Consultant")
+    Rogue
+    [Criminal]
+
+aminaZidane :: CardDef
+aminaZidane =
+  investigator
+    "09011"
+    ("Amina Zidane" <:> "The Operator")
+    Mystic
+    [Chosen, Cursed]
+
+darrellSimmons :: CardDef
+darrellSimmons =
+  investigator
+    "09015"
+    ("Darrell Simmons" <:> "The Photographer")
+    Survivor
+    [Reporter]
+
+charlieKane :: CardDef
+charlieKane =
+  investigator
+    "09018"
+    ("Charlie Kane" <:> "The Politician")
+    Neutral
+    [Civic, Socialite]
 
 nathanielCho :: CardDef
 nathanielCho =

@@ -28,6 +28,7 @@ import Arkham.Card
 import Arkham.ChaosBag.RevealStrategy
 import Arkham.ChaosBagStepState
 import Arkham.ChaosToken
+import Arkham.Choose
 import Arkham.ClassSymbol
 import Arkham.Cost
 import Arkham.DamageEffect
@@ -73,7 +74,6 @@ import Arkham.Slot
 import Arkham.Source
 import Arkham.Target
 import Arkham.Tarot
-import Arkham.Token
 import Arkham.Token qualified as Token
 import Arkham.Trait
 import Arkham.Window (Window, WindowType)
@@ -146,6 +146,26 @@ instance Sourceable a => Is a Source where
 instance Targetable a => Is a Target where
   is = isTarget
 
+pattern MovedDamage :: Source -> Source -> Target -> Int -> Message
+pattern MovedDamage source source' target n <- MoveTokens source source' target Token.Damage n
+  where
+    MovedDamage source source' target n = MoveTokens source source' target Token.Damage n
+
+pattern MovedHorror :: Source -> Source -> Target -> Int -> Message
+pattern MovedHorror source source' target n <- MoveTokens source source' target Token.Horror n
+  where
+    MovedHorror source source' target n = MoveTokens source source' target Token.Horror n
+
+pattern MovedClues :: Source -> Source -> Target -> Int -> Message
+pattern MovedClues source source' target n <- MoveTokens source source' target Token.Clue n
+  where
+    MovedClues source source' target n = MoveTokens source source' target Token.Clue n
+
+pattern MoveUses :: Source -> Source -> Target -> UseType -> Int -> Message
+pattern MoveUses source source' target useType' n <- MoveTokens source source' target useType' n
+  where
+    MoveUses source source' target useType' n = MoveTokens source source' target useType' n
+
 pattern AdvanceAgenda :: AgendaId -> Message
 pattern AdvanceAgenda aid <- AdvanceAgendaBy aid AgendaAdvancedWithDoom
   where
@@ -210,9 +230,8 @@ pattern RemoveResources source target n = RemoveTokens source target Token.Resou
 pattern CancelNext :: Source -> MessageType -> Message
 pattern CancelNext source msgType = CancelEachNext source [msgType]
 
-pattern AttachTreachery :: TreacheryId -> Target -> Message
-pattern AttachTreachery tid target =
-  PlaceTreachery tid (TreacheryAttachedTo target)
+pattern CancelRevelation :: Source -> Message
+pattern CancelRevelation source = CancelEachNext source [RevelationMessage]
 
 pattern PlayThisEvent :: InvestigatorId -> EventId -> Message
 pattern PlayThisEvent iid eid <- InvestigatorPlayEvent iid eid _ _ _
@@ -270,24 +289,6 @@ instance IsMessage (EnemyCreation Message) where
   toMessage = CreateEnemy
   {-# INLINE toMessage #-}
 
-instance IsMessage Discover where
-  toMessage discovery = case discovery.location of
-    DiscoverYourLocation ->
-      InvestigatorDiscoverCluesAtTheirLocation
-        discovery.investigator
-        discovery.source
-        discovery.count
-        discovery.action
-    DiscoverAtLocation lid ->
-      DiscoverCluesAtLocation
-        discovery.investigator
-        lid
-        discovery.source
-        discovery.count
-        (if discovery.action == Just #investigate then IsInvestigate else NotInvestigate)
-        discovery.action
-  {-# INLINE toMessage #-}
-
 data ReplaceStrategy = DefaultReplace | Swap
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -328,12 +329,15 @@ data CanAdvance = CanAdvance | CanNotAdvance
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
-data IsInvestigate = IsInvestigate | NotInvestigate
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (ToJSON, FromJSON)
+class AndThen a where
+  andThen :: a -> Message -> a
+
+instance AndThen (CardDraw Message) where
+  andThen cd msg = cd {cardDrawAndThen = Just msg}
 
 data Message
   = UseAbility InvestigatorId Ability [Window]
+  | AddSubscriber Target
   | SetInvestigator PlayerId Investigator
   | ResolvedAbility Ability -- INTERNAL, See Arbiter of Fates
   | -- Story Card Messages
@@ -402,9 +406,16 @@ data Message
     AddToScenarioDeck ScenarioDeckKey Target
   | AddCardToScenarioDeck ScenarioDeckKey Card
   | ShuffleScenarioDeckIntoEncounterDeck ScenarioDeckKey
-  | DrawFromScenarioDeck InvestigatorId ScenarioDeckKey Target Int
-  | DrawRandomFromScenarioDeck InvestigatorId ScenarioDeckKey Target Int
-  | DrewFromScenarioDeck InvestigatorId ScenarioDeckKey Target [Card]
+  | DrawStartingHand InvestigatorId
+  | DrawCards InvestigatorId (CardDraw Message)
+  | DoDrawCards InvestigatorId
+  | DrawEnded InvestigatorId
+  | Instead Message Message
+  | ReplaceCurrentCardDraw InvestigatorId (CardDraw Message)
+  | DrawEncounterCards Target Int -- Meant to allow events to handle (e.g. first watch)
+  | DrewCards InvestigatorId CardDrew
+  | ChooseFrom InvestigatorId Choose
+  | ChoseCards InvestigatorId Chosen
   | SetScenarioDeck ScenarioDeckKey [Card]
   | RemoveCardFromScenarioDeck ScenarioDeckKey Card
   | SwapPlaces (Target, LocationId) (Target, LocationId) -- we include the placement so it is up to date
@@ -417,7 +428,7 @@ data Message
   | RemoveAllChaosTokens ChaosTokenFace
   | RemoveChaosToken ChaosTokenFace
   | -- Asset Uses
-    AddUses AssetId UseType Int
+    AddUses Source AssetId UseType Int
   | -- Asks
     AskPlayer Message
   | Ask PlayerId (Question Message)
@@ -461,6 +472,7 @@ data Message
   | CancelSkillEffects -- used by scenarios to cancel skill cards
   | CancelHorror InvestigatorId Int
   | CancelDamage InvestigatorId Int
+  | CancelAssetDamage AssetId Source Int
   | CheckAttackOfOpportunity InvestigatorId Bool
   | CheckDefeated Source Target
   | AssignDamage Target
@@ -512,7 +524,7 @@ data Message
   | CreateEventAt InvestigatorId Card Placement
   | PlaceAsset AssetId Placement
   | PlaceEvent InvestigatorId EventId Placement
-  | PlaceTreachery TreacheryId TreacheryPlacement
+  | PlaceTreachery TreacheryId Placement
   | PlaceSkill SkillId Placement
   | PlaceKey Target ArkhamKey
   | CreateStoryAssetAtLocationMatching Card LocationMatcher
@@ -521,7 +533,6 @@ data Message
   | CreatedEffect EffectId (Maybe (EffectMetadata Window Message)) Source Target
   | CrossOutRecord CampaignLogKey
   | SetCampaignLog CampaignLog
-  | Damage Target Source Int
   | DeckHasNoCards InvestigatorId (Maybe Target)
   | DisableEffect EffectId
   | Discard (Maybe InvestigatorId) Source Target
@@ -536,13 +547,10 @@ data Message
   | Discarded Target Source Card
   | DiscardedTopOfEncounterDeck InvestigatorId [EncounterCard] Source Target
   | DiscardedTopOfDeck InvestigatorId [PlayerCard] Source Target
-  | DiscoverClues InvestigatorId LocationId Source Int IsInvestigate (Maybe Action)
-  | DiscoverCluesAtLocation InvestigatorId LocationId Source Int IsInvestigate (Maybe Action)
+  | DiscoverClues InvestigatorId Discover
   | DisengageEnemy InvestigatorId EnemyId
   | DisengageEnemyFromAll EnemyId
   | DrawAnotherChaosToken InvestigatorId
-  | DrawCards CardDraw -- use drawCards
-  | DrawEncounterCards Target Int -- Meant to allow events to handle (e.g. first watch)
   | DrawChaosToken InvestigatorId ChaosToken
   | DrewPlayerEnemy InvestigatorId Card
   | DrewTreachery InvestigatorId (Maybe DeckSignifier) Card
@@ -578,6 +586,7 @@ data Message
   | EnemyAttackIfEngaged EnemyId (Maybe InvestigatorId)
   | EnemyAttacks [Message]
   | ChangeEnemyAttackTarget EnemyId Target
+  | ChangeEnemyAttackDetails EnemyId EnemyAttackDetails
   | CheckEnemyEngagement InvestigatorId
   | EnemyCheckEngagement EnemyId
   | EnemyDamage EnemyId DamageAssignment
@@ -630,10 +639,7 @@ data Message
   | HealHorror Target Source Int
   | HealDamageDelayed Target Source Int
   | HealHorrorDelayed Target Source Int
-  | MovedHorror Source Target Int
   | ReassignHorror Source Target Int
-  | MovedDamage Source Target Int
-  | MovedClues Source Target Int
   | HealHorrorWithAdditional Target Source Int
   | AdditionalHealHorror Target Source Int
   | HealDamageDirectly Target Source Int
@@ -679,8 +685,6 @@ data Message
   | InvestigatorIsDefeated Source InvestigatorId
   | InvestigatorDirectDamage InvestigatorId Source Int Int
   | InvestigatorDiscardAllClues Source InvestigatorId
-  | InvestigatorDiscoverClues InvestigatorId LocationId Source Int (Maybe Action)
-  | InvestigatorDiscoverCluesAtTheirLocation InvestigatorId Source Int (Maybe Action)
   | -- | meant to be used internally by investigators                  ^ damage ^ horror
     InvestigatorDoAssignDamage
       InvestigatorId
@@ -691,8 +695,6 @@ data Message
       Int
       [Target]
       [Target]
-  | InvestigatorDrawEncounterCard InvestigatorId
-  | InvestigatorDoDrawEncounterCard InvestigatorId
   | InvestigatorDrawEnemy InvestigatorId EnemyId
   | InvestigatorDrewEncounterCard InvestigatorId EncounterCard
   | InvestigatorDrewPlayerCard InvestigatorId PlayerCard
@@ -762,7 +764,7 @@ data Message
   | PlaceLocationMatching CardMatcher
   | PlaceTokens Source Target Token Int
   | RemoveTokens Source Target Token Int
-  | MoveTokens Source Target Token Int
+  | MoveTokens Source Source Target Token Int
   | PlaceUnderneath Target [Card]
   | PlacedUnderneath Target Card
   | PlaceNextTo Target [Card]
@@ -916,8 +918,7 @@ data Message
   | SpawnEnemyAtEngagedWith Card LocationId InvestigatorId
   | SpendClues Int [InvestigatorId]
   | SpendResources InvestigatorId Int
-  | SpendUses Target UseType Int
-  | MoveUses Source Target UseType Int
+  | SpendUses Source Target UseType Int
   | SpentAllUses Target
   | StartCampaign
   | StartScenario ScenarioId
@@ -941,7 +942,6 @@ data Message
   | SetAsideCards [Card]
   | TakeResources InvestigatorId Int Source Bool
   | DrawStartingHands
-  | DrawStartingHand InvestigatorId
   | TakeStartingResources InvestigatorId
   | TakenActions InvestigatorId [Action]
   | PerformedActions InvestigatorId [Action]
@@ -1074,8 +1074,8 @@ questionLabel lbl pid q = Ask pid (QuestionLabel lbl Nothing q)
 questionLabelWithCard :: Text -> CardCode -> PlayerId -> Question Message -> Message
 questionLabelWithCard lbl cCode pid q = Ask pid (QuestionLabel lbl (Just cCode) q)
 
-chooseOne :: PlayerId -> [UI Message] -> Message
-chooseOne _ [] = throw $ InvalidState "No messages for chooseOne"
+chooseOne :: HasCallStack => PlayerId -> [UI Message] -> Message
+chooseOne _ [] = error "No messages for chooseOne"
 chooseOne pid msgs = Ask pid (ChooseOne msgs)
 
 chooseOneDropDown :: PlayerId -> [(Text, Message)] -> Message

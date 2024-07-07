@@ -38,10 +38,10 @@ instance HasAbilities DecoratedSkull where
 instance RunMessage DecoratedSkull where
   runMessage msg a@(DecoratedSkull attrs) = case msg of
     UseThisAbility _ (isSource attrs -> True) 1 -> do
-      push $ AddUses (toId attrs) Charge 1
+      push $ AddUses (attrs.ability 1) (toId attrs) Charge 1
       pure a
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      drawing <- drawCards iid (toAbilitySource attrs 2) 1
+      let drawing = drawCards iid (toAbilitySource attrs 2) 1
       pushAll [drawing, TakeResources iid 1 (toAbilitySource attrs 2) False]
       pure a
     _ -> DecoratedSkull <$> runMessage msg attrs

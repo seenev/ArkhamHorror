@@ -21,7 +21,7 @@ instance RunMessage ScoutingTheVale where
   runMessage msg s@(ScoutingTheVale attrs) = runQueueT $ case msg of
     ResolveStory iid ResolveIt story' | story' == toId attrs -> do
       n <- perPlayer 2
-      lookAt iid attrs EncounterDeckTarget [fromTopOfDeck n] AnyCard (defer attrs)
+      lookAt iid attrs EncounterDeckTarget [fromTopOfDeck n] AnyCard (defer attrs IsNotDraw)
       cragOfTheGhouls <- selectJust $ locationIs Locations.cragOfTheGhouls
       gameModifier attrs cragOfTheGhouls Blank
       pure s
@@ -47,4 +47,4 @@ instance RunMessage ScoutingTheVale where
         | (c, rest) <- eachWithRest cards
         ]
       pure s
-    _ -> ScoutingTheVale <$> lift (runMessage msg attrs)
+    _ -> ScoutingTheVale <$> liftRunMessage msg attrs

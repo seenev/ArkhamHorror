@@ -23,7 +23,7 @@ import Arkham.Matcher
 import Arkham.Message.Lifted hiding (setActDeck, setAgendaDeck)
 import Arkham.Prelude
 import Arkham.Resolution
-import Arkham.Scenario.Runner hiding (chooseOne, drawCardsIfCan, story)
+import Arkham.Scenario.Runner hiding (chooseOne, drawCardsIfCan, drawEncounterCard, story)
 import Arkham.Scenario.Setup
 import Arkham.ScenarioLogKey
 import Arkham.Treachery.Cards qualified as Treacheries
@@ -137,7 +137,7 @@ instance RunMessage PointOfNoReturn where
       pure s
     FailedSkillTest iid _ _ (ChaosTokenTarget token) _ n -> do
       case token.face of
-        Cultist -> push $ InvestigatorDrawEncounterCard iid
+        Cultist -> drawEncounterCard iid Cultist
         ElderThing | n >= 2 -> do
           enemies <-
             select
@@ -180,4 +180,4 @@ instance RunMessage PointOfNoReturn where
           pure ()
         other -> throw $ UnknownResolution other
       pure s
-    _ -> PointOfNoReturn <$> lift (runMessage msg attrs)
+    _ -> PointOfNoReturn <$> liftRunMessage msg attrs

@@ -22,12 +22,15 @@ import Arkham.Card
 import Arkham.Card.PlayerCard (setPlayerCardOwner)
 import Arkham.ChaosBag ()
 import Arkham.ChaosToken
+import Arkham.Choose
 import Arkham.Classes.GameLogger
 import Arkham.Classes.HasChaosTokenValue
 import Arkham.Classes.Query hiding (matches)
 import Arkham.Classes.RunMessage
+import Arkham.Collection
 import Arkham.Deck qualified as Deck
 import Arkham.DefeatedBy
+import Arkham.Draw.Types
 import Arkham.EncounterCard.Source
 import Arkham.Enemy.Creation
 import Arkham.Enemy.Types (Enemy, Field (..))
@@ -389,23 +392,12 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
     error "The scenario should specify what to do for no resolution"
   LookAtTopOfDeck _ ScenarioDeckTarget _ ->
     error "The scenario should handle looking at the top of the scenario deck"
-  DrawFromScenarioDeck iid key target n -> case lookup key scenarioDecks of
-    Just [] -> pure a
-    Just xs -> do
-      let (drew, rest) = splitAt n xs
-      push (DrewFromScenarioDeck iid key target drew)
-      pure $ a & decksL . at key ?~ rest
-    _ ->
-      error
-        $ "Invalid scenario deck key "
-        <> show key
-        <> ", could not find deck in scenario"
-  DrawRandomFromScenarioDeck iid key target n ->
+  ChooseFrom iid choose | Just key <- collectionToScenarioDeckKey choose.collection ->
     case lookup key scenarioDecks of
       Just [] -> pure a
       Just xs -> do
-        (drew, rest) <- splitAt n <$> shuffleM xs
-        push (DrewFromScenarioDeck iid key target drew)
+        (drew, rest) <- splitAt choose.amount <$> shuffleM xs
+        push $ ChoseCards iid $ finalizeChoose choose drew
         pure $ a & decksL . at key ?~ rest
       _ ->
         error
@@ -601,20 +593,20 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
   ShuffleCardsIntoDeck (Deck.EncounterDeckByKey deckKey) cards -> do
     let
       encounterCards = mapMaybe (preview _EncounterCard) cards
-      filterCards = filter (`notElem` cards)
+      filterOutCards = filter (`notElem` cards)
     deck' <-
       withDeckM
         (shuffleM . (<> encounterCards) . filter (`notElem` encounterCards))
         (a ^. encounterDeckLensFromKey deckKey)
     pure
       $ a
-      & (cardsUnderAgendaDeckL %~ filterCards)
-      & (cardsUnderActDeckL %~ filterCards)
-      & (cardsNextToActDeckL %~ filterCards)
-      & (cardsNextToAgendaDeckL %~ filterCards)
-      & (cardsUnderScenarioReferenceL %~ filterCards)
-      & (setAsideCardsL %~ filterCards)
-      & (victoryDisplayL %~ filterCards)
+      & (cardsUnderAgendaDeckL %~ filterOutCards)
+      & (cardsUnderActDeckL %~ filterOutCards)
+      & (cardsNextToActDeckL %~ filterOutCards)
+      & (cardsNextToAgendaDeckL %~ filterOutCards)
+      & (cardsUnderScenarioReferenceL %~ filterOutCards)
+      & (setAsideCardsL %~ filterOutCards)
+      & (victoryDisplayL %~ filterOutCards)
       & (encounterDeckLensFromKey deckKey .~ deck')
   RequestSetAsideCard target cardCode -> do
     let
@@ -682,20 +674,32 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
         handler <- getEncounterDeckHandler $ toCardId card
         pure $ a & discardLens handler %~ (ec :)
       VengeanceCard _ -> error "vengeance card"
-  InvestigatorDoDrawEncounterCard iid -> do
+  DrewCards iid drew | isNothing drew.target && any isEncounterCard drew.cards -> do
+    pushAll $ InvestigatorDrewEncounterCard iid <$> onlyEncounterCards drew.cards
+    pure a
+  Do (DrawCards iid drawing) | Just key <- Deck.deckSignifierToScenarioDeckKey drawing.deck -> do
+    case lookup key scenarioDecks of
+      Just [] -> pure a
+      Just xs -> do
+        let (drew, rest) = splitAt drawing.amount xs
+        push $ DrewCards iid $ finalizeDraw drawing drew
+        pure $ a & decksL . at key ?~ rest
+      _ ->
+        error
+          $ "Invalid scenario deck key "
+          <> show key
+          <> ", could not find deck in scenario"
+  Do (DrawCards iid drawing) | drawing.deck == Deck.EncounterDeck -> do
     handler <- getEncounterDeckHandler iid
     case unDeck (a ^. deckLens handler) of
       [] -> do
         when (notNull (a ^. discardLens handler)) $ do
-          pushAll
-            [ShuffleEncounterDiscardBackIn, InvestigatorDrawEncounterCard iid]
+          pushAll [ShuffleEncounterDiscardBackIn, Do (DrawCards iid drawing)]
         pure a
       -- This case should not happen but this safeguards against it
       (card : encounterDeck) -> do
         when (null encounterDeck) $ do
-          windows' <-
-            checkWindows
-              [mkWindow Timing.When Window.EncounterDeckRunsOutOfCards]
+          windows' <- checkWindows [mkWhen Window.EncounterDeckRunsOutOfCards]
           pushAll [windows', ShuffleEncounterDiscardBackIn]
         pushAll [UnsetActiveCard, InvestigatorDrewEncounterCard iid card]
         pure $ a & (deckLens handler .~ Deck encounterDeck)
@@ -763,7 +767,7 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
 
     case foundStrategy' of
       DrawOrCommitFound {} -> error "CommitFound not implemented for EncounterDeck"
-      DrawOrPlayFound {} -> error "DrawOrPlayFound not implemented for EncounterDeck"
+      AddToHandOrPlayFound {} -> error "AddToHandOrPlayFound not implemented for EncounterDeck"
       RemoveFoundFromGame _ _ -> error "Unhandled"
       DrawFound who n -> do
         let
@@ -785,7 +789,7 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
           $ if null choices
             then chooseOne player [Label "No cards found" []]
             else chooseUpToN player n "Do not draw more cards" choices
-      DeferSearchedToTarget searchTarget -> do
+      DeferSearchedToTarget searchTarget _ -> do
         pushBatch batchId
           $ if null targetCards
             then
@@ -1044,9 +1048,9 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
         pure a
       (card : cards) -> do
         beforeWindow <-
-          checkWindows [mkWindow Timing.When (Window.Discarded iid source (EncounterCard card))]
+          checkWindows [mkWindow Timing.When (Window.Discarded (Just iid) source (EncounterCard card))]
         afterWindow <-
-          checkWindows [mkWindow Timing.After (Window.Discarded iid source (EncounterCard card))]
+          checkWindows [mkWindow Timing.After (Window.Discarded (Just iid) source (EncounterCard card))]
         pushAll
           [ beforeWindow
           , Discarded (CardIdTarget $ toCardId card) source (EncounterCard card)
@@ -1061,6 +1065,8 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
         pure $ a & deckLens handler .~ Deck cards & discardLens handler %~ (card :)
   SpawnEnemyAt card@(EncounterCard ec) _ -> do
     pure $ a & discardL %~ filter (/= ec) & setAsideCardsL %~ filter (/= card)
+  AddToHand _ cards -> do
+    pure $ a & setAsideCardsL %~ filter (`notElem` cards)
   SpawnEnemyAtEngagedWith (EncounterCard ec) _ _ -> do
     pure $ a & discardL %~ filter (/= ec)
   InvestigatorDrewEncounterCard _ ec -> do
@@ -1148,40 +1154,22 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
     pure a
   RemoveAllDoomFromPlay matchers -> do
     let Matcher.RemoveDoomMatchers {..} = matchers
-    locations <-
-      selectMap
-        LocationTarget
-        (removeDoomLocations <> Matcher.LocationWithAnyDoom)
-    investigators <- selectMap InvestigatorTarget removeDoomInvestigators
-    enemies <-
-      selectMap
-        EnemyTarget
-        (removeDoomEnemies <> Matcher.EnemyWithAnyDoom <> Matcher.EnemyWithoutModifier DoNotRemoveDoom)
-    assets <-
-      selectMap
-        AssetTarget
-        (removeDoomAssets <> Matcher.AssetWithAnyDoom)
-    acts <- selectMap ActTarget removeDoomActs
-    agendas <-
-      selectMap
-        AgendaTarget
-        (removeDoomAgendas <> Matcher.AgendaWithAnyDoom)
-    treacheries <- selectMap TreacheryTarget removeDoomTreacheries
-    events <- selectMap EventTarget removeDoomEvents
-    skills <- selectMap SkillTarget removeDoomSkills
-    pushAll
-      [ RemoveAllDoom (toSource a) target
-      | target <-
-          locations
-            <> investigators
-            <> enemies
-            <> assets
-            <> acts
-            <> agendas
-            <> treacheries
-            <> events
-            <> skills
-      ]
+    targets <-
+      fold
+        <$> sequence
+          [ selectMap LocationTarget (removeDoomLocations <> Matcher.LocationWithAnyDoom)
+          , selectMap InvestigatorTarget removeDoomInvestigators
+          , selectMap
+              EnemyTarget
+              (removeDoomEnemies <> Matcher.EnemyWithAnyDoom <> Matcher.EnemyWithoutModifier DoNotRemoveDoom)
+          , selectMap AssetTarget (removeDoomAssets <> Matcher.AssetWithAnyDoom)
+          , selectMap ActTarget removeDoomActs
+          , selectMap AgendaTarget (removeDoomAgendas <> Matcher.AgendaWithAnyDoom)
+          , selectMap TreacheryTarget removeDoomTreacheries
+          , selectMap EventTarget removeDoomEvents
+          , selectMap SkillTarget removeDoomSkills
+          ]
+    pushAll [RemoveAllDoom (toSource a) target | target <- targets]
     pure a
   SetupInvestigators -> do
     iids <- allInvestigatorIds

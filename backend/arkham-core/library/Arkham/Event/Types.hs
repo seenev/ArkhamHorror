@@ -53,6 +53,7 @@ data instance Field Event :: Type -> Type where
   EventCardId :: Field Event CardId
   EventSealedChaosTokens :: Field Event [ChaosToken]
   EventUses :: Field Event (Map UseType Int)
+  EventTokens :: Field Event (Map UseType Int)
   EventWindows :: Field Event [Window]
 
 data instance Field (InHandEntity Event) :: Type -> Type where
@@ -84,15 +85,29 @@ data EventAttrs = EventAttrs
   , eventWindows :: [Window]
   , eventTarget :: Maybe Target
   , eventMeta :: Value
-  , eventUses :: Map UseType Int
+  , eventTokens :: Map UseType Int
+  , eventCustomizations :: IntMap Int
   }
   deriving stock (Show, Eq, Generic)
 
 allEventCards :: Map CardCode CardDef
 allEventCards = allPlayerEventCards
 
+instance AsId EventAttrs where
+  type IdOf EventAttrs = EventId
+  asId = toId
+
 instance Is EventAttrs EventId where
   is = (==) . toId
+
+instance HasField "customizations" EventAttrs (IntMap Int) where
+  getField = eventCustomizations
+
+instance HasField "windows" EventAttrs [Window] where
+  getField = eventWindows
+
+instance HasField "attachedTo" EventAttrs (Maybe Target) where
+  getField = eventAttachedTarget
 
 instance HasField "id" EventAttrs EventId where
   getField = eventId
@@ -114,6 +129,10 @@ instance HasField "controller" EventAttrs InvestigatorId where
 
 instance HasField "ability" EventAttrs (Int -> Source) where
   getField this = toAbilitySource this
+
+instance HasField "cardId" EventAttrs CardId where
+  getField = toCardId
+  {-# INLINE getField #-}
 
 instance HasCardCode EventAttrs where
   toCardCode = eventCardCode
@@ -147,7 +166,9 @@ instance FromJSON EventAttrs where
     eventWindows <- o .: "windows"
     eventTarget <- o .: "target"
     eventMeta <- o .:? "meta" .!= Null
-    eventUses <- o .:? "uses" .!= mempty
+    deprecatedEventUses <- o .:? "uses" .!= mempty
+    eventTokens <- o .:? "tokens" .!= deprecatedEventUses
+    eventCustomizations <- o .:? "customizations" .!= mempty
 
     pure EventAttrs {..}
 
@@ -190,7 +211,8 @@ event f cardDef =
             , eventWindows = []
             , eventTarget = Nothing
             , eventMeta = Null
-            , eventUses = mempty
+            , eventTokens = mempty
+            , eventCustomizations = mempty
             }
     }
 
@@ -206,9 +228,12 @@ instance Named EventAttrs where
 
 instance Targetable EventAttrs where
   toTarget = EventTarget . toId
-  isTarget EventAttrs {eventId} (EventTarget eid) = eventId == eid
-  isTarget attrs (SkillTestInitiatorTarget target) = isTarget attrs target
-  isTarget _ _ = False
+  isTarget attrs@EventAttrs {..} = \case
+    EventTarget eid -> eventId == eid
+    CardCodeTarget cardCode -> cdCardCode (toCardDef attrs) == cardCode
+    CardIdTarget cardId -> cardId == eventCardId
+    SkillTestInitiatorTarget target -> isTarget attrs target
+    _ -> False
 
 instance Sourceable EventAttrs where
   toSource = EventSource . toId
@@ -285,3 +310,11 @@ makeLensesWith suffixedFields ''EventAttrs
 
 setMeta :: ToJSON a => a -> EventAttrs -> EventAttrs
 setMeta a = metaL .~ toJSON a
+
+overMeta :: (FromJSON a, ToJSON a) => (a -> a) -> EventAttrs -> EventAttrs
+overMeta f = metaL %~ (\m -> toJSON (f $ toResult m))
+
+getEventMeta :: FromJSON a => EventAttrs -> Maybe a
+getEventMeta a = case fromJSON (eventMeta a) of
+  Error _ -> Nothing
+  Success a' -> Just a'

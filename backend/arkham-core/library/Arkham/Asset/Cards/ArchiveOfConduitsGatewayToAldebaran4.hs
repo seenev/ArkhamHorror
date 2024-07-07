@@ -39,7 +39,9 @@ instance RunMessage ArchiveOfConduitsGatewayToAldebaran4 where
       enemies <- select NonEliteEnemy
       chooseOne
         iid
-        [targetLabel enemy [MoveUses (toSource attrs) (toTarget enemy) Leyline 1] | enemy <- enemies]
+        [ targetLabel enemy [MoveTokens (attrs.ability 1) (toSource attrs) (toTarget enemy) Leyline 1]
+        | enemy <- enemies
+        ]
       pure a
     UseThisAbility iid (isSource attrs -> True) 2 -> do
       iids <-
@@ -74,4 +76,4 @@ instance RunMessage ArchiveOfConduitsGatewayToAldebaran4 where
 
       chooseOrRunOne iid choices
       pure a
-    _ -> ArchiveOfConduitsGatewayToAldebaran4 <$> lift (runMessage msg attrs)
+    _ -> ArchiveOfConduitsGatewayToAldebaran4 <$> liftRunMessage msg attrs

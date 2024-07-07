@@ -271,11 +271,7 @@ instance RunMessage SkillTest where
     PassSkillTest -> do
       modifiedSkillValue' <- totalModifiedSkillValue s
       player <- getPlayer skillTestInvestigator
-      pushAll
-        [ chooseOne player [SkillTestApplyResultsButton]
-        , SkillTestEnds skillTestInvestigator skillTestSource
-        , Do (SkillTestEnds skillTestInvestigator skillTestSource)
-        ]
+      push $ chooseOne player [SkillTestApplyResultsButton]
       pure $ s & resultL .~ SucceededBy Automatic modifiedSkillValue'
     FailSkillTest -> do
       resultsData <- autoFailSkillTestResultsData s
@@ -717,7 +713,7 @@ instance RunMessage SkillTest where
                         resolver
                         skillTestAction
                         skillTestSource
-                        (SkillTestInitiatorTarget skillTestTarget)
+                        (Initiator skillTestTarget)
                         skillTestType
                         n
                     )
@@ -732,7 +728,7 @@ instance RunMessage SkillTest where
                         resolver
                         skillTestAction
                         skillTestSource
-                        (SkillTestInitiatorTarget skillTestTarget)
+                        (Initiator skillTestTarget)
                         skillTestType
                         n
                      ]
@@ -759,6 +755,7 @@ instance RunMessage SkillTest where
                 pushAll $ handleChoice skillTestResolveFailureInvestigator player
         Unrun -> pure ()
       pure s
+    AddSubscriber t -> pure $ s & subscribersL <>~ [t]
     RerunSkillTest -> case skillTestResult of
       FailedBy Automatic _ -> pure s
       _ -> do

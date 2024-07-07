@@ -13,6 +13,8 @@ import {-# SOURCE #-} Arkham.GameEnv
 import Arkham.Id
 import Arkham.Matcher
 import Arkham.Message
+import Arkham.SkillTest.Base (SkillTest)
+import Arkham.Source (Source)
 import Arkham.Timing (Timing)
 import Arkham.Timing qualified as Timing
 import Arkham.Window
@@ -20,6 +22,12 @@ import Arkham.Window qualified as Window
 
 checkWindow :: HasGame m => Window -> m Message
 checkWindow = checkWindows . pure
+
+checkAfter :: HasGame m => WindowType -> m Message
+checkAfter = checkWindows . pure . mkAfter
+
+checkWhen :: HasGame m => WindowType -> m Message
+checkWhen = checkWindows . pure . mkWhen
 
 checkWindows :: HasGame m => [Window] -> m Message
 checkWindows windows' = do
@@ -126,6 +134,24 @@ splitWithWindows msg windows' = do
     <> [msg]
     <> [CheckWindow iids $ map (mkWindow Timing.After) windows']
 
+discoveredClues :: [Window] -> Int
+discoveredClues =
+  fromMaybe (error "missing discovery") . asum . map \case
+    (windowType -> Window.DiscoverClues _ _ _ n) -> Just n
+    _ -> Nothing
+
+discoveredLocation :: [Window] -> LocationId
+discoveredLocation =
+  fromMaybe (error "missing discovery") . asum . map \case
+    (windowType -> Window.DiscoverClues _ lid _ _) -> Just lid
+    _ -> Nothing
+
+discoveredLocationAndClues :: [Window] -> (LocationId, Int)
+discoveredLocationAndClues =
+  fromMaybe (error "missing discovery") . asum . map \case
+    (windowType -> Window.DiscoverClues _ lid _ n) -> Just (lid, n)
+    _ -> Nothing
+
 defeatedEnemy :: [Window] -> EnemyId
 defeatedEnemy =
   fromMaybe (error "missing enemy") . asum . map \case
@@ -184,16 +210,33 @@ getChaosToken = \case
 
 getAttackDetails :: [Window] -> EnemyAttackDetails
 getAttackDetails = \case
-  [] -> error "No chaos token drawn"
+  [] -> error "No attack details"
   ((windowType -> Window.EnemyWouldAttack details) : _) -> details
+  ((windowType -> Window.EnemyAttacks details) : _) -> details
+  ((windowType -> Window.EnemyAttacksEvenIfCancelled details) : _) -> details
   (_ : rest) -> getAttackDetails rest
 
 getInvestigatedLocation :: [Window] -> LocationId
 getInvestigatedLocation = \case
-  [] -> error "No chaos token drawn"
+  [] -> error "No fail or pass skill test"
   ((windowType -> Window.FailInvestigationSkillTest _ lid _) : _) -> lid
   ((windowType -> Window.PassInvestigationSkillTest _ lid _) : _) -> lid
   (_ : rest) -> getInvestigatedLocation rest
+
+getDamageSource :: [Window] -> Source
+getDamageSource = \case
+  [] -> error "No damage"
+  ((windowType -> Window.DealtDamage source _ _ _) : _) -> source
+  ((windowType -> Window.DealtExcessDamage source _ _ _) : _) -> source
+  (_ : rest) -> getDamageSource rest
+
+getDamageOrHorrorSource :: [Window] -> Source
+getDamageOrHorrorSource = \case
+  [] -> error "No damage"
+  ((windowType -> Window.DealtDamage source _ _ _) : _) -> source
+  ((windowType -> Window.DealtHorror source _ _) : _) -> source
+  ((windowType -> Window.DealtExcessDamage source _ _ _) : _) -> source
+  (_ : rest) -> getDamageSource rest
 
 replaceWindow :: HasQueue Message m => (Window -> Bool) -> (Window -> Window) -> m ()
 replaceWindow f wf = do
@@ -227,3 +270,9 @@ replaceWindowMany f wf = do
               ws
         ]
       _ -> error "impossible"
+
+windowSkillTest :: [Window] -> Maybe SkillTest
+windowSkillTest = \case
+  [] -> Nothing
+  ((windowType -> Window.InitiatedSkillTest st) : _) -> Just st
+  (_ : rest) -> windowSkillTest rest

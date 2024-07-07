@@ -5,6 +5,7 @@ import Arkham.Discover
 import Arkham.Investigator.Cards qualified as Cards
 import Arkham.Investigator.Runner
 import Arkham.Matcher
+import Arkham.Message qualified as Msg
 import Arkham.Prelude
 
 newtype RexMurphy = RexMurphy InvestigatorAttrs
@@ -31,14 +32,15 @@ instance HasChaosTokenValue RexMurphy where
 instance RunMessage RexMurphy where
   runMessage msg i@(RexMurphy attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ discoverAtYourLocation iid (toAbilitySource attrs 1) 1
+      push $ Msg.DiscoverClues iid $ discoverAtYourLocation (toAbilitySource attrs 1) 1
       pure i
     ResolveChaosToken _drawnToken ElderSign iid | iid == toId attrs -> do
-      drawing <- drawCards iid (ChaosTokenEffectSource ElderSign) 3
       player <- getPlayer iid
       push
         $ chooseOne player
-        $ [ Label "Automatically fail to draw 3" [FailSkillTest, drawing]
+        $ [ Label
+              "Automatically fail to draw 3"
+              [FailSkillTest, drawCards iid (ChaosTokenEffectSource ElderSign) 3]
           , Label "Resolve normally" []
           ]
       pure i

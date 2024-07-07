@@ -12,16 +12,27 @@ import Arkham.Investigator.Runner as X (
   InvestigatorCard,
   IsInvestigator,
   Stats (..),
+  deckL,
+  deleteMetaKey,
+  insertMetaKey,
   investigator,
   investigatorWith,
   is,
+  lookupMetaKeyWithDefault,
+  overMetaKey,
   push,
   pushAll,
   pushWhen,
   setMeta,
+  startsWith,
   usedAdditionalActionsL,
  )
-import Arkham.Message as X (Message (..), pattern ElderSignEffect, pattern UseThisAbility)
+import Arkham.Message as X (
+  Message (..),
+  pattern ElderSignEffect,
+  pattern PassedThisSkillTestBy,
+  pattern UseThisAbility,
+ )
 import Arkham.Message.Lifted as X
 import Arkham.Prelude as X
 import Arkham.Question as X

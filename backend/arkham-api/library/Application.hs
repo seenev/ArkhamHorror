@@ -25,16 +25,22 @@ module Application (
 import Config
 import Control.Monad.Logger (liftLoc, runLoggingT)
 import Data.CaseInsensitive (mk)
+import Data.Default.Class (def)
+import Data.Text qualified as T
+import Data.X509.CertificateStore (readCertificateStore)
 import Database.Persist.Postgresql (
   SqlBackend,
   createPostgresqlPool,
   pgConnStr,
   pgPoolSize,
  )
+import Database.Redis (ConnectInfo (..), parseConnectInfo)
 import Import hiding (sendResponse)
 import Language.Haskell.TH.Syntax (qLocation)
 import Network.HTTP.Client.TLS (getGlobalManager)
 import Network.HTTP.Types (ResponseHeaders, status200)
+import Network.TLS (ClientParams (..), Shared (..), Supported (..), defaultParamsClient)
+import Network.TLS.Extra.Cipher (ciphersuite_strong)
 import Network.Wai (Middleware, requestHeaders, requestMethod, responseLBS)
 import Network.Wai.Handler.Warp (
   Settings,
@@ -47,7 +53,7 @@ import Network.Wai.Handler.Warp (
   setPort,
  )
 import Network.Wai.Middleware.AddHeaders (addHeaders)
-import Network.Wai.Middleware.Gzip (def, gzip)
+import Network.Wai.Middleware.Gzip (gzip)
 import Network.Wai.Middleware.RequestLogger (
   Destination (Logger),
   IPAddrSource (..),
@@ -75,7 +81,13 @@ import Base.Api.Handler.CurrentUser
 import Base.Api.Handler.PasswordReset
 import Base.Api.Handler.Registration
 import Base.Api.Handler.Settings
+import Control.Concurrent (forkIO)
 import Data.List (lookup)
+import Database.Redis (
+  checkedConnect,
+  newPubSubController,
+  pubSubForever,
+ )
 import Handler.Health
 
 -- This line actually creates our YesodDispatch instance. It is the second half
@@ -95,9 +107,15 @@ makeFoundation appSettings = do
   appHttpManager <- getGlobalManager
   appLogger <- newStdoutLoggerSet defaultBufSize >>= makeYesodLogger
 
-  -- appBroadcastChannel <- atomically newBroadcastTChan
-  appGameChannels <- newIORef mempty
-  appGameChannelClients <- newIORef mempty
+  appGameRooms <- newIORef mempty
+
+  appMessageBroker <- case appRedisConnectionInfo appSettings of
+    Nothing -> pure WebSocketBroker
+    Just url -> do
+      conn <- checkedConnect =<< fromConnectionUrl url
+      ctrl <- newPubSubController [] []
+      _ <- forkIO $ pubSubForever conn ctrl (pure ())
+      pure $ RedisBroker conn ctrl
 
   -- We need a log function to create a connection pool. We need a connection
   -- pool to create our foundation. And we need our foundation to get a
@@ -264,3 +282,23 @@ handler h = getAppSettings >>= makeFoundation >>= flip unsafeHandler h
 -- | Run DB queries
 db :: ReaderT SqlBackend Handler a -> IO a
 db = handler . runDB
+
+-- parse a text url into a redis connection
+fromConnectionUrl :: (MonadFail m, MonadIO m) => Text -> m ConnectInfo
+fromConnectionUrl info = do
+  case parseConnectInfo (T.unpack $ T.replace "rediss://" "redis://" info) of
+    Right x ->
+      if "rediss" `T.isPrefixOf` info
+        then do
+          Just certStore <- liftIO $ readCertificateStore "digital-ocean.crt"
+          pure
+            $ x
+              { connectTLSParams =
+                  Just
+                    $ (defaultParamsClient (connectHost x) "")
+                      { clientSupported = def {supportedCiphers = ciphersuite_strong}
+                      , clientShared = def {sharedCAStore = certStore}
+                      }
+              }
+        else pure x
+    Left err -> fail err

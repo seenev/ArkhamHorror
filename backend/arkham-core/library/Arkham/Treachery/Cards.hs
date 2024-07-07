@@ -64,10 +64,12 @@ allPlayerTreacheryCards =
       , acrossSpaceAndTime
       , amnesia
       , angeredSpirits
+      , armInjury
       , atychiphobia
       , bloodlust
       , boughtInBlood
       , burdenOfDestiny
+      , burdenOfLeadership
       , buriedSecrets
       , callOfTheUnknown
       , calledByTheMists
@@ -80,6 +82,7 @@ allPlayerTreacheryCards =
       , damned
       , darkFuture
       , dayOfReckoning
+      , deafeningSilence
       , detachedFromReality
       , doomed
       , drawingTheSign
@@ -94,6 +97,7 @@ allPlayerTreacheryCards =
       , hypochondria
       , indebted
       , internalInjury
+      , legInjury
       , lostSoul
       , narcolepsy
       , nihilism
@@ -101,21 +105,25 @@ allPlayerTreacheryCards =
       , offerYouCannotRefuse
       , outOfBodyExperience
       , overzealous
+      , panic
       , paranoia
       , poisoned
       , psychosis
       , rationalThought
       , rexsCurse
       , rookieMistake
+      , ruinedFilm
       , searchingForIzzie
       , selfCentered
       , selfDestructive
+      , selflessToAFault
       , sellYourSoul
       , shellShock
       , shockingDiscovery
       , sirenCall
       , smiteTheWicked
       , starsOfHyades
+      , stupor
       , terribleSecret
       , the13thVision
       , theBellTolls
@@ -2070,6 +2078,54 @@ burdenOfDestiny =
 greed :: CardDef
 greed =
   (weakness "08018" "Greed")
+    { cdCardTraits = setFromList [Flaw]
+    }
+
+armInjury :: CardDef
+armInjury =
+  (basicWeakness "08130" "Arm Injury")
+    { cdCardTraits = singleton Injury
+    }
+
+legInjury :: CardDef
+legInjury =
+  (basicWeakness "08131" "Leg Injury")
+    { cdCardTraits = singleton Injury
+    }
+
+panic :: CardDef
+panic =
+  (basicWeakness "08132" "Panic")
+    { cdCardTraits = singleton Madness
+    }
+
+stupor :: CardDef
+stupor =
+  (basicWeakness "08133" "Stupor")
+    { cdCardTraits = singleton Madness
+    }
+
+selflessToAFault :: CardDef
+selflessToAFault =
+  (weakness "09003" "Selfless to a Fault")
+    { cdCardTraits = setFromList [Flaw]
+    }
+
+deafeningSilence :: CardDef
+deafeningSilence =
+  (weakness "09014" "Deafening Silence")
+    { cdCardTraits = setFromList [Omen]
+    }
+
+ruinedFilm :: CardDef
+ruinedFilm =
+  (weakness "09017" "Ruined Film")
+    { cdCardTraits = setFromList [Blunder]
+    }
+
+burdenOfLeadership :: CardDef
+burdenOfLeadership =
+  (weakness "09020" "Burden of Leadership")
     { cdCardTraits = setFromList [Flaw]
     }
 

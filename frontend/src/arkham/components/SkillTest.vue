@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import AbilityButton from '@/arkham/components/AbilityButton.vue'
-import StatusBar from '@/arkham/components/StatusBar.vue';
+import Question from '@/arkham/components/Question.vue';
 import { computed } from 'vue';
 import { ChaosBag } from '@/arkham/types/ChaosBag';
 import { Game } from '@/arkham/types/Game';
@@ -93,8 +93,6 @@ const card = computed(() => {
 
   return props.game.cards[props.skillTest.card]
 })
-
-const tokenOperator = computed(() => (skillTestResults.value?.skillTestResultsChaosTokensValue || 0) < 0 ? '-' : '+')
 
 const showChoices = computed(() => choices.value.some((c) => { return c.tag === MessageType.DONE || c.tag === MessageType.LABEL || c.tag === MessageType.SKILL_LABEL || c.tag === MessageType.SKILL_LABEL_WITH_LABEL || c.tag == MessageType.PORTRAIT_LABEL }))
 
@@ -242,6 +240,7 @@ const label = function(body: string) {
         @click="$emit('choose', skipTriggersAction)"
         class="skip-triggers-button"
       >Skip Triggers</button>
+      <Question :game="game" :playerId="playerId" @choose="choose" />
       <button
         class="apply-results"
         v-if="applyResultsAction !== -1"
@@ -315,7 +314,7 @@ const label = function(body: string) {
 
 .portrait {
   width: $card-width;
-  height: fit-content;
+  height: auto;
 }
 
 .committed-skills {

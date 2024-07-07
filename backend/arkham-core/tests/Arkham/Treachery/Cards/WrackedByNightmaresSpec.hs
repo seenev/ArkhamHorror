@@ -1,8 +1,4 @@
-module Arkham.Treachery.Cards.WrackedByNightmaresSpec (
-  spec,
-) where
-
-import TestImport.Lifted
+module Arkham.Treachery.Cards.WrackedByNightmaresSpec (spec) where
 
 import Arkham.Asset.Types (Field (..))
 import Arkham.Asset.Types qualified as Asset
@@ -11,10 +7,11 @@ import Arkham.Placement
 import Arkham.Projection
 import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Types (Field (..))
+import TestImport.Lifted
 
 spec :: Spec
 spec = describe "Wracked by Nightmares" $ do
-  it "prevents controlled assets from readying" $ gameTest $ \investigator -> do
+  it "prevents controlled assets from readying" . gameTest $ \investigator -> do
     wrackedByNightmares <- genPlayerCard Cards.wrackedByNightmares
     asset <-
       testAsset
@@ -22,10 +19,9 @@ spec = describe "Wracked by Nightmares" $ do
             . (Asset.placementL .~ InPlayArea (toId investigator))
         )
         investigator
-    drawing <- drawCards (toId investigator) investigator 1
     pushAndRunAll
       [ loadDeck investigator [wrackedByNightmares]
-      , drawing
+      , drawCards (toId investigator) investigator 1
       , ReadyExhausted
       ]
     assert
@@ -40,8 +36,8 @@ spec = describe "Wracked by Nightmares" $ do
       testAsset
         ((Asset.exhaustedL .~ True) . (Asset.ownerL ?~ toId investigator))
         investigator
-    drawing <- drawCards (toId investigator) investigator 1
-    pushAndRunAll [loadDeck investigator [wrackedByNightmares], drawing]
+    pushAndRunAll
+      [loadDeck investigator [wrackedByNightmares], drawCards (toId investigator) investigator 1]
     wrackedByNightmaresId <- selectJust AnyTreachery
     [discardWrackedByNightmares] <-
       field

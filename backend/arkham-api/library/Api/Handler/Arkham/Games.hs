@@ -29,8 +29,10 @@ import Control.Monad.Random.Class (getRandom)
 import Data.ByteString.Lazy qualified as BSL
 import Data.Coerce
 import Data.Map.Strict qualified as Map
+import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Time.Clock
 import Database.Esqueleto.Experimental hiding (update)
+import Database.Redis (publish, runRedis)
 import Entity.Answer
 import Entity.Arkham.Step
 import Import hiding (delete, exists, on, (==.))
@@ -43,10 +45,10 @@ import Yesod.WebSockets
 
 gameStream :: Maybe UserId -> ArkhamGameId -> WebSocketsT Handler ()
 gameStream mUserId gameId = catchingConnectionException $ do
-  writeChannel <- lift $ getChannel gameId
-  gameChannelClients <- appGameChannelClients <$> getYesod
-  atomicModifyIORef' gameChannelClients
-    $ \channelClients -> (Map.insertWith (+) gameId 1 channelClients, ())
+  writeChannel <- lift $ (.channel) <$> getRoom gameId
+  roomsRef <- getsYesod appGameRooms
+  atomicModifyIORef' roomsRef
+    $ \rooms -> (Map.adjust (\room -> room {socketClients = room.clients + 1}) gameId rooms, ())
   bracket (atomically $ dupTChan writeChannel) closeConnection
     $ \readChannel ->
       race_
@@ -60,16 +62,15 @@ gameStream mUserId gameId = catchingConnectionException $ do
         Right answer -> updateGame answer gameId userId writeChannel
 
   closeConnection _ = do
-    gameChannelsRef <- appGameChannels <$> lift getYesod
-    gameChannelClientsRef <- appGameChannelClients <$> lift getYesod
+    roomsRef <- getsYesod appGameRooms
     clientCount <-
-      atomicModifyIORef' gameChannelClientsRef $ \channelClients ->
-        ( Map.adjust pred gameId channelClients
-        , Map.findWithDefault 1 gameId channelClients - 1
+      atomicModifyIORef' roomsRef $ \rooms ->
+        ( Map.adjust (\room -> room {socketClients = max 0 (room.clients - 1)}) gameId rooms
+        , maybe 0 (\room -> max 0 (room.clients - 1)) $ Map.lookup gameId rooms
         )
-    when (clientCount == 0)
-      $ atomicModifyIORef' gameChannelsRef
-      $ \gameChannels' -> (Map.delete gameId gameChannels', ())
+    when (clientCount == 0) do
+      lift $ removeChannel (gameChannel gameId)
+      atomicModifyIORef' roomsRef $ \rooms -> (Map.delete gameId rooms, ())
 
 catchingConnectionException :: WebSocketsT Handler () -> WebSocketsT Handler ()
 catchingConnectionException f =
@@ -188,7 +189,7 @@ putApiV1ArkhamGameR :: ArkhamGameId -> Handler ()
 putApiV1ArkhamGameR gameId = do
   userId <- fromJustNote "Not authenticated" <$> getRequestUserId
   response <- requireCheckJsonBody
-  writeChannel <- getChannel gameId
+  writeChannel <- (.channel) <$> getRoom gameId
   updateGame response gameId userId writeChannel
 
 updateGame :: Answer -> ArkhamGameId -> UserId -> TChan BSL.ByteString -> Handler ()
@@ -244,9 +245,7 @@ updateGame response gameId userId writeChannel = do
         (arkhamGameStep + 1)
         (ActionDiff $ view actionDiffL ge)
 
-  atomically
-    $ writeTChan writeChannel
-    $ encode
+  publishToRoom gameId
     $ GameUpdate
     $ PublicGame gameId arkhamGameName (gameLogToLogEntries $ oldLog <> GameLog updatedLog) ge
 
@@ -281,7 +280,7 @@ putApiV1ArkhamGameRawR :: ArkhamGameId -> Handler ()
 putApiV1ArkhamGameRawR gameId = do
   userId <- fromJustNote "Not authenticated" <$> getRequestUserId
   response <- requireCheckJsonBody
-  writeChannel <- getChannel gameId
+  writeChannel <- (.channel) <$> getRoom gameId
   updateGame (Raw $ gameMessage response) gameId userId writeChannel
 
 deleteApiV1ArkhamGameR :: ArkhamGameId -> Handler ()
@@ -294,3 +293,18 @@ deleteApiV1ArkhamGameR gameId = do
       players <- from $ table @ArkhamPlayer
       where_ $ players.arkhamGameId ==. games.id
       where_ $ players.userId ==. val userId
+
+publishToRoom :: (MonadIO m, ToJSON a, HasApp m) => ArkhamGameId -> a -> m ()
+publishToRoom gameId a = do
+  broker <- getsApp appMessageBroker
+  case broker of
+    RedisBroker redisConn _ ->
+      void
+        $ liftIO
+        $ runRedis redisConn
+        $ publish (gameChannel gameId)
+        $ toStrictByteString
+        $ encode a
+    WebSocketBroker -> do
+      writeChannel <- (.channel) <$> getRoom gameId
+      atomically $ writeTChan writeChannel $ encode a

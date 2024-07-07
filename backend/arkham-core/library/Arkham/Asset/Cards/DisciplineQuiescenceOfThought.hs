@@ -41,10 +41,10 @@ instance RunMessage DisciplineQuiescenceOfThought where
       finished <- fieldMap InvestigatorHand ((>= 5) . length) iid
       canDrawCards <- can.draw.cards iid
       when (not finished && canDrawCards) do
-        drawing <- Msg.drawCards iid (attrs.ability 1) 1
+        let drawing = Msg.drawCards iid (attrs.ability 1) 1
         pushAll [drawing, DoStep 1 msg']
       pure a
     Flip iid _ (isTarget attrs -> True) -> do
       push $ ReplaceInvestigatorAsset iid attrs.id (flipCard $ toCard attrs)
       pure a
-    _ -> DisciplineQuiescenceOfThought <$> lift (runMessage msg attrs)
+    _ -> DisciplineQuiescenceOfThought <$> liftRunMessage msg attrs

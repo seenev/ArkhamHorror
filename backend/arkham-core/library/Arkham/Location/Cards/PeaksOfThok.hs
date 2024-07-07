@@ -1,7 +1,6 @@
 module Arkham.Location.Cards.PeaksOfThok (peaksOfThok, PeaksOfThok (..)) where
 
 import Arkham.Ability
-import Arkham.Helpers.Message (assignDamage)
 import Arkham.Helpers.Story (readStory)
 import Arkham.Location.Cards qualified as Cards
 import Arkham.Location.Import.Lifted
@@ -36,9 +35,9 @@ instance RunMessage PeaksOfThok where
       beginSkillTest iid (attrs.ability 2) iid #agility (Fixed 2)
       pure l
     FailedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
-      push $ assignDamage iid (toAbilitySource attrs 2) 1
+      assignDamage iid (toAbilitySource attrs 2) 1
       pure l
     Flip iid _ (isTarget attrs -> True) -> do
       readStory iid (toId attrs) Story.inhabitantsOfTheVale
       pure . PeaksOfThok $ attrs & canBeFlippedL .~ False
-    _ -> PeaksOfThok <$> lift (runMessage msg attrs)
+    _ -> PeaksOfThok <$> liftRunMessage msg attrs

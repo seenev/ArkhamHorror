@@ -15,6 +15,7 @@ import Arkham.Effect.Runner hiding (Discarded)
 import Arkham.Helpers.Customization
 import Arkham.Investigator.Types (Field (..))
 import Arkham.Matcher
+import Arkham.Message qualified as Msg
 import Arkham.Projection
 
 newtype EmpiricalHypothesis = EmpiricalHypothesis AssetAttrs
@@ -97,13 +98,13 @@ instance RunMessage EmpiricalHypothesis where
            ]
       pure a
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      pushM $ drawCards iid (toAbilitySource attrs 2) 1
+      push $ drawCards iid (toAbilitySource attrs 2) 1
       pure a
     UseThisAbility iid (isSource attrs -> True) 3 -> do
       push $ createCardEffect Cards.empiricalHypothesis Nothing attrs iid
       pure a
     UseThisAbility iid (isSource attrs -> True) 4 -> do
-      push $ toMessage $ discoverAtYourLocation iid (toAbilitySource attrs 4) 1
+      push $ Msg.DiscoverClues iid $ discoverAtYourLocation (toAbilitySource attrs 4) 1
       pure a
     UseThisAbility iid (isSource attrs -> True) 5 -> do
       let meta = toResult @[Int] (assetMeta attrs)
@@ -204,20 +205,20 @@ instance HasAbilities EmpiricalHypothesisEffect where
   getAbilities _ = []
 
 -- TODO: Determine if this is a delayed effect, lasting effect, or replaced
--- Currently treating is as thought it is replaced, if this switchings to
+-- Currently treating is as though it is replaced, if this switchings to
 -- delayed: then we would disable on the AddUses line and remove the HandleAbilityOption
 -- lasting: remove the HandleAbilityOption
 instance RunMessage EmpiricalHypothesisEffect where
   runMessage msg e@(EmpiricalHypothesisEffect attrs) = case msg of
     CreatedEffect eid _ (AssetSource aid) _ | eid == toId attrs -> do
-      peerReview <- getHasCustomization aid PeerReview
+      peerReview <- getHasCustomization @Asset aid PeerReview
       EmpiricalHypothesisEffect
         <$> runMessage
           msg
           (attrs {effectExtraMetadata = toJSON $ EmpiricalHypothesisEffectMetadata 0 False peerReview})
     UseThisAbility _ (ProxySource _ (isSource attrs -> True)) 1 -> do
       case attrs.source of
-        AssetSource aid -> push $ AddUses aid Evidence 1
+        AssetSource aid -> push $ AddUses attrs.source aid Evidence 1
         _ -> error $ "invalid effect source: " <> show attrs.source
       pure e
     EndRound | isJust attrs.meta -> do

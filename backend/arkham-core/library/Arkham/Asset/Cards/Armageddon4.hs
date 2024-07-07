@@ -48,8 +48,8 @@ armageddon4Effect = cardEffect Armageddon4Effect Cards.armageddon4
 instance RunMessage Armageddon4Effect where
   runMessage msg e@(Armageddon4Effect attrs) = case msg of
     RevealChaosToken _ iid token | InvestigatorTarget iid == attrs.target -> do
-      case attrs.source of
-        AbilitySource (AssetSource assetId) 1 ->
+      let
+        handleIt assetId = do
           when (token.face == #curse) do
             enemies <- select $ EnemyAt (locationWithInvestigator iid) <> EnemyCanBeDamagedBySource attrs.source
             stillInPlay <- selectAny $ AssetWithId assetId
@@ -57,7 +57,9 @@ instance RunMessage Armageddon4Effect where
             pushAll
               $ [ chooseOrRunOne
                   player
-                  $ [Label "Place 1 Charge on Armageddon4" [AddUses assetId Charge 1] | stillInPlay]
+                  $ [ Label "Place 1 Charge on Armageddon4" [AddUses attrs.source assetId Charge 1]
+                    | stillInPlay
+                    ]
                   <> [ Label
                         "Deal 1 damage to an enemy at your location"
                         [ chooseOne
@@ -67,6 +69,9 @@ instance RunMessage Armageddon4Effect where
                      ]
                 | stillInPlay || notNull enemies
                 ]
+      case attrs.source of
+        AbilitySource (AssetSource assetId) 1 -> handleIt assetId
+        AbilitySource (ProxySource (CardIdSource _) (AssetSource assetId)) 1 -> handleIt assetId
         _ -> error "wrong source"
       pure e
     SkillTestEnds _ _ -> do

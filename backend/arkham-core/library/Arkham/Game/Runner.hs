@@ -92,7 +92,7 @@ import Arkham.Message qualified as Msg
 import Arkham.Movement
 import Arkham.Name
 import Arkham.Phase
-import Arkham.Placement hiding (TreacheryPlacement (..))
+import Arkham.Placement
 import Arkham.Placement qualified as Placement
 import Arkham.PlayerCard
 import Arkham.Projection
@@ -200,7 +200,6 @@ runGameMessage msg g = case msg of
       $ g
       & (inActionL .~ False)
       & (actionCanBeUndoneL .~ False)
-      & (actionRemovedEntitiesL .~ mempty)
       & (actionDiffL .~ [])
       & (inDiscardEntitiesL .~ mempty)
       & (outOfPlayEntitiesL %~ deleteMap RemovedZone)
@@ -428,9 +427,10 @@ runGameMessage msg g = case msg of
       isSetCost = \case
         SetAbilityCost _ -> True
         _ -> False
-      additionalCosts = flip mapMaybe modifiers' $ \case
-        AdditionalCost c -> Just c
-        _ -> Nothing
+      additionalCosts =
+        abilityAdditionalCosts ability <> flip mapMaybe modifiers' \case
+          AdditionalCost c -> Just c
+          _ -> Nothing
     let
       activeCost =
         ActiveCost
@@ -717,7 +717,14 @@ runGameMessage msg g = case msg of
           & actionRemovedEntitiesL
           . enemiesL
           %~ insertEntity enemy
-  RemoveSkill sid -> pure $ g & entitiesL . skillsL %~ deleteMap sid
+  RemoveSkill sid -> do
+    removedEntitiesF <-
+      if notNull (gameActiveAbilities g)
+        then do
+          skill <- getSkill sid
+          pure $ actionRemovedEntitiesL . skillsL %~ insertEntity skill
+        else pure id
+    pure $ g & entitiesL . skillsL %~ deleteMap sid & removedEntitiesF
   When (RemoveEnemy enemy) -> do
     pushM $ checkWindows [mkWhen (Window.LeavePlay $ toTarget enemy)]
     pure g
@@ -848,7 +855,8 @@ runGameMessage msg g = case msg of
             other -> other
           _ -> id
 
-    skills' <- filterMapM (fieldMap SkillPlacement (== Limbo) . toId) $ g ^. entitiesL . skillsL
+    skills' <-
+      filterMapM (fieldMap SkillPlacement (== Limbo) . toId) $ g ^. entitiesL . skillsL
 
     skillPairs <- for (mapToList skills') $ \(skillId, skill) -> do
       card <- field SkillCard skillId
@@ -905,6 +913,12 @@ runGameMessage msg g = case msg of
               (\k _ -> k `notElem` skillsToRemove)
         )
       & (phaseHistoryL %~ insertHistory iid historyItem)
+      & ( actionRemovedEntitiesL
+            . skillsL
+            %~ foldr
+              (\s m -> Map.insert s.id s m)
+              skills'
+        )
       & setTurnHistory
   Msg.SkillTestEnded -> do
     pure
@@ -942,16 +956,12 @@ runGameMessage msg g = case msg of
               )
               (findWithDefault [] Zone.FromDeck foundCards)
         PutBackInAnyOrder -> do
-          when (foundKey cardSource /= Zone.FromDeck) $ error "Expects a deck"
+          when (foundKey cardSource /= Zone.FromDeck) $ error "Expects a deck: Game<PutBackInAnyOrder>"
           lift
             $ push
             $ chooseOneAtATime player
             $ map
-              ( \c ->
-                  TargetLabel
-                    (CardIdTarget $ toCardId c)
-                    [AddFocusedToTopOfDeck iid EncounterDeckTarget $ toCardId c]
-              )
+              (\c -> targetLabel c [AddFocusedToTopOfDeck iid EncounterDeckTarget c.id])
               (findWithDefault [] Zone.FromDeck foundCards)
         ShuffleBackIn -> lift $ pushAll [ClearFound $ foundKey cardSource, ShuffleDeck Deck.EncounterDeck]
         PutBack -> do
@@ -1085,10 +1095,8 @@ runGameMessage msg g = case msg of
           ]
     let
       isFast = case card of
-        PlayerCard pc ->
-          isJust (cdFastWindow $ toCardDef pc)
-            || BecomesFast
-            `elem` allModifiers
+        PlayerCard _ ->
+          isJust $ cdFastWindow (toCardDef card) <|> listToMaybe [w | BecomesFast w <- allModifiers]
         _ -> False
       isPlayAction = if isFast then NotPlayAction else IsPlayAction
     activeCost <- createActiveCostForCard iid card isPlayAction windows'
@@ -1131,7 +1139,7 @@ runGameMessage msg g = case msg of
           let isPermanent = cdPermanent $ toCardDef treachery
           if isPermanent
             then do
-              push $ PlaceTreachery tid (Placement.TreacheryAttachedTo $ toTarget iid)
+              push $ PlaceTreachery tid (Placement.InThreatArea iid)
               pure $ g & (entitiesL . treacheriesL %~ insertMap tid treachery)
             else do
               pushAll
@@ -1173,6 +1181,7 @@ runGameMessage msg g = case msg of
                   , eventTarget = mtarget
                   , eventOriginalCardCode = pcOriginalCardCode pc
                   , eventPayment = payment
+                  , eventPlacement = Limbo
                   }
 
           pushAll
@@ -1187,7 +1196,7 @@ runGameMessage msg g = case msg of
         TreacheryType -> do
           tid <- getRandom
           let treachery = createTreachery card iid tid
-          push $ AttachTreachery tid (toTarget iid)
+          push $ PlaceTreachery tid (InThreatArea iid)
           pure $ g & (entitiesL . treacheriesL %~ insertMap tid treachery)
         EncounterAssetType -> do
           -- asset might have been put into play via revelation
@@ -1775,10 +1784,7 @@ runGameMessage msg g = case msg of
     pushAll
       $ [ chooseOne
           player
-          [ TargetLabel
-              EncounterDeckTarget
-              [InvestigatorDrawEncounterCard iid]
-          ]
+          [TargetLabel EncounterDeckTarget [drawEncounterCard iid GameSource]]
         | (iid, player) <- investigators
         ]
       <> [SetActiveInvestigator $ g ^. activeInvestigatorIdL]
@@ -1942,11 +1948,20 @@ runGameMessage msg g = case msg of
   CreateWeaknessInThreatArea card iid -> do
     treacheryId <- getRandom
     let treachery = createTreachery card iid treacheryId
-    push (AttachTreachery treacheryId (InvestigatorTarget iid))
+    push (PlaceTreachery treacheryId (InThreatArea iid))
     pure $ g & entitiesL . treacheriesL . at treacheryId ?~ treachery
   AttachStoryTreacheryTo treacheryId card target -> do
     let treachery = createTreachery card (g ^. leadInvestigatorIdL) treacheryId
-    push (AttachTreachery treacheryId target)
+    push
+      $ PlaceTreachery treacheryId
+      $ case target of
+        LocationTarget lid -> AttachedToLocation lid
+        EnemyTarget eid -> AttachedToEnemy eid
+        AssetTarget aid -> AttachedToAsset aid Nothing
+        ActTarget aid -> AttachedToAct aid
+        AgendaTarget aid -> AttachedToAgenda aid
+        InvestigatorTarget iid -> InThreatArea iid
+        _ -> error $ "unhandled attach target : " <> show target
     pure $ g & entitiesL . treacheriesL . at treacheryId ?~ treachery
   TakeControlOfSetAsideAsset iid card -> do
     assetId <- getRandom
@@ -2079,7 +2094,7 @@ runGameMessage msg g = case msg of
   Discarded (InvestigatorTarget iid) source card -> do
     pushM
       $ checkWindows
-      $ (`mkWindow` Window.Discarded iid source card)
+      $ (`mkWindow` Window.Discarded (Just iid) source card)
       <$> [#when, #after]
     pure g
   InvestigatorAssignDamage iid' source _ n 0 | n > 0 -> do
@@ -2137,7 +2152,7 @@ runGameMessage msg g = case msg of
       _ -> error "Unhandled surge target"
     (effectId, surgeEffect) <- createSurgeEffect source cardId
     pure $ g & entitiesL . effectsL . at effectId ?~ surgeEffect
-  Surge iid _ -> g <$ push (InvestigatorDrawEncounterCard iid)
+  Surge iid source -> g <$ push (drawEncounterCard iid source)
   ReplaceCard cardId card -> do
     replaceCard cardId card -- We must update the IORef
     pure $ g & cardsL %~ insertMap cardId card
@@ -2145,28 +2160,22 @@ runGameMessage msg g = case msg of
   SetActiveInvestigator iid -> do
     player <- getPlayer iid
     pure $ g & activeInvestigatorIdL .~ iid & activePlayerIdL .~ player
-  InvestigatorDrawEncounterCard iid -> do
-    drawEncounterCardWindow <- checkWindows [mkWhen $ Window.WouldDrawEncounterCard iid $ g ^. phaseL]
-    pushAll
-      [ SetActiveInvestigator iid
-      , drawEncounterCardWindow
-      , InvestigatorDoDrawEncounterCard iid
-      , SetActiveInvestigator (g ^. activeInvestigatorIdL)
-      ]
-    pure g
+  -- InvestigatorDrawEncounterCard iid -> do
+  --   drawEncounterCardWindow <- checkWindows [mkWhen $ Window.WouldDrawEncounterCard iid $ g ^. phaseL]
+  --   pushAll
+  --     [ SetActiveInvestigator iid
+  --     , drawEncounterCardWindow
+  --     , InvestigatorDoDrawEncounterCard iid
+  --     , SetActiveInvestigator (g ^. activeInvestigatorIdL)
+  --     ]
+  --   pure g
   RevelationSkillTest iid (TreacherySource tid) skillType difficulty -> do
     -- [ALERT] If changed update (DreamersCurse, Somniphobia)
     card <- field TreacheryCard tid
 
     let
       skillTest =
-        ( initSkillTest
-            iid
-            (TreacherySource tid)
-            (TreacheryTarget tid)
-            skillType
-            difficulty
-        )
+        (initSkillTest iid tid tid skillType difficulty)
           { skillTestIsRevelation = True
           }
     pushAll [BeginSkillTest skillTest, UnsetActiveCard]
@@ -2209,20 +2218,38 @@ runGameMessage msg g = case msg of
         other -> other
     pure $ g & resolvingCardL .~ Nothing & activeCardL %~ unsetActiveCard
   InvestigatorDrewEncounterCard iid card -> do
+    hasForesight <- hasModifier iid (Foresight $ toTitle card)
+    if hasForesight
+      then do
+        canCancel <- (EncounterCard card) <=~> CanCancelRevelationEffect #any
+        if canCancel
+          then do
+            player <- getPlayer iid
+            push
+              $ chooseOne
+                player
+                [ Label
+                    "Cancel card effects and discard it"
+                    [UnfocusCards, CancelNext GameSource RevelationMessage, AddToEncounterDiscard card]
+                , Label "Draw as normal" [UnfocusCards, Do msg]
+                ]
+            pure $ g & focusedCardsL .~ [toCard card]
+          else runMessage (Do msg) g
+      else runMessage (Do msg) g
+  Do (InvestigatorDrewEncounterCard iid card) -> do
     push $ ResolvedCard iid (toCard card)
     let
+      removeCard = filter ((/= Just card) . preview _EncounterCard)
       g' =
         g
-          & (resolvingCardL ?~ EncounterCard card)
-          & (focusedCardsL %~ filter ((/= Just card) . preview _EncounterCard))
-          & ( foundCardsL
-                %~ Map.map
-                  (filter ((/= Just card) . preview _EncounterCard))
-            )
+          & (resolvingCardL ?~ toCard card)
+          & (focusedCardsL %~ removeCard)
+          & (foundCardsL %~ Map.map removeCard)
 
     whenDraw <- checkWindows [mkWhen (Window.DrawCard iid (toCard card) Deck.EncounterDeck)]
     afterDraw <- checkWindows [mkAfter (Window.DrawCard iid (toCard card) Deck.EncounterDeck)]
     -- [ALERT]: If you extend this make sure to update LetMeHandleThis
+    let uiRevelation = getPlayer iid >>= (`sendRevelation` (toJSON $ toCard card))
     case toCardType card of
       EnemyType -> do
         investigator <- getInvestigator iid
@@ -2238,22 +2265,19 @@ runGameMessage msg g = case msg of
           & (entitiesL . enemiesL . at enemyId ?~ enemy)
           & (activeCardL ?~ toCard card)
       TreacheryType -> do
-        pid <- getPlayer iid
-        sendRevelation pid (toJSON $ toCard card)
+        uiRevelation
         -- handles draw windows
         push $ DrewTreachery iid (Just Deck.EncounterDeck) (toCard card)
         pure g'
       EncounterAssetType -> do
-        pid <- getPlayer iid
-        sendRevelation pid (toJSON $ toCard card)
+        uiRevelation
         assetId <- getRandom
         let asset = createAsset card assetId
         -- Asset is assumed to have a revelation ability if drawn from encounter deck
         pushAll $ whenDraw : afterDraw : resolve (Revelation iid $ AssetSource assetId)
         pure $ g' & (entitiesL . assetsL . at assetId ?~ asset)
       EncounterEventType -> do
-        pid <- getPlayer iid
-        sendRevelation pid (toJSON $ toCard card)
+        uiRevelation
         eventId <- getRandom
         let owner = fromMaybe iid (toCardOwner card)
         let event' = createEvent card owner eventId
@@ -2261,8 +2285,7 @@ runGameMessage msg g = case msg of
         pushAll $ whenDraw : afterDraw : resolve (Revelation iid $ EventSource eventId)
         pure $ g' & (entitiesL . eventsL . at eventId ?~ event')
       LocationType -> do
-        pid <- getPlayer iid
-        sendRevelation pid (toJSON $ toCard card)
+        uiRevelation
         locationId <- getRandom
         let location = createLocation card locationId
 
@@ -2366,13 +2389,10 @@ runGameMessage msg g = case msg of
   ResolvedAbility _ -> do
     let removedEntitiesF = if length (gameActiveAbilities g) <= 1 then actionRemovedEntitiesL .~ mempty else id
     pure $ g & activeAbilitiesL %~ drop 1 & removedEntitiesF
-  Do (Discarded (EnemyTarget eid) _ _) -> do
-    pure $ g & actionRemovedEntitiesL . enemiesL %~ deleteMap eid
   Discarded (AssetTarget aid) _ (EncounterCard _) -> do
     runMessage (RemoveAsset aid) g
-  Discarded (AssetTarget aid) _ _ -> do
-    mAsset <- maybeAsset aid
-    case mAsset of
+  Discarded (AssetTarget aid) _source _card -> do
+    maybeAsset aid >>= \case
       Nothing -> pure g
       Just _ -> runMessage (RemoveAsset aid) g
   DiscardedCost (SearchedCardTarget cid) -> do
@@ -2426,7 +2446,7 @@ runGameMessage msg g = case msg of
     wouldDo
       (Run $ windows'' <> [Discarded (TreacheryTarget tid) source card])
       (Window.WouldBeDiscarded (TreacheryTarget tid))
-      (Window.Discarded iid source card)
+      (Window.Discarded (Just iid) source card)
 
     pure g
   UpdateHistory iid historyItem -> do

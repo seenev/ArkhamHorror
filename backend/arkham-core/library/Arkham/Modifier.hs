@@ -44,10 +44,13 @@ data ModifierType
   | ActionDoesNotCauseAttacksOfOpportunity Action
   | ActionSkillModifier {action :: Action, skillType :: SkillType, value :: Int}
   | ActionsAreFree
+  | IsPointOfDamage
+  | IsPointOfHorror
   | AddKeyword Keyword
   | AddSkillIcons [SkillIcon]
   | AddSkillToOtherSkill SkillType SkillType
   | AddSkillValue SkillType
+  | SetSkillValue SkillType Int
   | AddSkillValueOf SkillType InvestigatorId
   | AddTrait Trait
   | AdditionalActions Text Source Int
@@ -77,7 +80,7 @@ data ModifierType
   | PlayUnderControlOf InvestigatorId
   | AttacksCannotBeCancelled
   | BaseSkillOf {skillType :: SkillType, value :: Int}
-  | BecomesFast
+  | BecomesFast WindowMatcher
   | Blank
   | BlankExceptForcedAbilities
   | Blocked
@@ -215,6 +218,7 @@ data ModifierType
   | EnemyFightActionCriteria CriteriaOverride
   | EnemyFightWithMin Int (Min Int)
   | EnemyEngageActionCriteria CriteriaOverride
+  | EntersPlayWithDoom Int
   | ExtraResources Int
   | FailTies
   | FewerActions Int
@@ -223,6 +227,7 @@ data ModifierType
   | ForcePrey PreyMatcher
   | ForceSpawnLocation LocationMatcher
   | ForceSpawn SpawnAt
+  | Foresight Text
   | ChangeSpawnLocation LocationMatcher LocationMatcher
   | ForcedChaosTokenChange ChaosTokenFace [ChaosTokenFace]
   | GainVictory Int
@@ -269,6 +274,7 @@ data ModifierType
   | NoSurge
   | NonDirectHorrorMustBeAssignToThisFirst
   | NonDirectDamageMustBeAssignToThisFirst
+  | NonDirectDamageMustBeAssignToThisN Int
   | Omnipotent
   | OnlyFirstCopyCardCountsTowardMaximumHandSize
   | PlaceOnBottomOfDeckInsteadOfDiscard
@@ -406,13 +412,29 @@ data ActionTarget
   | IsAction Action
   | EnemyAction Action EnemyMatcher
   | IsAnyAction
+  | AnyActionTarget [ActionTarget]
   deriving stock (Show, Eq, Ord, Data)
+
+instance IsLabel "parley" ActionTarget where
+  fromLabel = IsAction #parley
+
+instance IsLabel "play" ActionTarget where
+  fromLabel = IsAction #play
+
+instance IsLabel "engage" ActionTarget where
+  fromLabel = IsAction #engage
+
+instance IsLabel "resource" ActionTarget where
+  fromLabel = IsAction #resource
 
 instance IsLabel "draw" ActionTarget where
   fromLabel = IsAction #draw
 
 instance IsLabel "move" ActionTarget where
   fromLabel = IsAction #move
+
+instance IsLabel "evade" ActionTarget where
+  fromLabel = IsAction #evade
 
 instance IsLabel "investigate" ActionTarget where
   fromLabel = IsAction #investigate

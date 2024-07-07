@@ -30,7 +30,7 @@ instance RunMessage ShrineOfTheMoirai3 where
     PlayThisEvent iid eid | eid == toId attrs -> do
       location <- getJustLocation iid
       push $ PlaceEvent iid eid $ AtLocation location
-      pure . ShrineOfTheMoirai3 $ attrs & usesL . at Offering .~ Just 3
+      pure . ShrineOfTheMoirai3 $ attrs & tokensL . at Offering .~ Just 3
     UseThisAbility _iid (isProxySource attrs -> True) 1 -> do
       push $ DoStep 5 msg
       pure e
@@ -45,4 +45,4 @@ instance RunMessage ShrineOfTheMoirai3 where
           | target <- targets
           ]
       pure e
-    _ -> ShrineOfTheMoirai3 <$> lift (runMessage msg attrs)
+    _ -> ShrineOfTheMoirai3 <$> liftRunMessage msg attrs

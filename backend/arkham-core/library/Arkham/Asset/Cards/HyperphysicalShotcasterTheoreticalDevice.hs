@@ -310,7 +310,7 @@ instance RunMessage HyperphysicalShotcasterTheoreticalDevice where
       when (notNull lids)
         $ chooseOne
           iid
-          [ targetLabel lid' [toMessage $ viaInvestigate $ discover iid lid' attrs 1]
+          [ targetLabel lid' [Msg.DiscoverClues iid $ viaInvestigate $ discover lid' attrs 1]
           | lid' <- lids
           ]
       pure a
@@ -353,4 +353,4 @@ instance RunMessage HyperphysicalShotcasterTheoreticalDevice where
           | n == 4 = Matterweaver
           | otherwise = error "Invalid manifest"
       pure . HyperphysicalShotcasterTheoreticalDevice . (`with` Metadata (Just manifest')) $ attrs
-    _ -> HyperphysicalShotcasterTheoreticalDevice . (`with` meta) <$> lift (runMessage msg attrs)
+    _ -> HyperphysicalShotcasterTheoreticalDevice . (`with` meta) <$> liftRunMessage msg attrs

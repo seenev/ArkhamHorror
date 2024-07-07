@@ -40,8 +40,8 @@ instance HasAbilities Prophetic3 where
 
 instance RunMessage Prophetic3 where
   runMessage msg a@(Prophetic3 attrs) = runQueueT $ case msg of
-    Do BeginRound -> pure . Prophetic3 $ attrs & usesL . ix Resource %~ max 2
+    Do BeginRound -> pure . Prophetic3 $ attrs & tokensL . ix Resource %~ max 2
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       skillTestModifier (attrs.ability 1) iid (AnySkillValue 1)
       pure a
-    _ -> Prophetic3 <$> lift (runMessage msg attrs)
+    _ -> Prophetic3 <$> liftRunMessage msg attrs

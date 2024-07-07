@@ -90,6 +90,7 @@ costSealedChaosTokensL :: Lens' ActiveCost [ChaosToken]
 costSealedChaosTokensL = lens activeCostSealedChaosTokens $ \m x -> m {activeCostSealedChaosTokens = x}
 
 matchTarget :: [[Action]] -> [[Action]] -> ActionTarget -> Action -> Bool
+matchTarget takenActions performedActions (AnyActionTarget as) a = any (\atarget -> matchTarget takenActions performedActions atarget a) as
 matchTarget _takenActions performedActions (FirstOneOfPerformed as) action =
   action `elem` as && all (\a -> all (notElem a) performedActions) as
 matchTarget _ _ (IsAction a) action = action == a
@@ -142,6 +143,7 @@ startAbilityPayment activeCost@ActiveCost {activeCostId} iid window abilityType 
     FastAbility' _ mAction ->
       pushAll $ PayCosts activeCostId : [PerformedActions iid [action] | action <- toList mAction]
     ForcedWhen _ aType -> startAbilityPayment activeCost iid window aType source provokeAttacksOfOpportunity
+    CustomizationReaction {} -> push (PayCosts activeCostId)
     ReactionAbility {} -> push (PayCosts activeCostId)
     ActionAbilityWithBefore actions' _ _ -> handleActions (Action.Activate : actions')
     ActionAbilityWithSkill actions' _ _ -> handleActions $ Action.Activate : actions'
@@ -175,6 +177,14 @@ payCost msg c iid skipAdditionalCosts cost = do
   let pay = PayCost acId iid skipAdditionalCosts
   player <- getPlayer iid
   case cost of
+    CostIfEnemy mtchr cost1 cost2 -> do
+      hasEnemy <- selectAny mtchr
+      payCost msg c iid skipAdditionalCosts $ if hasEnemy then cost1 else cost2
+    CostWhenEnemy mtchr cost' -> do
+      hasEnemy <- selectAny mtchr
+      if hasEnemy
+        then payCost msg c iid skipAdditionalCosts cost'
+        else pure c
     ArchiveOfConduitsUnidentifiedCost -> do
       locations <- select Anywhere
       push
@@ -212,7 +222,7 @@ payCost msg c iid skipAdditionalCosts cost = do
       push $ toMessage $ enemyAttack eid source iid
       pure c
     DrawEncounterCardsCost n -> do
-      pushAll $ replicate n $ InvestigatorDrawEncounterCard iid
+      pushAll $ replicate n $ drawEncounterCard iid source
       pure c
     SkillTestCost stsource sType n -> do
       push $ beginSkillTest iid stsource ScenarioTarget sType n
@@ -565,7 +575,7 @@ payCost msg c iid skipAdditionalCosts cost = do
                             0
                             total
                             (tshow uType <> " from " <> name)
-                            (SpendUses (toTarget assetId) uType 1)
+                            (SpendUses source (toTarget assetId) uType 1)
                       )
                       resourcesFromAssets
       withPayment $ ResourcePayment x
@@ -597,12 +607,14 @@ payCost msg c iid skipAdditionalCosts cost = do
       push $ SpendActions iid source' actions' modifiedActionCost
       withPayment $ ActionPayment x
     UseCost assetMatcher uType n -> do
-      assets <- select assetMatcher
-      push $ chooseOrRunOne player [targetLabel aid [SpendUses (AssetTarget aid) uType n] | aid <- assets]
+      assets <- select $ assetMatcher <> AssetWithTokens (atLeast n) uType
+      push
+        $ chooseOrRunOne player [targetLabel aid [SpendUses source (AssetTarget aid) uType n] | aid <- assets]
       withPayment $ UsesPayment n
     EventUseCost eventMatcher uType n -> do
       events <- select eventMatcher
-      push $ chooseOrRunOne player [targetLabel eid [SpendUses (EventTarget eid) uType n] | eid <- events]
+      push
+        $ chooseOrRunOne player [targetLabel eid [SpendUses source (EventTarget eid) uType n] | eid <- events]
       withPayment $ UsesPayment n
     DynamicUseCost assetMatcher uType costValue -> case costValue of
       DrawnCardsValue -> do
@@ -613,7 +625,8 @@ payCost msg c iid skipAdditionalCosts cost = do
             _ -> getDrawnCards xs
           n = getDrawnCards c.windows
         assets <- select assetMatcher
-        push $ chooseOrRunOne player [targetLabel aid [SpendUses (AssetTarget aid) uType n] | aid <- assets]
+        push
+          $ chooseOrRunOne player [targetLabel aid [SpendUses source (AssetTarget aid) uType n] | aid <- assets]
         withPayment $ UsesPayment n
     UseCostUpTo assetMatcher uType n m -> do
       assets <- select assetMatcher
@@ -860,7 +873,7 @@ instance RunMessage ActiveCost where
           pushAll [PayCosts acId, PayCostFinished acId]
           pure c
         ForCard isPlayAction card -> do
-          modifiers' <- getModifiers iid
+          modifiers' <- (<>) <$> getModifiers iid <*> getModifiers card
           let
             cardDef = toCardDef card
             modifiersPreventAttackOfOpportunity = ActionDoesNotCauseAttacksOfOpportunity #play `elem` modifiers'

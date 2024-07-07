@@ -362,6 +362,400 @@ const getImage = (el: HTMLElement): string | null => {
   }
 }
 
+// Hunter's Armor
+.tick-09021 {
+  --top-0: 19.1%;
+  --top-1: 30.0%;
+  --top-2: 40.9%;
+  --top-3: 45.1%;
+  --top-4: 49.4%;
+  --top-5: 60.3%;
+  --top-6: 74.4%;
+  --left-1: 8.6%;
+  --left-2: 11.6%;
+  --left-3: 15.2%;
+}
+
+.customization-09021-0-1 {
+  top: var(--top-0);
+  left: var(--left-1);
+}
+.customization-09021-1-1 {
+  top: var(--top-1);
+  left: var(--left-1);
+}
+.customization-09021-1-2 {
+  top: var(--top-1);
+  left: var(--left-2);
+}
+.customization-09021-2-1 {
+  top: var(--top-2);
+  left: var(--left-1);
+}
+.customization-09021-2-2 {
+  top: var(--top-2);
+  left: var(--left-2);
+}
+.customization-09021-3-1 {
+  top: var(--top-3);
+  left: var(--left-1);
+}
+.customization-09021-3-2 {
+  top: var(--top-3);
+  left: var(--left-2);
+}
+.customization-09021-4-1 {
+  top: var(--top-4);
+  left: var(--left-1);
+}
+.customization-09021-4-2 {
+  top: var(--top-4);
+  left: var(--left-2);
+}
+.customization-09021-5-1 {
+  top: var(--top-5);
+  left: var(--left-1);
+}
+.customization-09021-5-2 {
+  top: var(--top-5);
+  left: var(--left-2);
+}
+.customization-09021-5-3 {
+  top: var(--top-5);
+  left: var(--left-3);
+}
+.customization-09021-6-1 {
+  top: var(--top-6);
+  left: var(--left-1);
+}
+.customization-09021-6-2 {
+  top: var(--top-6);
+  left: var(--left-2);
+}
+.customization-09021-6-3 {
+  top: var(--top-6);
+  left: var(--left-3);
+}
+
+// Runic Axe
+.tick-09022 {
+  --top-0: 18.6%;
+  --top-1: 25.3%;
+  --top-2: 34.9%;
+  --top-3: 47.2%;
+  --top-4: 56.7%;
+  --top-5: 69.3%;
+  --top-6: 75.9%;
+  --top-7: 82.4%;
+  --left-1: 8.6%;
+  --left-2: 11.6%;
+  --left-3: 14.7%;
+  --left-4: 17.7%;
+}
+
+.customization-09022-0-1 {
+  top: var(--top-0);
+  left: var(--left-1);
+}
+.customization-09022-1-1 {
+  top: var(--top-1);
+  left: var(--left-1);
+}
+.customization-09022-2-1 {
+  top: var(--top-2);
+  left: var(--left-1);
+}
+.customization-09022-3-1 {
+  top: var(--top-3);
+  left: var(--left-1);
+}
+.customization-09022-4-1 {
+  top: var(--top-4);
+  left: var(--left-1);
+}
+.customization-09022-4-2 {
+  top: var(--top-4);
+  left: var(--left-2);
+}
+.customization-09022-5-1 {
+  top: var(--top-5);
+  left: var(--left-1);
+}
+.customization-09022-5-2 {
+  top: var(--top-5);
+  left: var(--left-2);
+}
+.customization-09022-5-3 {
+  top: var(--top-5);
+  left: var(--left-3);
+}
+.customization-09022-6-1 {
+  top: var(--top-6);
+  left: var(--left-1);
+}
+.customization-09022-6-2 {
+  top: var(--top-6);
+  left: var(--left-2);
+}
+.customization-09022-6-3 {
+  top: var(--top-6);
+  left: var(--left-3);
+}
+.customization-09022-7-1 {
+  top: var(--top-7);
+  left: var(--left-1);
+}
+.customization-09022-7-2 {
+  top: var(--top-7);
+  left: var(--left-2);
+}
+.customization-09022-7-3 {
+  top: var(--top-7);
+  left: var(--left-3);
+}
+.customization-09022-7-4 {
+  top: var(--top-7);
+  left: var(--left-4);
+}
+
+// Custom Modifications
+.tick-09023 {
+  --top-0: 19.1%;
+  --top-1: 33.4%;
+  --top-2: 40.9%;
+  --top-3: 51.7%;
+  --top-4: 62.5%;
+  --top-5: 73.3%;
+  --left-1: 8.6%;
+  --left-2: 11.9%;
+  --left-3: 15.4%;
+  --left-4: 19.1%;
+}
+
+.customization-09023-0-1 {
+  top: var(--top-0);
+  left: var(--left-1);
+}
+.customization-09023-1-1 {
+  top: var(--top-1);
+  left: var(--left-1);
+}
+.customization-09023-1-2 {
+  top: var(--top-1);
+  left: var(--left-2);
+}
+.customization-09023-2-1 {
+  top: var(--top-2);
+  left: var(--left-1);
+}
+.customization-09023-2-2 {
+  top: var(--top-2);
+  left: var(--left-2);
+}
+.customization-09023-3-1 {
+  top: var(--top-3);
+  left: var(--left-1);
+}
+.customization-09023-3-2 {
+  top: var(--top-3);
+  left: var(--left-2);
+}
+.customization-09023-3-3 {
+  top: var(--top-3);
+  left: var(--left-3);
+}
+.customization-09023-4-1 {
+  top: var(--top-4);
+  left: var(--left-1);
+}
+.customization-09023-4-2 {
+  top: var(--top-4);
+  left: var(--left-2);
+}
+.customization-09023-4-3 {
+  top: var(--top-4);
+  left: var(--left-3);
+}
+.customization-09023-5-1 {
+  top: var(--top-5);
+  left: var(--left-1);
+}
+.customization-09023-5-2 {
+  top: var(--top-5);
+  left: var(--left-2);
+}
+.customization-09023-5-3 {
+  top: var(--top-5);
+  left: var(--left-3);
+}
+.customization-09023-5-4 {
+  top: var(--top-5);
+  left: var(--left-4);
+}
+
+// Alchemical Distillation
+.tick-09040 {
+  --top-0: 19.1%;
+  --top-1: 26.7%;
+  --top-2: 34.3%;
+  --top-3: 45.1%;
+  --top-4: 52.8%;
+  --top-5: 60.2%;
+  --top-6: 74.3%;
+  --left-1: 8.6%;
+  --left-2: 11.9%;
+  --left-3: 15.4%;
+  --left-4: 19.1%;
+  --left-5: 22.4%;
+}
+
+.customization-09040-0-1 {
+  top: var(--top-0);
+  left: var(--left-1);
+}
+.customization-09040-1-1 {
+  top: var(--top-1);
+  left: var(--left-1);
+}
+.customization-09040-2-1 {
+  top: var(--top-2);
+  left: var(--left-1);
+}
+.customization-09040-3-1 {
+  top: var(--top-3);
+  left: var(--left-1);
+}
+.customization-09040-4-1 {
+  top: var(--top-4);
+  left: var(--left-1);
+}
+.customization-09040-4-2 {
+  top: var(--top-4);
+  left: var(--left-2);
+}
+.customization-09040-5-1 {
+  top: var(--top-5);
+  left: var(--left-1);
+}
+.customization-09040-5-2 {
+  top: var(--top-5);
+  left: var(--left-2);
+}
+.customization-09040-5-3 {
+  top: var(--top-5);
+  left: var(--left-3);
+}
+.customization-09040-5-4 {
+  top: var(--top-5);
+  left: var(--left-4);
+}
+.customization-09040-6-1 {
+  top: var(--top-6);
+  left: var(--left-1);
+}
+.customization-09040-6-2 {
+  top: var(--top-6);
+  left: var(--left-2);
+}
+.customization-09040-6-3 {
+  top: var(--top-6);
+  left: var(--left-3);
+}
+.customization-09040-6-4 {
+  top: var(--top-6);
+  left: var(--left-4);
+}
+.customization-09040-6-5 {
+  top: var(--top-6);
+  left: var(--left-5);
+}
+
+// Empirical Hypothesis
+.tick-09041 {
+  --top-0: 18.4%;
+  --top-1: 25.2%;
+  --top-2: 31.8%;
+  --top-3: 38.3%;
+  --top-4: 45.0%;
+  --top-5: 57.4%;
+  --top-6: 67.0%;
+  --top-7: 76.5%;
+  --left-1: 8.6%;
+  --left-2: 11.5%;
+  --left-3: 14.4%;
+  --left-4: 17.5%;
+}
+
+.customization-09041-0-1 {
+  top: var(--top-0);
+  left: var(--left-1);
+}
+.customization-09041-1-1 {
+  top: var(--top-1);
+  left: var(--left-1);
+}
+.customization-09041-2-1 {
+  top: var(--top-2);
+  left: var(--left-1);
+}
+.customization-09041-3-1 {
+  top: var(--top-3);
+  left: var(--left-1);
+}
+.customization-09041-4-1 {
+  top: var(--top-4);
+  left: var(--left-1);
+}
+.customization-09041-4-2 {
+  top: var(--top-4);
+  left: var(--left-2);
+}
+.customization-09041-5-1 {
+  top: var(--top-5);
+  left: var(--left-1);
+}
+.customization-09041-5-2 {
+  top: var(--top-5);
+  left: var(--left-2);
+}
+.customization-09041-5-3 {
+  top: var(--top-5);
+  left: var(--left-3);
+}
+.customization-09041-5-4 {
+  top: var(--top-5);
+  left: var(--left-4);
+}
+.customization-09041-6-1 {
+  top: var(--top-6);
+  left: var(--left-1);
+}
+.customization-09041-6-2 {
+  top: var(--top-6);
+  left: var(--left-2);
+}
+.customization-09041-6-3 {
+  top: var(--top-6);
+  left: var(--left-3);
+}
+.customization-09041-7-1 {
+  top: var(--top-7);
+  left: var(--left-1);
+}
+.customization-09041-7-2 {
+  top: var(--top-7);
+  left: var(--left-2);
+}
+.customization-09041-7-3 {
+  top: var(--top-7);
+  left: var(--left-3);
+}
+.customization-09041-7-4 {
+  top: var(--top-7);
+  left: var(--left-4);
+}
+
+// Hyperphysical Shotcaster
 .tick-09119 {
   --top-0: 19.0%;
   --top-1: 28.4%;

@@ -62,6 +62,9 @@ freeReaction window = ReactionAbility window Free
 forced :: WindowMatcher -> AbilityType
 forced = ForcedAbility
 
+class HasCost c where
+  overCost :: (Cost -> Cost) -> c -> c
+
 pattern FastAbility :: Cost -> AbilityType
 pattern FastAbility cost <- FastAbility' cost []
   where
@@ -70,6 +73,7 @@ pattern FastAbility cost <- FastAbility' cost []
 data AbilityType
   = FastAbility' {cost :: Cost, actions :: [Action]}
   | ReactionAbility {window :: WindowMatcher, cost :: Cost}
+  | CustomizationReaction {label :: Text, window :: WindowMatcher, cost :: Cost}
   | ActionAbility {actions :: [Action], cost :: Cost}
   | ActionAbilityWithSkill {actions :: [Action], skillType :: SkillType, cost :: Cost}
   | ActionAbilityWithBefore {actions :: [Action], actionBefore :: Action, cost :: Cost} -- Action is first type, before is second
@@ -83,6 +87,25 @@ data AbilityType
   | ForcedWhen {criteria :: Criterion, abilityType :: AbilityType}
   deriving stock (Show, Ord, Eq, Data)
 
+instance HasCost AbilityType where
+  overCost f = \case
+    FastAbility' cost actions -> FastAbility' (f cost) actions
+    ReactionAbility window cost -> ReactionAbility window (f cost)
+    CustomizationReaction label window cost -> CustomizationReaction label window (f cost)
+    ActionAbility actions cost -> ActionAbility actions (f cost)
+    ActionAbilityWithSkill actions skillType cost ->
+      ActionAbilityWithSkill actions skillType (f cost)
+    ActionAbilityWithBefore actions actionBefore cost ->
+      ActionAbilityWithBefore actions actionBefore (f cost)
+    SilentForcedAbility window -> SilentForcedAbility window
+    ForcedAbility window -> ForcedAbility window
+    ForcedAbilityWithCost window cost -> ForcedAbilityWithCost window (f cost)
+    AbilityEffect cost -> AbilityEffect (f cost)
+    Objective abilityType -> Objective (overCost f abilityType)
+    Haunted -> Haunted
+    Cosmos -> Cosmos
+    ForcedWhen criteria abilityType -> ForcedWhen criteria (overCost f abilityType)
+
 pattern Anytime :: AbilityType
 pattern Anytime <- SilentForcedAbility AnyWindow
   where
@@ -92,6 +115,7 @@ abilityTypeCostL :: Traversal' AbilityType Cost
 abilityTypeCostL f = \case
   FastAbility' cost action -> (`FastAbility'` action) <$> f cost
   ReactionAbility window cost -> ReactionAbility window <$> f cost
+  CustomizationReaction label window cost -> CustomizationReaction label window <$> f cost
   ActionAbility action cost -> ActionAbility action <$> f cost
   ActionAbilityWithSkill action skillType cost ->
     ActionAbilityWithSkill action skillType <$> f cost

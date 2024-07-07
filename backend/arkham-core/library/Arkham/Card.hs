@@ -181,6 +181,12 @@ cardMatch a (toCardMatcher -> cardMatcher) = case cardMatcher of
   CardWithRevelation -> cdRevelation (toCardDef a) /= NoRevelation
   CardOwnedBy iid -> toCardOwner a == Just iid
 
+isNonWeakness :: IsCard a => a -> Bool
+isNonWeakness = (`cardMatch` NonWeakness)
+
+filterCards :: IsCardMatcher a => a -> [Card] -> [Card]
+filterCards matcher = filter (`cardMatch` matcher)
+
 instance IsCard PlayerCard where
   toCard = PlayerCard
   toCardId = pcId
@@ -208,6 +214,16 @@ data Card
   | VengeanceCard Card
   deriving stock (Show, Ord, Data)
 
+instance HasField "keywords" Card (Set Keyword) where
+  getField = cdKeywords . toCardDef
+
+instance HasField "id" Card CardId where
+  getField = \case
+    PlayerCard pc -> pc.id
+    EncounterCard ec -> ec.id
+    VengeanceCard vc -> vc.id
+  {-# INLINE getField #-}
+
 isEncounterCard :: Card -> Bool
 isEncounterCard = \case
   PlayerCard _ -> False
@@ -225,11 +241,17 @@ instance HasField "skills" Card [SkillIcon] where
 instance HasField "cost" Card (Maybe CardCost) where
   getField = cdCost . toCardDef
 
+instance HasField "printedCost" Card Int where
+  getField = (.printedCost) . toCardDef
+
 instance HasField "level" Card (Maybe Int) where
   getField = cdLevel . toCardDef
 
 instance HasField "kind" Card CardType where
   getField = cdCardType . toCardDef
+
+instance HasField "owner" Card (Maybe InvestigatorId) where
+  getField = toCardOwner
 
 instance Eq Card where
   a == b = toCardId a == toCardId b

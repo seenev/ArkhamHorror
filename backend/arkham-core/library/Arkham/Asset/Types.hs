@@ -7,6 +7,7 @@ import Arkham.Prelude
 import Arkham.Ability.Types
 import Arkham.Asset.Cards
 import Arkham.Asset.Uses
+import Arkham.Calculation
 import Arkham.Card
 import Arkham.ChaosToken (ChaosToken)
 import Arkham.ClassSymbol
@@ -15,21 +16,20 @@ import Arkham.Classes.HasAbilities
 import Arkham.Classes.HasModifiersFor
 import Arkham.Classes.RunMessage.Internal
 import Arkham.Field
-import Arkham.GameValue
 import Arkham.Id
 import Arkham.Json
 import Arkham.Key
 import Arkham.Matcher.Types (AssetMatcher (AssetWithId), Be (..))
-import Arkham.Message hiding (AssetDamage, Damage)
+import Arkham.Message hiding (AssetDamage)
 import Arkham.Name
 import Arkham.Placement
 import Arkham.Slot
 import Arkham.Source
 import Arkham.Target
-import Arkham.Token
 import Arkham.Token qualified as Token
 import Arkham.Trait (Trait)
 import Data.Data
+import Data.Map.Strict qualified as Map
 import GHC.Records
 
 data Asset = forall a. IsAsset a => Asset a
@@ -157,7 +157,7 @@ data instance Field Asset :: Type -> Type where
   AssetDoom :: Field Asset Int
   AssetExhausted :: Field Asset Bool
   AssetUses :: Field Asset (Map UseType Int)
-  AssetStartingUses :: Field Asset (Uses GameValue)
+  AssetStartingUses :: Field Asset (Uses GameCalculation)
   AssetController :: Field Asset (Maybe InvestigatorId)
   AssetOwner :: Field Asset (Maybe InvestigatorId)
   AssetLocation :: Field Asset (Maybe LocationId)
@@ -244,9 +244,9 @@ data AssetAttrs = AssetAttrs
   , assetSlots :: [SlotType]
   , assetHealth :: Maybe Int
   , assetSanity :: Maybe Int
-  , assetUses :: Map UseType Int
-  , assetPrintedUses :: Uses GameValue
+  , assetPrintedUses :: Uses GameCalculation
   , assetExhausted :: Bool
+  , assetExiled :: Bool
   , assetTokens :: Tokens
   , assetCanLeavePlayByNormalMeans :: Bool
   , assetWhenNoUses :: Maybe WhenNoUses
@@ -264,12 +264,21 @@ data AssetAttrs = AssetAttrs
   }
   deriving stock (Show, Eq, Generic)
 
+assetUses :: AssetAttrs -> Map UseType Int
+assetUses = Map.filterWithKey (\k _ -> tokenIsUse k) . coerce . assetTokens
+
 instance Is AssetAttrs AssetId where
   is = (==) . toId
   {-# INLINE is #-}
 
 instance Be AssetAttrs AssetMatcher where
   be = AssetWithId . assetId
+
+instance HasField "customizations" AssetAttrs (IntMap Int) where
+  getField = assetCustomizations
+
+instance HasField "cardId" AssetAttrs CardId where
+  getField = assetCardId
 
 instance HasField "id" AssetAttrs AssetId where
   getField = assetId
@@ -282,6 +291,9 @@ instance HasField "flipped" AssetAttrs Bool where
 
 instance HasField "placement" AssetAttrs Placement where
   getField = assetPlacement
+
+instance HasField "exiled" AssetAttrs Bool where
+  getField = assetExiled
 
 instance HasField "exhausted" AssetAttrs Bool where
   getField = assetExhausted
@@ -299,7 +311,7 @@ instance HasField "owner" AssetAttrs (Maybe InvestigatorId) where
   getField = assetOwner
 
 instance HasField "uses" AssetAttrs (Map UseType Int) where
-  getField = assetUses
+  getField = Map.filterWithKey (\k _ -> tokenIsUse k) . coerce . assetTokens
 
 instance HasField "tokens" AssetAttrs Tokens where
   getField = assetTokens
@@ -367,10 +379,11 @@ instance FromJSON AssetAttrs where
     assetSlots <- o .: "slots"
     assetHealth <- o .: "health"
     assetSanity <- o .: "sanity"
-    assetUses <- o .: "uses"
-    assetPrintedUses <- o .: "printedUses"
+    deprecatedAssetUses <- o .:? "uses" .!= mempty
+    assetPrintedUses <- o .: "printedUses" <|> (fmap GameValueCalculation <$> o .: "printedUses")
     assetExhausted <- o .: "exhausted"
-    assetTokens <- o .: "tokens"
+    assetExiled <- o .:? "exiled" .!= False
+    assetTokens <- Map.unionWith (+) deprecatedAssetUses <$> o .: "tokens"
     assetCanLeavePlayByNormalMeans <- o .: "canLeavePlayByNormalMeans"
     assetWhenNoUses <- o .: "whenNoUses"
     assetIsStory <- o .: "isStory"
@@ -421,9 +434,9 @@ assetWith f cardDef g =
             , assetSlots = cdSlots cardDef
             , assetHealth = Nothing
             , assetSanity = Nothing
-            , assetUses = mempty
             , assetPrintedUses = cdUses cardDef
             , assetExhausted = False
+            , assetExiled = False
             , assetTokens = mempty
             , assetCanLeavePlayByNormalMeans = True
             , assetWhenNoUses = Nothing

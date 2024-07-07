@@ -55,11 +55,14 @@ affectsOthers matcher =
 class OneOf a where
   oneOf :: [a] -> a
 
+mapOneOf :: OneOf b => (a -> b) -> [a] -> b
+mapOneOf f = oneOf . map f
+
+notOneOf :: (Not a, OneOf a) => [a] -> a
+notOneOf = not_ . oneOf
+
 instance OneOf SkillTestMatcher where
   oneOf = SkillTestOneOf
-
-instance OneOf SkillTestTypeMatcher where
-  oneOf = SkillTestTypeOneOf
 
 instance OneOf AbilityMatcher where
   oneOf = AbilityOneOf
@@ -180,6 +183,9 @@ assetIs = AssetIs . toCardCode
 assetControlledBy :: InvestigatorId -> AssetMatcher
 assetControlledBy = AssetControlledBy . InvestigatorWithId
 
+assetWithAttachedEvent :: (AsId a, IdOf a ~ EventId) => a -> AssetMatcher
+assetWithAttachedEvent = AssetWithAttachedEvent . EventWithId . asId
+
 assetAt :: (AsId a, IdOf a ~ LocationId) => a -> AssetMatcher
 assetAt = AssetAt . LocationWithId . asId
 
@@ -229,6 +235,10 @@ locationWithEnemy = LocationWithEnemy . EnemyWithId . asId
 locationWithInvestigator :: InvestigatorId -> LocationMatcher
 locationWithInvestigator = LocationWithInvestigator . InvestigatorWithId
 {-# INLINE locationWithInvestigator #-}
+
+locationWithLowerPrintedShroudThan :: (AsId a, IdOf a ~ LocationId) => a -> LocationMatcher
+locationWithLowerPrintedShroudThan = LocationWithLowerPrintedShroudThan . LocationWithId . asId
+{-# INLINE locationWithLowerPrintedShroudThan #-}
 
 locationWithDiscoverableCluesBy :: InvestigatorId -> LocationMatcher
 locationWithDiscoverableCluesBy =
@@ -328,6 +338,7 @@ replaceThisCard :: Data a => CardId -> a -> a
 replaceThisCard cardId = over biplate (transform replace)
  where
   replace NotThisCard = basic (NotCard $ CardWithId cardId)
+  replace IsThisCard = basic (CardWithId cardId)
   replace m = m
 
 replaceLocationMatcher :: Data a => LocationId -> LocationMatcher -> a -> a

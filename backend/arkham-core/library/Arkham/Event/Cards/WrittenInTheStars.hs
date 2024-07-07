@@ -8,7 +8,6 @@ where
 import Arkham.Card
 import Arkham.Deck qualified as Deck
 import Arkham.Effect.Import
-import Arkham.EffectMetadata
 import Arkham.Event.Cards qualified as Cards
 import Arkham.Event.Import.Lifted
 import {-# SOURCE #-} Arkham.GameEnv (getCard)
@@ -42,7 +41,7 @@ instance RunMessage WrittenInTheStars where
           attrs
           (CardIdTarget $ toCardId card)
       pure e
-    _ -> WrittenInTheStars <$> lift (runMessage msg attrs)
+    _ -> WrittenInTheStars <$> liftRunMessage msg attrs
 
 newtype WrittenInTheStarsEffect = WrittenInTheStarsEffect EffectAttrs
   deriving anyclass (HasAbilities, IsEffect)
@@ -74,4 +73,4 @@ instance RunMessage WrittenInTheStarsEffect where
     EndTurn {} -> do
       disable attrs
       pure e
-    _ -> WrittenInTheStarsEffect <$> lift (runMessage msg attrs)
+    _ -> WrittenInTheStarsEffect <$> liftRunMessage msg attrs

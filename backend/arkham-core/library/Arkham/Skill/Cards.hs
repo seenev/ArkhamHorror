@@ -33,6 +33,7 @@ allPlayerSkillCards =
       , allIn5
       , anythingYouCanDoBetter
       , arrogance
+      , asYouWish
       , beloved
       , bruteForce1
       , copycat3
@@ -77,6 +78,7 @@ allPlayerSkillCards =
       , nimble
       , notWithoutAFight
       , occultTheory1
+      , onTheMend
       , opportunist
       , opportunist2
       , overpower
@@ -103,6 +105,7 @@ allPlayerSkillCards =
       , signumCrucis2
       , skeptic1
       , steadfast
+      , strengthInNumbers1
       , strokeOfLuck2
       , stunningBlow
       , surprisingFind1
@@ -488,6 +491,7 @@ essenceOfTheDream =
     { cdCardTraits = setFromList [Practiced, Expert]
     , cdKeywords = singleton (Keyword.Bonded 1 "06112")
     , cdLevel = Nothing
+    , cdWhenDiscarded = ToBonded
     }
 
 momentum1 :: CardDef
@@ -678,6 +682,14 @@ occultTheory1 =
     , cdCardInHandEffects = True
     }
 
+strengthInNumbers1 :: CardDef
+strengthInNumbers1 =
+  (skill "08077" "Strength in Numbers" [#wild] Survivor)
+    { cdCardTraits = setFromList [Innate, Synergy]
+    , cdLevel = Just 1
+    , cdCardInHandEffects = True
+    }
+
 dauntlessSpirit1 :: CardDef
 dauntlessSpirit1 =
   (skill "08078" "Dauntless Spirit" [] Survivor)
@@ -685,6 +697,23 @@ dauntlessSpirit1 =
     , cdLevel = Just 1
     , cdCardInHandEffects = True
     }
+
+asYouWish :: CardDef
+asYouWish =
+  signature "09001"
+    $ (skill "09002" "\"As you wish\"" [#wild, #wild, #wild] Neutral)
+      { cdCardTraits = setFromList [Practiced, Expert]
+      , cdCommitRestrictions = [OnlyNotYourTest]
+      }
+
+onTheMend :: CardDef
+onTheMend =
+  signature "09004"
+    $ (skill "09006" "On the Mend" [#wild, #wild] Neutral)
+      { cdCardTraits = setFromList [Innate]
+      , cdCommitRestrictions = [OnlyYourTest]
+      , cdWhenDiscarded = ToSetAside
+      }
 
 fightingLessons :: CardDef
 fightingLessons =

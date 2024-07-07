@@ -11,6 +11,7 @@ import Arkham.Asset.Runner
 import Arkham.DamageEffect
 import Arkham.Discover
 import Arkham.Matcher hiding (NonAttackDamageEffect)
+import Arkham.Message qualified as Msg
 
 newtype TheNecronomiconPetrusDeDaciaTranslation5 = TheNecronomiconPetrusDeDaciaTranslation5 AssetAttrs
   deriving anyclass (IsAsset, HasModifiersFor)
@@ -47,7 +48,7 @@ instance RunMessage TheNecronomiconPetrusDeDaciaTranslation5 where
         push $ skillTestModifier (toAbilitySource attrs 1) iid (AnySkillValue 2)
         pure a
       UseCardAbility iid (isSource attrs -> True) 2 _ _ -> do
-        pushM $ drawCards iid (toAbilitySource attrs 2) 2
+        push $ drawCards iid (toAbilitySource attrs 2) 2
         pure a
       UseCardAbility iid (isSource attrs -> True) 3 _ _ -> do
         lids <- select $ LocationWithDiscoverableCluesBy $ InvestigatorWithId iid
@@ -55,7 +56,7 @@ instance RunMessage TheNecronomiconPetrusDeDaciaTranslation5 where
         pushWhen (notNull lids)
           $ chooseOrRunOne
             player
-            [ targetLabel lid [toMessage $ discover iid lid (attrs.ability 1) 2]
+            [ targetLabel lid [Msg.DiscoverClues iid $ discover lid (attrs.ability 1) 2]
             | lid <- lids
             ]
         pure a

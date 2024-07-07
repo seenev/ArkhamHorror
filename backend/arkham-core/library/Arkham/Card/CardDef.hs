@@ -7,6 +7,7 @@ import Arkham.Prelude
 
 import Arkham.Action (Action)
 import Arkham.Asset.Uses
+import Arkham.Calculation
 import Arkham.Card.CardCode
 import Arkham.Card.CardType
 import Arkham.Card.Cost
@@ -16,7 +17,6 @@ import {-# SOURCE #-} Arkham.Cost
 import Arkham.Criteria
 import Arkham.Customization
 import Arkham.EncounterSet
-import Arkham.GameValue
 import Arkham.Id
 import Arkham.Json
 import Arkham.Keyword (HasKeywords (..), Keyword)
@@ -55,6 +55,7 @@ data CardLimit
   = LimitPerInvestigator Int
   | LimitPerTrait Trait Int
   | MaxPerGame Int
+  | MaxPerAttack Int
   deriving stock (Show, Eq, Ord, Data)
 
 $(deriveJSON defaultOptions ''DeckRestriction)
@@ -91,6 +92,13 @@ data PurchaseTrauma
   deriving stock (Show, Eq, Ord, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
+data DiscardType
+  = ToDiscard
+  | ToBonded
+  | ToSetAside
+  deriving stock (Show, Eq, Ord, Generic, Data)
+  deriving anyclass (ToJSON, FromJSON)
+
 data CardDef = CardDef
   { cdCardCode :: CardCode
   , cdName :: Name
@@ -121,7 +129,7 @@ data CardDef = CardDef
   , cdDoubleSided :: Bool
   , cdLimits :: [CardLimit]
   , cdExceptional :: Bool
-  , cdUses :: Uses GameValue
+  , cdUses :: Uses GameCalculation
   , cdPlayableFromDiscard :: Bool
   , cdStage :: Maybe Int
   , cdSlots :: [SlotType]
@@ -143,6 +151,7 @@ data CardDef = CardDef
   , cdBeforeEffect :: Bool
   , cdCustomizations :: Map Customization Int
   , cdOtherSide :: Maybe CardCode
+  , cdWhenDiscarded :: DiscardType
   }
   deriving stock (Show, Eq, Ord, Data)
 
@@ -160,6 +169,9 @@ instance HasField "fastWindow" CardDef (Maybe WindowMatcher) where
 
 instance HasField "keywords" CardDef (Set Keyword) where
   getField = cdKeywords
+
+instance HasField "printedCost" CardDef Int where
+  getField = maybe 0 toPrintedCost . cdCost
 
 instance Exists CardDef where
   exists def = case cdCardType def of
@@ -233,6 +245,7 @@ emptyCardDef cCode name cType =
     , cdBeforeEffect = False
     , cdCustomizations = mempty
     , cdOtherSide = Nothing
+    , cdWhenDiscarded = ToDiscard
     }
 
 instance IsCardMatcher CardDef where
@@ -241,8 +254,8 @@ instance IsCardMatcher CardDef where
 instance IsLocationMatcher CardDef where
   toLocationMatcher = locationIs
 
-isSignature :: CardDef -> Bool
-isSignature = any isSignatureDeckRestriction . cdDeckRestrictions
+isSignature :: HasCardDef a => a -> Bool
+isSignature = any isSignatureDeckRestriction . cdDeckRestrictions . toCardDef
  where
   isSignatureDeckRestriction = \case
     Signature _ -> True
@@ -345,6 +358,7 @@ instance FromJSON CardDef where
     cdBeforeEffect <- o .: "beforeEffect"
     cdCustomizations <- o .:? "customizations" .!= mempty
     cdOtherSide <- o .:? "otherSide"
+    cdWhenDiscarded <- o .:? "whenDiscarded" .!= ToDiscard
     pure CardDef {..}
 
 instance Has InvestigatorMatcher CardDef where

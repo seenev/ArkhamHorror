@@ -34,6 +34,9 @@ withModifiers
   -> m a
 withModifiers = withModifiers'
 
+getCombinedModifiers :: forall m. HasGame m => [Target] -> m [ModifierType]
+getCombinedModifiers targets = map modifierType . nub . concat <$> traverse getFullModifiers targets
+
 getModifiers :: forall a m. (HasGame m, Targetable a) => a -> m [ModifierType]
 getModifiers (toTarget -> target) = do
   ignoreCanModifiers <- getIgnoreCanModifiers
@@ -53,6 +56,9 @@ getFullModifiers (toTarget -> target) = do
   filter (filterF . modifierType) <$> getModifiers' target
 
 getModifiers' :: (HasGame m, Targetable a) => a -> m [Modifier]
+getModifiers' (toTarget -> BothTarget t1 t2) = do
+  allMods <- getAllModifiers
+  pure $ findWithDefault [] t1 allMods <> findWithDefault [] t2 allMods
 getModifiers' (toTarget -> target) =
   findWithDefault [] target <$> getAllModifiers
 
@@ -76,6 +82,9 @@ toModifiers = map . toModifier
 
 modified :: (Sourceable a, Applicative m) => a -> [ModifierType] -> m [Modifier]
 modified a = pure . toModifiers a
+
+maybeModified :: (Sourceable a, Monad m) => a -> MaybeT m [ModifierType] -> m [Modifier]
+maybeModified a = modified a . fromMaybe [] <=< runMaybeT
 
 toModifiersWith :: Sourceable a => a -> (Modifier -> Modifier) -> [ModifierType] -> [Modifier]
 toModifiersWith a f xs = map (f . toModifier a) xs
@@ -180,6 +189,10 @@ phaseModifiers
   :: (Sourceable source, Targetable target) => source -> target -> [ModifierType] -> Message
 phaseModifiers source target modifiers = createWindowModifierEffect EffectPhaseWindow source target modifiers
 
+cardDrawModifier
+  :: (Sourceable source, Targetable target) => source -> target -> [ModifierType] -> Message
+cardDrawModifier source target modifiers = createWindowModifierEffect EffectCardDrawWindow source target modifiers
+
 cardResolutionModifier
   :: (Sourceable source, Targetable target, IsCard card)
   => card
@@ -237,7 +250,7 @@ getMeta target k = do
 
 getMetaMaybe :: (HasGame m, Targetable target, FromJSON a) => a -> target -> Key -> m a
 getMetaMaybe def target k = do
-  metas <- mapMaybe (preview _MetaModifier) <$> getModifiers target
+  metas <- mapMaybe (preview _MetaModifier) . traceShowId <$> getModifiers target
   let
     value = getFirst $ flip foldMap metas $ \case
       Object o -> case fromJSON <$> KeyMap.lookup k o of

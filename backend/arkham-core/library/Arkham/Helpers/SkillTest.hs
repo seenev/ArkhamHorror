@@ -13,6 +13,7 @@ import Arkham.Classes.Query hiding (matches)
 import Arkham.CommitRestriction
 import Arkham.Enemy.Types (Field (..))
 import {-# SOURCE #-} Arkham.GameEnv
+import {-# SOURCE #-} Arkham.GameEnv as X (getSkillTest)
 import Arkham.Helpers.Calculation
 import Arkham.Helpers.Card
 import Arkham.Helpers.Cost
@@ -38,11 +39,22 @@ import Arkham.Treachery.Types (Field (..))
 import Arkham.Window (Window (..))
 import Arkham.Window qualified as Window
 
+getBaseValueDifferenceForSkillTest
+  :: HasGame m => InvestigatorId -> SkillTest -> m Int
+getBaseValueDifferenceForSkillTest iid st = do
+  base <- getBaseValueForSkillTest iid st
+  difficulty <- getModifiedSkillTestDifficulty st
+  pure $ difficulty - base
+
+getBaseValueForSkillTest
+  :: HasGame m => InvestigatorId -> SkillTest -> m Int
+getBaseValueForSkillTest iid st = getBaseValueForSkillTestType iid st.action st.kind
+
 getBaseValueForSkillTestType
   :: HasGame m => InvestigatorId -> Maybe Action -> SkillTestType -> m Int
 getBaseValueForSkillTestType iid mAction = \case
-  SkillSkillTest skillType -> baseSkillValueFor skillType mAction [] iid
-  AndSkillTest types -> sum <$> traverse (\skillType -> baseSkillValueFor skillType mAction [] iid) types
+  SkillSkillTest skillType -> baseSkillValueFor skillType mAction iid
+  AndSkillTest types -> sum <$> traverse (\skillType -> baseSkillValueFor skillType mAction iid) types
   ResourceSkillTest -> field InvestigatorResources iid
 
 getSkillTestRevealedChaosTokens :: HasGame m => m [ChaosToken]
@@ -210,6 +222,9 @@ isInvestigating iid lid =
     , (== Just #investigate) <$> getSkillTestAction
     , (== Just iid) <$> getSkillTestInvestigator
     ]
+
+inAttackSkillTest :: HasGame m => m Bool
+inAttackSkillTest = (== Just #fight) <$> getSkillTestAction
 
 getIsPerilous :: HasGame m => SkillTest -> m Bool
 getIsPerilous skillTest = case skillTestSource skillTest of
@@ -394,6 +409,7 @@ getIsCommittable a c = do
                     OnlyInvestigator matcher -> iid <=~> matcher
                     OnlyCardCommittedToTest -> pure $ null committedCardTitles
                     OnlyYourTest -> pure $ iid == a
+                    OnlyNotYourTest -> pure $ iid /= a
                     MustBeCommittedToYourTest -> pure $ iid == a
                     OnlyIfYourLocationHasClues -> maybe (pure False) (fieldMap LocationClues (> 0)) mlid
                     OnlyTestWithActions as -> pure $ maybe False (`elem` as) (skillTestAction skillTest)
@@ -467,10 +483,10 @@ getSkillTestDifficultyDifferenceFromBaseValue iid skillTest = do
   skillDifficulty <- getModifiedSkillTestDifficulty skillTest
   case skillTestType skillTest of
     SkillSkillTest skillType -> do
-      baseValue <- baseSkillValueFor skillType Nothing [] iid
+      baseValue <- baseSkillValueFor skillType Nothing iid
       pure $ skillDifficulty - baseValue
     AndSkillTest types -> do
-      baseValue <- sum <$> traverse (\skillType -> baseSkillValueFor skillType Nothing [] iid) types
+      baseValue <- sum <$> traverse (\skillType -> baseSkillValueFor skillType Nothing iid) types
       pure $ skillDifficulty - baseValue
     ResourceSkillTest -> do
       resources <- field InvestigatorResources iid

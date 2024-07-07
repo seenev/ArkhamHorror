@@ -1,12 +1,14 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 
 name:           arkham-api
 version:        0.0.0
 build-type:     Simple
+extra-source-files:
+    digital-ocean.crt
 
 flag dev
   description: Turn on development settings, like auto-reload templates.
@@ -64,6 +66,7 @@ library
   hs-source-dirs:
       library
   default-extensions:
+      BlockArguments
       DataKinds
       DeriveAnyClass
       DerivingStrategies
@@ -73,6 +76,7 @@ library
       NoImplicitPrelude
       NoMonomorphismRestriction
       OverloadedStrings
+      OverloadedRecordDot
       RecordWildCards
       TypeFamilies
   build-depends:
@@ -87,12 +91,15 @@ library
     , case-insensitive
     , conduit
     , containers
+    , crypton-x509-store
+    , data-default-class
     , directory
     , errors
     , esqueleto
     , fast-logger
     , file-embed
     , hashable
+    , hedis
     , http-api-data
     , http-client-tls
     , http-conduit
@@ -112,6 +119,7 @@ library
     , text
     , these
     , time
+    , tls
     , unix
     , unliftio
     , uri-bytestring
@@ -141,6 +149,7 @@ executable arkham-api
   hs-source-dirs:
       app
   default-extensions:
+      BlockArguments
       DataKinds
       DeriveAnyClass
       DerivingStrategies
@@ -150,6 +159,7 @@ executable arkham-api
       NoImplicitPrelude
       NoMonomorphismRestriction
       OverloadedStrings
+      OverloadedRecordDot
       RecordWildCards
       TypeFamilies
   ghc-options: -threaded -rtsopts -with-rtsopts=-N

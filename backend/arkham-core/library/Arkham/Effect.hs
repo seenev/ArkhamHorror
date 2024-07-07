@@ -56,6 +56,7 @@ import Arkham.Asset.Assets (
   fieldworkEffect,
   fireExtinguisher1Effect,
   gildedVoltoEffect,
+  grapplingHookEffect,
   gregoryGryEffect,
   grislyTotemSeeker3Effect,
   grislyTotemSurvivor3Effect,
@@ -125,6 +126,7 @@ import Arkham.Event.Events (
   pilfer3Effect,
   sleightOfHandEffect,
   slipAway2Effect,
+  snipe1Effect,
   spectralRazorEffect,
   stormOfSpirits3Effect,
   stormOfSpiritsEffect,
@@ -141,6 +143,7 @@ import Arkham.Event.Events (
 import Arkham.Investigator.Investigators (
   dexterDrakeEffect,
   fatherMateoElderSignEffect,
+  kymaniJonesEffect,
   nathanielChoEffect,
   pennyWhiteEffect,
   ritaYoungElderSignEffect,
@@ -419,6 +422,9 @@ allEffects =
     , ("08021", SomeEffect getBehindMeEffect)
     , ("08034", SomeEffect writtenInTheStarsEffect)
     , ("08055", SomeEffect blackMarket2Effect)
+    , ("08087", SomeEffect snipe1Effect)
+    , ("09008", SomeEffect kymaniJonesEffect)
+    , ("09009", SomeEffect grapplingHookEffect)
     , ("09041", SomeEffect empiricalHypothesisEffect)
     , ("50013", SomeEffect twilightBladeEffect)
     , ("50044", SomeEffect jeremiahPierceEffect)

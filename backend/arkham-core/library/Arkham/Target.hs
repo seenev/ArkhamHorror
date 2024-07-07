@@ -34,7 +34,6 @@ data Target
   | LocationTarget LocationId
   | SetAsideLocationsTarget [Trait]
   | SkillTestTarget
-  | AfterSkillTestTarget
   | TreacheryTarget TreacheryId
   | EncounterDeckTarget
   | ScenarioDeckTarget
@@ -68,6 +67,9 @@ data Target
   | LabeledTarget Text Target -- Use with caution, this is not a real target
   deriving stock (Show, Eq, Ord, Data)
 
+bothTarget :: (Targetable a, Targetable b) => a -> b -> Target
+bothTarget a b = BothTarget (toTarget a) (toTarget b)
+
 actualTarget :: Target -> Target
 actualTarget = \case
   LabeledTarget _ t -> actualTarget t
@@ -82,6 +84,9 @@ investigatorTarget _ = Nothing
 
 _InvestigatorTarget :: Prism' Target InvestigatorId
 _InvestigatorTarget = prism' InvestigatorTarget investigatorTarget
+
+instance IsLabel "encounterDeck" Target where
+  fromLabel = EncounterDeckTarget
 
 instance IsLabel "investigator" (Getting (First InvestigatorId) Target InvestigatorId) where
   fromLabel = _InvestigatorTarget
@@ -99,6 +104,9 @@ pattern InitiatorProxy t a <- SkillTestInitiatorTarget (ProxyTarget t a)
 class WithTarget a where
   getTarget :: a -> Maybe Target
   setTarget :: Targetable target => target -> a -> a
+
+maybeIsTarget :: (Targetable target, WithTarget a) => target -> a -> Bool
+maybeIsTarget target a = maybe False (isTarget target) (getTarget a)
 
 class Targetable a where
   toTarget :: a -> Target

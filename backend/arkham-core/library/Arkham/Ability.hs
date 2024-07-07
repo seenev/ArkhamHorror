@@ -24,6 +24,9 @@ import Arkham.Source
 import Control.Lens (set)
 import GHC.Records
 
+withAdditionalCost :: Cost -> Ability -> Ability
+withAdditionalCost c ab = ab {abilityAdditionalCosts = c : abilityAdditionalCosts ab}
+
 inHandAbility :: Ability -> Bool
 inHandAbility = inHandCriteria . abilityCriteria
  where
@@ -60,6 +63,9 @@ abilityIsActionAbility a = case abilityType a of
   ActionAbilityWithSkill {} -> True
   ActionAbilityWithBefore {} -> True
   _ -> False
+
+abilityIsActivate :: Ability -> Bool
+abilityIsActivate a = not (abilityIndex a >= 100 && abilityIndex a <= 102) && abilityIsActionAbility a
 
 abilityIsFastAbility :: Ability -> Bool
 abilityIsFastAbility a = case abilityType a of
@@ -195,6 +201,7 @@ mkAbility entity idx type' =
     , abilityDisplayAsAction = False
     , abilityDelayAdditionalCosts = False
     , abilityBasic = False
+    , abilityAdditionalCosts = []
     }
 
 applyAbilityModifiers :: Ability -> [ModifierType] -> Ability
@@ -227,9 +234,10 @@ abilityTypeActions :: AbilityType -> [Action]
 abilityTypeActions = \case
   FastAbility' _ actions -> actions
   ReactionAbility {} -> []
-  ActionAbility actions _ -> actions
-  ActionAbilityWithSkill actions _ _ -> actions
-  ActionAbilityWithBefore actions _ _ -> actions
+  CustomizationReaction {} -> []
+  ActionAbility actions _ -> #activate : actions
+  ActionAbilityWithSkill actions _ _ -> #activate : actions
+  ActionAbilityWithBefore actions _ _ -> #activate : actions
   ForcedAbility _ -> []
   SilentForcedAbility _ -> []
   ForcedAbilityWithCost _ _ -> []
@@ -243,6 +251,7 @@ abilityTypeCost :: AbilityType -> Cost
 abilityTypeCost = \case
   FastAbility' cost _ -> cost
   ReactionAbility _ cost -> cost
+  CustomizationReaction _ _ cost -> cost
   ActionAbility _ cost -> cost
   ActionAbilityWithSkill _ _ cost -> cost
   ActionAbilityWithBefore _ _ cost -> cost
@@ -260,6 +269,8 @@ modifyCost f = \case
   FastAbility' cost mAction -> FastAbility' (f cost) mAction
   ReactionAbility window cost ->
     ReactionAbility window $ f cost
+  CustomizationReaction label window cost ->
+    CustomizationReaction label window $ f cost
   ActionAbility mAction cost ->
     ActionAbility mAction $ f cost
   ActionAbilityWithSkill mAction skill cost ->
@@ -307,6 +318,7 @@ defaultAbilityWindow = \case
   SilentForcedAbility window -> window
   ForcedAbilityWithCost window _ -> window
   ReactionAbility window _ -> window
+  CustomizationReaction _ window _ -> window
   AbilityEffect _ -> AnyWindow
   Haunted -> AnyWindow
   Cosmos -> AnyWindow
@@ -321,6 +333,7 @@ isFastAbilityType = \case
   ForcedAbilityWithCost {} -> False
   Objective aType -> isFastAbilityType aType
   ReactionAbility {} -> False
+  CustomizationReaction {} -> False
   ActionAbility {} -> False
   ActionAbilityWithSkill {} -> False
   ActionAbilityWithBefore {} -> False
@@ -337,6 +350,7 @@ isReactionAbilityType = \case
   Objective aType -> isReactionAbilityType aType
   FastAbility' {} -> False
   ReactionAbility {} -> True
+  CustomizationReaction {} -> False
   ActionAbility {} -> False
   ActionAbilityWithSkill {} -> False
   ActionAbilityWithBefore {} -> False
@@ -353,6 +367,7 @@ isSilentForcedAbilityType = \case
   Objective aType -> isSilentForcedAbilityType aType
   FastAbility' {} -> False
   ReactionAbility {} -> False
+  CustomizationReaction {} -> False
   ActionAbility {} -> False
   ActionAbilityWithSkill {} -> False
   ActionAbilityWithBefore {} -> False
@@ -377,6 +392,7 @@ defaultAbilityLimit = \case
   SilentForcedAbility _ -> GroupLimit PerWindow 1
   ForcedAbilityWithCost _ _ -> GroupLimit PerWindow 1
   ReactionAbility _ _ -> PlayerLimit PerWindow 1
+  CustomizationReaction {} -> PlayerLimit PerWindow 1
   FastAbility' {} -> NoLimit
   ActionAbility _ _ -> NoLimit
   ActionAbilityWithBefore {} -> NoLimit

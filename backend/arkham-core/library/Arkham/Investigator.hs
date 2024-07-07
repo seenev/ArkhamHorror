@@ -127,6 +127,12 @@ allInvestigators =
       , SomeInvestigatorCard montereyJack
       , SomeInvestigatorCard lilyChen
       , SomeInvestigatorCard bobJenkins
+      , SomeInvestigatorCard carsonSinclair
+      , SomeInvestigatorCard vincentLee
+      , SomeInvestigatorCard kymaniJones
+      , SomeInvestigatorCard aminaZidane
+      , SomeInvestigatorCard darrellSimmons
+      , SomeInvestigatorCard charlieKane
       , SomeInvestigatorCard nathanielCho
       , SomeInvestigatorCard harveyWalters
       , SomeInvestigatorCard winifredHabbamock

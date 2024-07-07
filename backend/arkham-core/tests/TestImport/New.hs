@@ -30,6 +30,7 @@ import Arkham.Classes.HasChaosTokenValue
 import Arkham.Classes.HasGame
 import Arkham.CommitRestriction
 import Arkham.Deck qualified as Deck
+import Arkham.Discover
 import Arkham.Enemy.Types
 import Arkham.Enemy.Types qualified as Field
 import Arkham.Entities qualified as Entities
@@ -72,9 +73,7 @@ loadDeckCards :: Investigator -> [PlayerCard] -> TestAppT ()
 loadDeckCards i = run . LoadDeck (toId i) . Deck
 
 drawCards :: Investigator -> Int -> TestAppT ()
-drawCards i n = do
-  drawing <- Helpers.drawCards (toId i) i n
-  run drawing
+drawCards i n = run $ Helpers.drawCards (toId i) i n
 
 playCard :: Investigator -> Card -> TestAppT ()
 playCard i c = run $ InitiatePlayCard (toId i) c Nothing NoPayment (defaultWindows $ toId i) True
@@ -375,7 +374,7 @@ runSkillTest i st n = do
 discoverClues :: Investigator -> Int -> TestAppT ()
 discoverClues i n = do
   lid <- fieldJust InvestigatorLocation i.id
-  run $ InvestigatorDiscoverClues i.id lid GameSource n Nothing
+  run $ DiscoverClues i.id $ discover lid GameSource n
 
 getActionsFrom :: Sourceable source => Investigator -> source -> TestAppT [Ability]
 getActionsFrom i s = do
@@ -421,7 +420,7 @@ assertHasNoReaction = do
 drawsCard :: Investigator -> CardDef -> TestAppT ()
 drawsCard i cd = do
   c <- genCard cd
-  drawing <- Helpers.drawCards (toId i) GameSource 1
+  let drawing = Helpers.drawCards (toId i) GameSource 1
   runAll [PutCardOnTopOfDeck (toId i) (Deck.InvestigatorDeck $ toId i) c, drawing]
 
 startSkillTest :: HasCallStack => TestAppT ()

@@ -3,7 +3,39 @@ module Arkham.Customization where
 import Arkham.Prelude
 
 data Customization
-  = -- Empirical Hypothesis 09041
+  = -- Hunter's Armor 09021
+    Enchanted -- 0
+  | ProtectiveRunes -- 1
+  | Durable -- 2
+  | Hallowed -- 3
+  | Lightweight -- 4
+  | Hexdrinker -- 5
+  | ArmorOfThorns -- 6
+  | -- Runic Axe 09022
+    Heirloom -- 0
+  | InscriptionOfGlory -- 1
+  | InscriptionOfTheElders -- 2
+  | InscriptionOfTheHunt -- 3
+  | InscriptionOfFury -- 4
+  | AncientPower -- 5
+  | Saga -- 6
+  | Scriptweaver -- 7
+  | -- Custom Modifications 09023
+    NotchedSight -- 0
+  | ExtendedStock -- 1
+  | Counterbalance -- 2
+  | LeatherGrip -- 3
+  | ExtendedMagazine -- 4
+  | QuicksilverBullets -- 5
+  | -- Alchemical Distillation 09040
+    MendingDistillate -- 0
+  | CalmingDistillate -- 1
+  | EnlighteningDistillate -- 2
+  | QuickeningDistillate -- 3
+  | Refined -- 4
+  | Empowered -- 5
+  | Perfected -- 6
+  | -- Empirical Hypothesis 09041
     PessimisticOutlook -- 0
   | TrialAndError -- 1
   | IndepedentVariable -- 2

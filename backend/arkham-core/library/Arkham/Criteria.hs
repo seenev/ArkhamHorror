@@ -206,6 +206,7 @@ data Criterion
   | Negate Criterion
   | DuringAction
   | AffectedByTarot
+  | HasTrueMagick
   deriving stock (Show, Eq, Ord, Data)
 
 instance Not Criterion where
@@ -231,6 +232,9 @@ atYourLocation matcher = exists (AtYourLocation <> matcher)
 
 class Exists a where
   exists :: a -> Criterion
+
+any_ :: (Exists a, OneOf a) => [a] -> Criterion
+any_ = exists . oneOf
 
 overrideExists :: Exists a => a -> CriteriaOverride
 overrideExists = CriteriaOverride . exists

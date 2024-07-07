@@ -40,8 +40,8 @@ instance HasAbilities Sleuth3 where
 
 instance RunMessage Sleuth3 where
   runMessage msg a@(Sleuth3 attrs) = runQueueT $ case msg of
-    Do BeginRound -> pure . Sleuth3 $ attrs & usesL . ix Resource %~ max 2
+    Do BeginRound -> pure . Sleuth3 $ attrs & tokensL . ix Resource %~ max 2
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       skillTestModifier (attrs.ability 1) iid (AnySkillValue 1)
       pure a
-    _ -> Sleuth3 <$> lift (runMessage msg attrs)
+    _ -> Sleuth3 <$> liftRunMessage msg attrs

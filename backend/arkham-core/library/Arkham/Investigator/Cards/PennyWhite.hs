@@ -9,7 +9,7 @@ import Arkham.Prelude
 import Arkham.Ability
 import Arkham.Asset.Cards qualified as Cards hiding (pennyWhite)
 import Arkham.Card
-import Arkham.Draw.Types
+import Arkham.Discover
 import Arkham.Effect.Runner ()
 import Arkham.Effect.Types
 import Arkham.Event.Cards qualified as Cards
@@ -18,6 +18,7 @@ import Arkham.Helpers.Modifiers
 import Arkham.Investigator.Cards qualified as Cards
 import Arkham.Investigator.Runner
 import Arkham.Matcher
+import Arkham.Message qualified as Msg
 import Arkham.Projection
 import Arkham.Skill.Cards qualified as Cards
 import Arkham.SkillTest.Base
@@ -69,7 +70,7 @@ instance HasChaosTokenValue PennyWhite where
 instance RunMessage PennyWhite where
   runMessage msg i@(PennyWhite attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ InvestigatorDiscoverCluesAtTheirLocation iid (toAbilitySource attrs 1) 1 Nothing
+      push $ Msg.DiscoverClues iid $ discoverAtYourLocation (toAbilitySource attrs 1) 1
       pure i
     ResolveChaosToken _drawnToken ElderSign iid | iid == toId attrs -> do
       mSkillTest <- getSkillTest
@@ -77,7 +78,6 @@ instance RunMessage PennyWhite where
         pushWhen (skillTestIsRevelation skillTest)
           $ createCardEffect Cards.pennyWhite Nothing (toSource attrs) (toTarget attrs)
       pure i
-    DrawStartingHand iid | iid == toId attrs -> pure i
     InvestigatorMulligan iid | iid == toId attrs -> do
       push $ FinishedWithMulligan iid
       pure i
@@ -89,10 +89,8 @@ instance RunMessage PennyWhite where
       let card = fromJustNote "must be in hand" $ find ((== cardId) . toCardId) hand
       pushAll [RemoveCardFromHand iid cardId, RemovedFromGame card]
       pure i
-    Do (DiscardCard iid _ _) | iid == toId attrs -> do
-      pure i
-    DrawCards cardDraw | cardDrawInvestigator cardDraw == toId attrs -> do
-      pure i
+    Do (DiscardCard iid _ _) | iid == toId attrs -> pure i
+    DrawCards iid cardDraw | iid == attrs.id && cardDraw.isPlayerDraw -> pure i
     _ -> PennyWhite <$> runMessage msg attrs
 
 newtype PennyWhiteEffect = PennyWhiteEffect EffectAttrs

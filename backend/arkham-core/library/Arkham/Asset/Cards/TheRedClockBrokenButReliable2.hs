@@ -36,10 +36,10 @@ instance RunMessage TheRedClockBrokenButReliable2 where
           | otherwise = []
       chooseOrRunOne
         iid
-        $ [Label "Place 1 charge here" [AddUses attrs.id Charge 1]]
+        $ [Label "Place 1 charge here" [AddUses (attrs.ability 1) attrs.id Charge 1]]
         <> [ Label
             "Take all charges here as resources"
-            $ MoveUses (toSource attrs) (ResourceTarget iid) Charge charges
+            $ MoveTokens (attrs.ability 1) (toSource attrs) (ResourceTarget iid) Charge charges
             : otherMessages
            | charges > 0
            ]
@@ -54,4 +54,4 @@ instance RunMessage TheRedClockBrokenButReliable2 where
             | location <- locations
             ]
       pure a
-    _ -> TheRedClockBrokenButReliable2 <$> lift (runMessage msg attrs)
+    _ -> TheRedClockBrokenButReliable2 <$> liftRunMessage msg attrs

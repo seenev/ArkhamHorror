@@ -26,8 +26,11 @@ import Arkham.SkillType
 import Arkham.Source
 import Arkham.Strategy
 import Arkham.Target
+import Control.Lens (Plated (..), Prism', cosmos, prism', sumOf, toListOf)
 import Data.Aeson.TH
+import Data.Data.Lens (uniplate)
 import Data.Text qualified as T
+import GHC.Records
 
 totalActionCost :: Cost -> Int
 totalActionCost (ActionCost n) = n
@@ -40,9 +43,13 @@ totalResourceCost (Costs xs) = sum $ map totalResourceCost xs
 totalResourceCost _ = 0
 
 totalResourcePayment :: Payment -> Int
-totalResourcePayment (ResourcePayment n) = n
-totalResourcePayment (Payments xs) = sum $ map totalResourcePayment xs
-totalResourcePayment _ = 0
+totalResourcePayment = sumOf (cosmos . _ResourcePayment)
+
+totalUsesPayment :: Payment -> Int
+totalUsesPayment = sumOf (cosmos . _UsesPayment)
+
+totalInvestigatorDamagePayment :: Payment -> Int
+totalInvestigatorDamagePayment = sumOf (cosmos . _InvestigatorDamagePayment)
 
 decreaseActionCost :: Cost -> Int -> Cost
 decreaseActionCost (ActionCost x) y = ActionCost $ max 0 (x - y)
@@ -66,6 +73,24 @@ increaseResourceCost (Costs (a : as)) y = case a of
   ResourceCost x -> Costs (ResourceCost (x + y) : as)
   _ -> a <> increaseResourceCost (Costs as) y
 increaseResourceCost other _ = other
+
+discardPayments :: Payment -> [(Zone, Card)]
+discardPayments = concat . toListOf (cosmos . _DiscardPayment)
+
+exhaustedPayments :: Payment -> [Target]
+exhaustedPayments = concat . toListOf (cosmos . _ExhaustPayment)
+
+instance HasField "discards" Payment [(Zone, Card)] where
+  getField = discardPayments
+
+instance HasField "exhausted" Payment [Target] where
+  getField = exhaustedPayments
+
+instance HasField "resources" Payment Int where
+  getField = totalResourcePayment
+
+instance HasField "investigatorDamage" Payment Int where
+  getField = totalInvestigatorDamagePayment
 
 data Payment
   = ActionPayment Int
@@ -93,6 +118,34 @@ data Payment
   | NoPayment
   | SupplyPayment Supply
   deriving stock (Show, Eq, Ord, Data)
+
+instance Plated Payment where
+  plate = uniplate
+
+_DiscardPayment :: Prism' Payment [(Zone, Card)]
+_DiscardPayment = prism' DiscardPayment $ \case
+  DiscardPayment x -> Just x
+  _ -> Nothing
+
+_ExhaustPayment :: Prism' Payment [Target]
+_ExhaustPayment = prism' ExhaustPayment $ \case
+  ExhaustPayment x -> Just x
+  _ -> Nothing
+
+_ResourcePayment :: Prism' Payment Int
+_ResourcePayment = prism' ResourcePayment $ \case
+  ResourcePayment x -> Just x
+  _ -> Nothing
+
+_UsesPayment :: Prism' Payment Int
+_UsesPayment = prism' UsesPayment $ \case
+  UsesPayment x -> Just x
+  _ -> Nothing
+
+_InvestigatorDamagePayment :: Prism' Payment Int
+_InvestigatorDamagePayment = prism' InvestigatorDamagePayment $ \case
+  InvestigatorDamagePayment x -> Just x
+  _ -> Nothing
 
 data Cost
   = ActionCost Int
@@ -146,6 +199,8 @@ data Cost
   | EventUseCost EventMatcher UseType Int
   | DynamicUseCost AssetMatcher UseType DynamicUseCostValue
   | UseCostUpTo AssetMatcher UseType Int Int -- (e.g. Spend 1-5 ammo, see M1918 BAR)
+  | CostWhenEnemy EnemyMatcher Cost
+  | CostIfEnemy EnemyMatcher Cost Cost
   | UpTo Int Cost
   | SealCost ChaosTokenMatcher
   | SealMultiCost Int ChaosTokenMatcher
@@ -180,6 +235,9 @@ exhaust = ExhaustCost . toTarget
 discardCost :: Targetable a => a -> Cost
 discardCost = DiscardCost FromPlay . toTarget
 
+exileCost :: Targetable a => a -> Cost
+exileCost = ExileCost . toTarget
+
 removeCost :: Targetable a => a -> Cost
 removeCost = RemoveCost . toTarget
 
@@ -198,6 +256,8 @@ displayCostType = \case
     "Discard an encounter card that shares a Trait with that encounter card from beneath Gloria Goldberg"
   ArchiveOfConduitsUnidentifiedCost ->
     "Place 1 resource on 4 different locations, as leylines."
+  CostWhenEnemy _ c -> displayCostType c
+  CostIfEnemy _ _ c -> displayCostType c
   AsIfAtLocationCost _ c -> displayCostType c
   ShuffleAttachedCardIntoDeckCost _ _ -> "Shuffle attached card into deck"
   AddCurseTokenCost n -> "Add " <> tshow n <> " {curse} " <> pluralize n "token" <> "to the chaos bag"
@@ -301,6 +361,14 @@ displayCostType = \case
   ScenarioResourceCost n -> pluralize n "Resource from the scenario reference"
   EventUseCost _ b c -> displayCostType (UseCost AnyAsset b c)
   UseCost _ uType n -> case uType of
+    Clue -> error "Not a use"
+    Damage -> error "Not a use"
+    Doom -> error "Not a use"
+    Horror -> error "Not a use"
+    AlarmLevel -> pluralize n "Alarm Level"
+    LostSoul -> pluralize n "Lost Soul"
+    Corruption -> tshow n <> " Corruption"
+    Depth -> tshow n <> " Depth"
     Aether -> tshow n <> " Aether"
     Ammo -> tshow n <> " Ammo"
     Supply -> if n == 1 then "1 Supply" else tshow n <> " Supplies"
@@ -315,13 +383,23 @@ displayCostType = \case
     Lock -> pluralize n "Lock"
     Evidence -> tshow n <> " Evidence"
     Leyline -> pluralize n "Leyline"
+    Durability -> tshow n <> " Durability"
   DynamicUseCost _ uType _ -> case uType of
+    AlarmLevel -> "X Alarm Levels"
+    Depth -> "X Depth"
+    LostSoul -> "X LostSouls"
+    Clue -> error "Not a use"
+    Damage -> error "Not a use"
+    Doom -> error "Not a use"
+    Horror -> error "Not a use"
+    Corruption -> "X Corruptions"
     Aether -> "X Aether"
     Ammo -> "X Ammo"
     Supply -> "X Supplies"
     Secret -> "X Secrets"
     Charge -> "X Charges"
     Offering -> "X Offerings"
+    Durability -> "X Durability"
     Try -> "X Tries"
     Bounty -> "X Bounties"
     Whistle -> "X Whistles"
@@ -331,12 +409,21 @@ displayCostType = \case
     Evidence -> "X Evidence"
     Leyline -> "X Leylines"
   UseCostUpTo _ uType n m -> case uType of
+    AlarmLevel -> tshow n <> "-" <> tshow m <> " Alarm Levels"
+    Depth -> tshow n <> "-" <> tshow m <> " Depth"
+    LostSoul -> tshow n <> "-" <> tshow m <> " Lost Souls"
+    Clue -> error "Not a use"
+    Doom -> error "Not a use"
+    Horror -> error "Not a use"
+    Damage -> error "Not a use"
     Aether -> tshow n <> "-" <> tshow m <> " Aether"
+    Corruption -> tshow n <> "-" <> tshow m <> " Corruption"
     Ammo -> tshow n <> "-" <> tshow m <> " Ammo"
     Supply -> tshow n <> "-" <> tshow m <> " Supplies"
     Secret -> tshow n <> "-" <> tshow m <> " Secrets"
     Charge -> tshow n <> "-" <> tshow m <> " Charges"
     Offering -> tshow n <> "-" <> tshow m <> " Offerings"
+    Durability -> tshow n <> "-" <> tshow m <> " Durability"
     Try -> tshow n <> "-" <> tshow m <> " Tries"
     Bounty -> tshow n <> "-" <> tshow m <> " Bounties"
     Whistle -> tshow n <> "-" <> tshow m <> " Whistles"
