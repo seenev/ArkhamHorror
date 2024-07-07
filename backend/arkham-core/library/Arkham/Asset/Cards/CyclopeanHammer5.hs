@@ -2,9 +2,6 @@ module Arkham.Asset.Cards.CyclopeanHammer5 (cyclopeanHammer5, CyclopeanHammer5 (
 
 import Arkham.Ability
 import Arkham.Asset.Cards qualified as Cards
-import Arkham.Asset.Runner
-import Arkham.Fight
-import Arkham.Prelude
 import Arkham.Asset.Import.Lifted
 import Arkham.Fight
 import Arkham.Helpers.SkillTest (getSkillTestTarget)
