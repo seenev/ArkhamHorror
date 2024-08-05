@@ -23,6 +23,7 @@ import Arkham.Window qualified as Window
 newtype TommyMuldoon = TommyMuldoon InvestigatorAttrs
   deriving anyclass (IsInvestigator, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 tommyMuldoon :: InvestigatorCard TommyMuldoon
 tommyMuldoon =
@@ -58,16 +59,17 @@ instance RunMessage TommyMuldoon where
       hasBecky <- selectAny (assetIs Assets.becky)
       player <- getPlayer iid
 
+      chooseMsg <-
+        chooseAmounts
+          player
+          ("Distribute " <> tshow (damage + horror) <> " Resources")
+          (TotalAmountTarget $ damage + horror)
+          [("Tommy Muldoon Resources", (0, damage + horror)), ("Becky Resources", (0, damage + horror))]
+          (toTarget iid)
+
       pushAll
         $ if hasBecky
-          then
-            [ chooseAmounts
-                player
-                ("Distribute " <> tshow (damage + horror) <> " Resources")
-                (TotalAmountTarget $ damage + horror)
-                [("Tommy Muldoon Resources", (0, damage + horror)), ("Becky Resources", (0, damage + horror))]
-                (toTarget iid)
-            ]
+          then [chooseMsg]
           else
             [TakeResources iid (damage + horror) (toAbilitySource attrs 1) False]
               <> [ShuffleIntoDeck (Deck.InvestigatorDeck iid) (toTarget asset)]

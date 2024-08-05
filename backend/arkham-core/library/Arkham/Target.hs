@@ -20,6 +20,7 @@ import Control.Lens (Getting, Prism', prism')
 import Data.Aeson.TH
 import Data.Monoid (First)
 import GHC.OverloadedLabels
+import GHC.Records
 
 data ForSkillTest = ForSkillTest
 
@@ -33,7 +34,7 @@ data Target
   | InvestigatorDiscardTarget InvestigatorId -- used for cards in discard
   | LocationTarget LocationId
   | SetAsideLocationsTarget [Trait]
-  | SkillTestTarget
+  | SkillTestTarget SkillTestId
   | TreacheryTarget TreacheryId
   | EncounterDeckTarget
   | ScenarioDeckTarget
@@ -65,7 +66,15 @@ data Target
   | BatchTarget BatchId
   | ActiveCostTarget ActiveCostId
   | LabeledTarget Text Target -- Use with caution, this is not a real target
-  deriving stock (Show, Eq, Ord, Data)
+  | ThisTarget -- Used with withModifiers
+  deriving stock (Show, Eq, Ord, Data, Generic)
+
+instance HasField "enemy" Target (Maybe EnemyId) where
+  getField = \case
+    EnemyTarget aid -> Just aid
+    ProxyTarget (CardIdTarget _) t -> t.enemy
+    ProxyTarget t _ -> t.enemy
+    _ -> Nothing
 
 bothTarget :: (Targetable a, Targetable b) => a -> b -> Target
 bothTarget a b = BothTarget (toTarget a) (toTarget b)
@@ -157,6 +166,9 @@ instance Targetable SkillId where
 
 instance Targetable StoryId where
   toTarget = StoryTarget
+
+instance Targetable SkillTestId where
+  toTarget = SkillTestTarget
 
 toActionTarget :: Target -> Target
 toActionTarget (ProxyTarget _ actionTarget) = actionTarget

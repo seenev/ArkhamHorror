@@ -17,11 +17,12 @@ jordanPerry = asset JordanPerry Cards.jordanPerry
 
 instance HasAbilities JordanPerry where
   getAbilities (JordanPerry a) =
-    [ restrictedAbility
-        a
-        1
-        (OnSameLocation <> youExist (InvestigatorWithResources $ atLeast 10))
-        parleyAction_
+    [ skillTestAbility
+        $ restrictedAbility
+          a
+          1
+          (OnSameLocation <> youExist (InvestigatorWithResources $ atLeast 10))
+          parleyAction_
     , groupLimit PerGame
         $ restrictedAbility a 2 (not_ $ exists Story.sickeningReality_66)
         $ forced
@@ -31,12 +32,13 @@ instance HasAbilities JordanPerry where
 instance RunMessage JordanPerry where
   runMessage msg a@(JordanPerry attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ parley iid (attrs.ability 1) attrs #intellect (Fixed 2)
+      sid <- getRandom
+      push $ parley sid iid (attrs.ability 1) attrs #intellect (Fixed 2)
       pure a
-    PassedThisSkillTest iid (isSource attrs -> True) -> do
+    PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       modifiers <- getModifiers iid
-      when (assetClues attrs > 0 && CannotTakeControlOfClues `notElem` modifiers)
-        $ pushAll [RemoveClues (attrs.ability 1) (toTarget attrs) 1, GainClues iid (attrs.ability 1) 1]
+      when (assetClues attrs > 0 && CannotTakeControlOfClues `notElem` modifiers) do
+        pushAll [RemoveClues (attrs.ability 1) (toTarget attrs) 1, GainClues iid (attrs.ability 1) 1]
       pure a
     UseThisAbility iid (isSource attrs -> True) 2 -> do
       lagneauPerdu <- genCard Story.lagneauPerdu

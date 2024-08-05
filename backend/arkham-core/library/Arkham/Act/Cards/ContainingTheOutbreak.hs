@@ -24,8 +24,9 @@ containingTheOutbreak = act (3, A) ContainingTheOutbreak Cards.containingTheOutb
 
 instance HasAbilities ContainingTheOutbreak where
   getAbilities (ContainingTheOutbreak attrs) =
-    [ withTooltip
-        "{action}: Test {willpower} (X) to attempt to seal the rift. X is this location's shroud. Investigators at this location may spend 1 {perPlayer} clues, as a group, to automatically succeed. If you succeed, replace the damage token on this location with a horror token. For the remainder of the game, this location cannot become infested."
+    [ skillTestAbility
+        $ withTooltip
+          "{action}: Test {willpower} (X) to attempt to seal the rift. X is this location's shroud. Investigators at this location may spend 1 {perPlayer} clues, as a group, to automatically succeed. If you succeed, replace the damage token on this location with a horror token. For the remainder of the game, this location cannot become infested."
         $ restrictedAbility
           (proxied (LocationMatcherSource InfestedLocation) attrs)
           1
@@ -49,14 +50,16 @@ instance RunMessage ContainingTheOutbreak where
       1
       _
       (getPaidClues -> paidClues) -> do
+        sid <- getRandom
         pushAll
-          $ [skillTestModifier source SkillTestTarget SkillTestAutomaticallySucceeds | paidClues]
+          $ [skillTestModifier sid source (SkillTestTarget sid) SkillTestAutomaticallySucceeds | paidClues]
           <> [ beginSkillTest
+                sid
                 iid
                 (toAbilitySource source 1)
                 iid
                 #willpower
-                (LocationFieldCalculation lid LocationShroud)
+                (LocationMaybeFieldCalculation lid LocationShroud)
              ]
         pure a
     PassedThisSkillTest

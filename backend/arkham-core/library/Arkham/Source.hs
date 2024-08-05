@@ -21,6 +21,7 @@ import Arkham.Tarot
 import Arkham.Trait
 import Control.Lens (Prism', prism')
 import Data.Aeson.TH
+import Data.UUID (nil)
 import GHC.OverloadedLabels
 import GHC.Records
 
@@ -55,7 +56,7 @@ data Source
   | ResourceSource InvestigatorId
   | ScenarioSource
   | SkillSource SkillId
-  | SkillTestSource
+  | SkillTestSource SkillTestId
   | StorySource StoryId
   | TestSource (Set Trait)
   | ChaosTokenSource ChaosToken
@@ -68,7 +69,7 @@ data Source
   | BothSource Source Source
   | TarotSource TarotCard
   | BatchSource BatchId
-  deriving stock (Show, Eq, Ord, Data)
+  deriving stock (Show, Eq, Ord, Data, Generic)
 
 _AssetSource :: Prism' Source AssetId
 _AssetSource = prism' AssetSource $ \case
@@ -83,6 +84,30 @@ instance HasField "asset" Source (Maybe AssetId) where
     AbilitySource s _ -> s.asset
     _ -> Nothing
 
+instance HasField "event" Source (Maybe EventId) where
+  getField = \case
+    EventSource eid -> Just eid
+    ProxySource (CardIdSource _) s -> s.event
+    ProxySource s _ -> s.event
+    AbilitySource s _ -> s.event
+    _ -> Nothing
+
+instance HasField "location" Source (Maybe LocationId) where
+  getField = \case
+    LocationSource lid -> Just lid
+    ProxySource (CardIdSource _) s -> s.location
+    ProxySource s _ -> s.location
+    AbilitySource s _ -> s.location
+    _ -> Nothing
+
+instance HasField "enemy" Source (Maybe EnemyId) where
+  getField = \case
+    EnemySource aid -> Just aid
+    ProxySource (CardIdSource _) s -> s.enemy
+    ProxySource s _ -> s.enemy
+    AbilitySource s _ -> s.enemy
+    _ -> Nothing
+
 instance HasField "treachery" Source (Maybe TreacheryId) where
   getField = \case
     TreacherySource aid -> Just aid
@@ -91,7 +116,16 @@ instance HasField "treachery" Source (Maybe TreacheryId) where
     AbilitySource s _ -> s.treachery
     _ -> Nothing
 
-$(deriveJSON defaultOptions ''Source)
+$(deriveToJSON defaultOptions ''Source)
+
+instance FromJSON Source where
+  parseJSON = withObject "Source" $ \o -> do
+    tag :: Text <- o .: "tag"
+    case tag of
+      "SkillTestSource" -> do
+        eSkillTestId <- (Left <$> o .: "contents") <|> (Right <$> pure ())
+        pure $ either SkillTestSource (\_ -> SkillTestSource (SkillTestId nil)) eSkillTestId
+      _ -> genericParseJSON defaultOptions (Object o)
 
 instance ToJSONKey Source
 instance FromJSONKey Source
@@ -110,6 +144,9 @@ toProxySource a source = ProxySource source (toSource a)
 
 proxy :: (Sourceable a, Sourceable b) => a -> b -> Source
 proxy a b = ProxySource (toSource a) (toSource b)
+
+bothSource :: (Sourceable a, Sourceable b) => a -> b -> Source
+bothSource a b = BothSource (toSource a) (toSource b)
 
 instance Sourceable Source where
   toSource = id
@@ -145,6 +182,9 @@ instance Sourceable EnemyId where
 
 instance Sourceable EventId where
   toSource = EventSource
+
+instance Sourceable SkillTestId where
+  toSource = SkillTestSource
 
 instance Sourceable ChaosTokenFace where
   toSource = ChaosTokenEffectSource

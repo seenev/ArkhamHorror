@@ -27,7 +27,7 @@ instance HasAbilities Basement where
   getAbilities (Basement attrs) =
     withRevealedAbilities
       attrs
-      [ restrictedAbility attrs 1 Here actionAbility
+      [ skillTestAbility $ restrictedAbility attrs 1 Here actionAbility
       , restrictedAbility
           attrs
           2
@@ -57,7 +57,7 @@ instance RunMessage Basement where
 
       unless (null iids || isNothing tomeOfRituals) $ do
         named <- traverse (\(iid', x) -> (,x) <$> field InvestigatorName iid') iids
-        push
+        pushM
           $ chooseAmounts
             player
             "number of clues to move to Tome of Rituals"

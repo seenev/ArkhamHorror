@@ -12,12 +12,13 @@ import Arkham.Cost.Status as X
 import Arkham.Zone as X
 
 import Arkham.Asset.Uses
-import {-# SOURCE #-} Arkham.Calculation
+import Arkham.Calculation
 import Arkham.Campaigns.TheForgottenAge.Supply
 import {-# SOURCE #-} Arkham.Card
 import Arkham.ChaosToken (ChaosToken)
 import Arkham.Classes.Entity
 import {-# SOURCE #-} Arkham.Cost.FieldCost
+import Arkham.Customization
 import Arkham.GameValue
 import Arkham.Id
 import Arkham.Matcher
@@ -74,8 +75,30 @@ increaseResourceCost (Costs (a : as)) y = case a of
   _ -> a <> increaseResourceCost (Costs as) y
 increaseResourceCost other _ = other
 
+decreaseResourceCost :: Cost -> Int -> Cost
+decreaseResourceCost (ResourceCost x) y = ResourceCost $ max 0 (x - y)
+decreaseResourceCost (Costs (a : as)) y = case a of
+  ResourceCost x -> Costs (ResourceCost (max 0 $ x - y) : as)
+  _ -> a <> decreaseResourceCost (Costs as) y
+decreaseResourceCost other _ = other
+
+totalDiscardCardPayments :: Payment -> Int
+totalDiscardCardPayments = length . concat . toListOf (cosmos . _DiscardCardPayment)
+
 discardPayments :: Payment -> [(Zone, Card)]
 discardPayments = concat . toListOf (cosmos . _DiscardPayment)
+
+chosenEnemyPayment :: Payment -> Maybe EnemyId
+chosenEnemyPayment = listToMaybe . toListOf (cosmos . _ChosenEnemyPayment)
+
+chosenCardPayment :: Payment -> Maybe CardId
+chosenCardPayment = listToMaybe . toListOf (cosmos . _ChosenCardPayment)
+
+addedCurseTokenPayment :: Payment -> Int
+addedCurseTokenPayment = sum . toListOf (cosmos . _AddCurseTokenPayment)
+
+discardedCards :: Payment -> [Card]
+discardedCards = concat . toListOf (cosmos . _DiscardCardPayment)
 
 exhaustedPayments :: Payment -> [Target]
 exhaustedPayments = concat . toListOf (cosmos . _ExhaustPayment)
@@ -95,6 +118,8 @@ instance HasField "investigatorDamage" Payment Int where
 data Payment
   = ActionPayment Int
   | AdditionalActionPayment
+  | ChosenEnemyPayment EnemyId
+  | ChosenCardPayment CardId
   | CluePayment InvestigatorId Int
   | DoomPayment Int
   | ResourcePayment Int
@@ -117,14 +142,35 @@ data Payment
   | ReturnToHandPayment Card
   | NoPayment
   | SupplyPayment Supply
+  | AddCurseTokenPayment Int
   deriving stock (Show, Eq, Ord, Data)
 
 instance Plated Payment where
   plate = uniplate
 
+_AddCurseTokenPayment :: Prism' Payment Int
+_AddCurseTokenPayment = prism' AddCurseTokenPayment $ \case
+  AddCurseTokenPayment x -> Just x
+  _ -> Nothing
+
+_ChosenEnemyPayment :: Prism' Payment EnemyId
+_ChosenEnemyPayment = prism' ChosenEnemyPayment $ \case
+  ChosenEnemyPayment x -> Just x
+  _ -> Nothing
+
+_ChosenCardPayment :: Prism' Payment CardId
+_ChosenCardPayment = prism' ChosenCardPayment $ \case
+  ChosenCardPayment x -> Just x
+  _ -> Nothing
+
 _DiscardPayment :: Prism' Payment [(Zone, Card)]
 _DiscardPayment = prism' DiscardPayment $ \case
   DiscardPayment x -> Just x
+  _ -> Nothing
+
+_DiscardCardPayment :: Prism' Payment [Card]
+_DiscardCardPayment = prism' DiscardCardPayment $ \case
+  DiscardCardPayment x -> Just x
   _ -> Nothing
 
 _ExhaustPayment :: Prism' Payment [Target]
@@ -150,7 +196,9 @@ _InvestigatorDamagePayment = prism' InvestigatorDamagePayment $ \case
 data Cost
   = ActionCost Int
   | IncreaseCostOfThis CardId Int
+  | AdditionalActionCost -- use the plural instead as this is internal
   | AdditionalActionsCost
+  | AdditionalActionsCostThatReducesResourceCostBy Int Cost
   | AssetClueCost Text AssetMatcher GameValue
   | ClueCost GameValue
   | ClueCostX
@@ -158,6 +206,10 @@ data Cost
   | GroupClueCostRange (Int, Int) LocationMatcher
   | PlaceClueOnLocationCost Int
   | ExhaustCost Target
+  | ChooseEnemyCost EnemyMatcher
+  | ChosenEnemyCost EnemyId
+  | ChooseExtendedCardCost ExtendedCardMatcher
+  | ChosenCardCost CardId
   | DiscardAssetCost AssetMatcher
   | ExhaustAssetCost AssetMatcher
   | ExhaustXAssetCost AssetMatcher
@@ -171,6 +223,7 @@ data Cost
   | DiscardTopOfDeckCost Int
   | DiscardCost Zone Target
   | DiscardCardCost Card
+  | DiscardUnderneathCardCost AssetId ExtendedCardMatcher
   | DiscardRandomCardCost
   | DiscardFromCost Int CostZone CardMatcher
   | DiscardDrawnCardCost
@@ -179,8 +232,8 @@ data Cost
   | EnemyDoomCost Int EnemyMatcher
   | EnemyAttackCost EnemyId
   | ExileCost Target
-  | HandDiscardCost Int CardMatcher
-  | HandDiscardAnyNumberCost CardMatcher
+  | HandDiscardCost Int ExtendedCardMatcher
+  | HandDiscardAnyNumberCost ExtendedCardMatcher
   | ReturnMatchingAssetToHandCost AssetMatcher
   | ReturnAssetToHandCost AssetId
   | SkillTestCost Source SkillType GameCalculation
@@ -193,6 +246,7 @@ data Cost
   | Free
   | ScenarioResourceCost Int
   | ResourceCost Int
+  | CalculatedResourceCost GameCalculation
   | FieldResourceCost FieldCost
   | MaybeFieldResourceCost MaybeFieldCost
   | UseCost AssetMatcher UseType Int
@@ -201,10 +255,12 @@ data Cost
   | UseCostUpTo AssetMatcher UseType Int Int -- (e.g. Spend 1-5 ammo, see M1918 BAR)
   | CostWhenEnemy EnemyMatcher Cost
   | CostIfEnemy EnemyMatcher Cost Cost
-  | UpTo Int Cost
+  | CostIfCustomization Customization Cost Cost
+  | UpTo GameCalculation Cost
   | SealCost ChaosTokenMatcher
   | SealMultiCost Int ChaosTokenMatcher
   | AddCurseTokenCost Int
+  | AddCurseTokensCost Int Int
   | AddCurseTokensEqualToShroudCost
   | AddCurseTokensEqualToSkillTestDifficulty
   | ReleaseChaosTokenCost ChaosToken
@@ -226,11 +282,16 @@ data Cost
   | ArchiveOfConduitsUnidentifiedCost -- this either
   deriving stock (Show, Eq, Ord, Data)
 
+instance Plated Cost
+
 assetUseCost :: (Entity a, EntityId a ~ AssetId) => a -> UseType -> Int -> Cost
 assetUseCost a uType n = UseCost (AssetWithId $ toId a) uType n
 
 exhaust :: Targetable a => a -> Cost
 exhaust = ExhaustCost . toTarget
+
+horrorCost :: (Sourceable source, Targetable source) => source -> Int -> Cost
+horrorCost source = HorrorCost (toSource source) (toTarget source)
 
 discardCost :: Targetable a => a -> Cost
 discardCost = DiscardCost FromPlay . toTarget
@@ -246,6 +307,10 @@ data DynamicUseCostValue = DrawnCardsValue
 
 displayCostType :: Cost -> Text
 displayCostType = \case
+  ChooseEnemyCost _ -> "Choose an enemy"
+  ChooseExtendedCardCost _ -> "Choose a card that matches"
+  ChosenEnemyCost _ -> "Choose an enemy"
+  ChosenCardCost _ -> "Choose a card that matches"
   ExhaustXAssetCost _ -> "Exhaust X copies"
   EnemyAttackCost _ -> "The chosen enemy makes an attack against you"
   UnpayableCost -> "Unpayable"
@@ -258,9 +323,11 @@ displayCostType = \case
     "Place 1 resource on 4 different locations, as leylines."
   CostWhenEnemy _ c -> displayCostType c
   CostIfEnemy _ _ c -> displayCostType c
+  CostIfCustomization _ _ c -> displayCostType c
   AsIfAtLocationCost _ c -> displayCostType c
   ShuffleAttachedCardIntoDeckCost _ _ -> "Shuffle attached card into deck"
   AddCurseTokenCost n -> "Add " <> tshow n <> " {curse} " <> pluralize n "token" <> "to the chaos bag"
+  AddCurseTokensCost n m -> "Add " <> tshow n <> "-" <> tshow m <> " {curse} tokens to the chaos bag"
   AddCurseTokensEqualToShroudCost -> "Add {curse} tokens to the chaos bag equal to your location's shroud value"
   AddCurseTokensEqualToSkillTestDifficulty -> "Add {curse} tokens to this test's difficulty"
   ShuffleIntoDeckCost _ -> "Shuffle into deck"
@@ -281,7 +348,9 @@ displayCostType = \case
   DiscardHandCost -> "Discard your entire hand"
   ShuffleDiscardCost n _ ->
     "Shuffle " <> pluralize n "matching card" <> " into your deck"
+  AdditionalActionCost -> "Additional Action"
   AdditionalActionsCost -> "Additional Action"
+  AdditionalActionsCostThatReducesResourceCostBy _ _ -> "Additional Action"
   AssetClueCost lbl _ gv -> case gv of
     Static n -> pluralize n "Clue" <> " from " <> lbl
     PerPlayer n -> pluralize n "Clue" <> " per Player from " <> lbl
@@ -341,6 +410,7 @@ displayCostType = \case
   InvestigatorDamageCost _ _ _ n -> tshow n <> " Damage"
   DiscardCost zone _ -> "Discard from " <> zoneLabel zone
   DiscardCardCost _ -> "Discard Card"
+  DiscardUnderneathCardCost _ _ -> "Discard card beneath"
   DiscardRandomCardCost -> "Discard Random Card"
   DiscardFromCost n _ _ -> "Discard " <> tshow n
   DiscardDrawnCardCost -> "Discard Drawn Card"
@@ -367,20 +437,25 @@ displayCostType = \case
     Horror -> error "Not a use"
     AlarmLevel -> pluralize n "Alarm Level"
     LostSoul -> pluralize n "Lost Soul"
+    Lead -> pluralize n "Lead"
     Corruption -> tshow n <> " Corruption"
     Depth -> tshow n <> " Depth"
     Aether -> tshow n <> " Aether"
     Ammo -> tshow n <> " Ammo"
     Supply -> if n == 1 then "1 Supply" else tshow n <> " Supplies"
+    Suspicion -> tshow n <> " Suspicion"
     Secret -> pluralize n "Secret"
     Charge -> pluralize n "Charge"
     Offering -> pluralize n "Offering"
     Try -> if n == 1 then "1 Try" else tshow n <> " Tries"
+    Time -> tshow n <> " Time"
     Bounty -> if n == 1 then "1 Bounty" else tshow n <> " Bounties"
     Whistle -> pluralize n "Whistle"
+    Wish -> if n == 1 then "1 Wish" else tshow n <> " Wishes"
     Resource -> pluralize n "Resource from the asset"
     Key -> pluralize n "Key"
     Lock -> pluralize n "Lock"
+    Growth -> tshow n <> " Growth"
     Evidence -> tshow n <> " Evidence"
     Leyline -> pluralize n "Leyline"
     Durability -> tshow n <> " Durability"
@@ -388,6 +463,7 @@ displayCostType = \case
     AlarmLevel -> "X Alarm Levels"
     Depth -> "X Depth"
     LostSoul -> "X LostSouls"
+    Lead -> "X Leads"
     Clue -> error "Not a use"
     Damage -> error "Not a use"
     Doom -> error "Not a use"
@@ -395,14 +471,18 @@ displayCostType = \case
     Corruption -> "X Corruptions"
     Aether -> "X Aether"
     Ammo -> "X Ammo"
+    Suspicion -> "X Suspicion"
     Supply -> "X Supplies"
     Secret -> "X Secrets"
     Charge -> "X Charges"
     Offering -> "X Offerings"
     Durability -> "X Durability"
     Try -> "X Tries"
+    Time -> "X Time"
     Bounty -> "X Bounties"
     Whistle -> "X Whistles"
+    Wish -> "X Wishes"
+    Growth -> "X Growth"
     Resource -> "X Resources"
     Key -> "X Keys"
     Lock -> "X Locks"
@@ -412,6 +492,7 @@ displayCostType = \case
     AlarmLevel -> tshow n <> "-" <> tshow m <> " Alarm Levels"
     Depth -> tshow n <> "-" <> tshow m <> " Depth"
     LostSoul -> tshow n <> "-" <> tshow m <> " Lost Souls"
+    Lead -> tshow n <> "-" <> tshow m <> " Leads"
     Clue -> error "Not a use"
     Doom -> error "Not a use"
     Horror -> error "Not a use"
@@ -419,20 +500,25 @@ displayCostType = \case
     Aether -> tshow n <> "-" <> tshow m <> " Aether"
     Corruption -> tshow n <> "-" <> tshow m <> " Corruption"
     Ammo -> tshow n <> "-" <> tshow m <> " Ammo"
+    Suspicion -> tshow n <> "-" <> tshow m <> " Suspicion"
     Supply -> tshow n <> "-" <> tshow m <> " Supplies"
     Secret -> tshow n <> "-" <> tshow m <> " Secrets"
     Charge -> tshow n <> "-" <> tshow m <> " Charges"
     Offering -> tshow n <> "-" <> tshow m <> " Offerings"
     Durability -> tshow n <> "-" <> tshow m <> " Durability"
     Try -> tshow n <> "-" <> tshow m <> " Tries"
+    Time -> tshow n <> "-" <> tshow m <> " Time"
     Bounty -> tshow n <> "-" <> tshow m <> " Bounties"
     Whistle -> tshow n <> "-" <> tshow m <> " Whistles"
+    Wish -> tshow n <> "-" <> tshow m <> " Wishes"
+    Growth -> tshow n <> "-" <> tshow m <> " Growth"
     Resource -> tshow n <> "-" <> tshow m <> " Resources"
     Key -> tshow n <> "-" <> tshow m <> " Keys"
     Lock -> tshow n <> "-" <> tshow m <> " Locks"
     Evidence -> tshow n <> "-" <> tshow m <> " Evidence"
     Leyline -> tshow n <> "-" <> tshow m <> " Leylines"
-  UpTo n c -> displayCostType c <> " up to " <> pluralize n "time"
+  UpTo (Fixed n) c -> displayCostType c <> " up to " <> pluralize n "time"
+  UpTo _ c -> displayCostType c <> " up to X times"
   SealCost _ -> "Seal token"
   SealMultiCost n _ -> "Seal " <> tshow n <> " matching tokens"
   SealChaosTokenCost _ -> "Seal token"
@@ -451,17 +537,31 @@ displayCostType = \case
     "Return " <> format token <> " to the token pool"
   FieldResourceCost {} -> "X"
   MaybeFieldResourceCost {} -> "X"
+  CalculatedResourceCost {} -> "X"
   SupplyCost _ supply ->
     "An investigator crosses off " <> tshow supply <> " from their supplies"
   IncreaseCostOfThis _ n -> "Increase its cost by " <> tshow n
 
 instance Semigroup Cost where
+  AdditionalActionsCostThatReducesResourceCostBy n1 a <> AdditionalActionsCostThatReducesResourceCostBy n2 b = AdditionalActionsCostThatReducesResourceCostBy (max n1 n2) (a <> b)
+  AdditionalActionsCostThatReducesResourceCostBy n a <> b = AdditionalActionsCostThatReducesResourceCostBy n (a <> b)
+  a <> AdditionalActionsCostThatReducesResourceCostBy n b = AdditionalActionsCostThatReducesResourceCostBy n (a <> b)
   Free <> a = a
   a <> Free = a
-  Costs xs <> Costs ys = Costs (xs <> ys)
-  Costs xs <> a = Costs (a : xs)
-  a <> Costs xs = Costs (a : xs)
-  a <> b = Costs [a, b]
+  ActionCost x <> ActionCost y = ActionCost (x + y)
+  ResourceCost x <> ResourceCost y = ResourceCost (x + y)
+  Costs xs <> Costs ys = Costs (combineCosts $ sort $ xs <> ys)
+  Costs xs <> a = Costs (combineCosts $ sort $ a : xs)
+  a <> Costs xs = Costs (combineCosts $ sort $ a : xs)
+  a <> b = Costs $ sort [a, b]
+
+combineCosts :: [Cost] -> [Cost]
+combineCosts l@[] = l
+combineCosts l@[_] = l
+combineCosts (x : y : rest) = case (x, y) of
+  (ActionCost a, ActionCost b) -> combineCosts $ ActionCost (a + b) : rest
+  (ResourceCost a, ResourceCost b) -> combineCosts $ ResourceCost (a + b) : rest
+  _ -> x : combineCosts (y : rest)
 
 instance Monoid Cost where
   mempty = Free

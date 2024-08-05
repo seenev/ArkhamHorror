@@ -12,7 +12,7 @@ import Data.Aeson.TH
 import GHC.Records
 
 data EnemyAttackType = AttackOfOpportunity | RegularAttack | AlertAttack
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data EnemyAttackDetails = EnemyAttackDetails
   { attackTarget :: Target
@@ -26,7 +26,7 @@ data EnemyAttackDetails = EnemyAttackDetails
   , attackAfter :: [Message]
   , attackDamaged :: Map Target (Int, Int)
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 instance HasField "target" EnemyAttackDetails Target where
   getField = attackTarget
@@ -47,19 +47,4 @@ damagedL :: Lens' EnemyAttackDetails (Map Target (Int, Int))
 damagedL = lens attackDamaged $ \m x -> m {attackDamaged = x}
 
 $(deriveJSON defaultOptions ''EnemyAttackType)
-
-instance FromJSON EnemyAttackDetails where
-  parseJSON = withObject "EnemyAttackDetails" $ \o -> do
-    attackTarget <- o .: "attackTarget"
-    attackOriginalTarget <- o .: "attackOriginalTarget" <|> pure attackTarget
-    attackEnemy <- o .: "attackEnemy"
-    attackType <- o .: "attackType"
-    attackDamageStrategy <- o .: "attackDamageStrategy"
-    attackExhaustsEnemy <- o .: "attackExhaustsEnemy"
-    attackSource <- o .: "attackSource"
-    attackCanBeCanceled <- o .: "attackCanBeCanceled"
-    attackAfter <- o .:? "attackAfter" .!= []
-    attackDamaged <- o .:? "attackDamaged" .!= mempty
-    pure EnemyAttackDetails {..}
-
-$(deriveToJSON defaultOptions ''EnemyAttackDetails)
+$(deriveJSON defaultOptions ''EnemyAttackDetails)

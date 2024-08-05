@@ -30,14 +30,15 @@ mendTheShatter = act (4, A) MendTheShatter Cards.mendTheShatter Nothing
 instance HasAbilities MendTheShatter where
   getAbilities (MendTheShatter a)
     | onSide A a =
-        [ restrictedAbility
-            a
-            1
-            ( InvestigatorExists
-                $ You
-                <> InvestigatorAt
-                  (LocationWithoutClues <> LocationWithTrait Shattered)
-            )
+        [ skillTestAbility
+            $ restrictedAbility
+              a
+              1
+              ( InvestigatorExists
+                  $ You
+                  <> InvestigatorAt
+                    (LocationWithoutClues <> LocationWithTrait Shattered)
+              )
             $ ActionAbility []
             $ ActionCost 1
         , restrictedAbility
@@ -57,10 +58,11 @@ instance RunMessage MendTheShatter where
   runMessage msg a@(MendTheShatter attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel skillType [beginSkillTest iid (attrs.ability 1) attrs skillType (Fixed 3)]
+          [ SkillLabel skillType [beginSkillTest sid iid (attrs.ability 1) attrs skillType (Fixed 3)]
           | skillType <- [SkillWillpower, SkillIntellect]
           ]
       pure a

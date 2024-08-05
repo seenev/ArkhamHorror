@@ -22,14 +22,15 @@ getDetails [] = error "missing targets"
 instance RunMessage ATestOfWill where
   runMessage msg e@(ATestOfWill attrs) = runQueueT $ case msg of
     InvestigatorPlayEvent iid eid _ (getDetails -> details) _ | eid == toId attrs -> do
-      beginSkillTest iid attrs details #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid attrs details #willpower (Fixed 3)
       pure e
     PassedThisSkillTest iid (isSource attrs -> True) -> do
       getSkillTestTarget >>= \case
         Just (BothTarget (InvestigatorTarget iid') (CardTarget c)) -> do
           canAffect <- (iid == iid' ||) <$> can.affect.otherPlayers iid
           canCancel <- c <=~> CanCancelRevelationEffect (basic AnyCard)
-          pushWhen (canAffect && canCancel) $ CancelRevelation (toSource attrs)
+          when (canAffect && canCancel) $ cancelRevelation attrs c
         _ -> error "Wrong target"
       pure e
     _ -> ATestOfWill <$> liftRunMessage msg attrs

@@ -20,12 +20,10 @@ instance RunMessage PassageIntoTheVeil where
     Revelation iid source | isSource attrs source -> do
       huntingHorrorAtYourLocation <-
         selectAny $ enemyIs Enemies.huntingHorror <> at_ (locationWithInvestigator iid)
+      sid <- getRandom
       push
-        $ revelationSkillTest
-          iid
-          source
-          #willpower
-          (Fixed $ if huntingHorrorAtYourLocation then 5 else 3)
+        $ revelationSkillTest sid iid source #willpower
+        $ Fixed (if huntingHorrorAtYourLocation then 5 else 3)
       pure t
     FailedThisSkillTest iid (isSource attrs -> True) -> do
       assetIds <- select $ assetControlledBy iid <> #ally
@@ -37,7 +35,7 @@ instance RunMessage PassageIntoTheVeil where
           , Label
               "Take 1 direct damage and deal 1 damage to each of your Ally assets"
               $ InvestigatorDirectDamage iid (toSource attrs) 1 0
-              : [Msg.AssetDamage aid (toSource attrs) 1 0 | aid <- assetIds]
+              : [Msg.DealAssetDamage aid (toSource attrs) 1 0 | aid <- assetIds]
           ]
       pure t
     _ -> PassageIntoTheVeil <$> runMessage msg attrs

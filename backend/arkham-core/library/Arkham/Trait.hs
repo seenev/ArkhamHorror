@@ -67,6 +67,7 @@ data Trait
   | Developed
   | Dhole
   | Dilemma
+  | Double
   | Dreamer
   | Dreamlands
   | Drifter
@@ -102,6 +103,7 @@ data Trait
   | Guest
   | Gug
   | Hall
+  | Hardship
   | Hazard
   | Hex
   | HistoricalSociety
@@ -113,6 +115,7 @@ data Trait
   | Injury
   | Innate
   | Innocent
+  | Insect
   | Insight
   | Instrument
   | Item
@@ -162,9 +165,11 @@ data Trait
   | Relic
   | Reporter
   | Research
+  | Resolute
   | Ritual
   | River
   | Riverside
+  | Rot
   | Ruins
   | Salem
   | Sanctum

@@ -23,8 +23,9 @@ instance HasAbilities Blur4 where
 instance RunMessage Blur4 where
   runMessage msg a@(Blur4 attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      skillTestModifier (attrs.ability 1) iid (AnySkillValue 2)
-      evade <- mkChooseEvade iid (attrs.ability 1)
+      sid <- getRandom
+      skillTestModifier sid (attrs.ability 1) iid (AnySkillValue 2)
+      evade <- mkChooseEvade sid iid (attrs.ability 1)
       chooseOne
         iid
         [ Label "Use willpower" [toMessage $ withSkillType #willpower evade]
@@ -34,7 +35,9 @@ instance RunMessage Blur4 where
     PassedThisSkillTestBy iid (isAbilitySource attrs 1 -> True) n -> do
       case attrs.use Charge of
         0 -> pure ()
-        1 -> push $ ResolveAmounts iid [("Charges", 1)] (toTarget attrs)
+        1 -> do
+          charges <- namedUUID "Charges"
+          push $ ResolveAmounts iid [(charges, 1)] (toTarget attrs)
         (min 2 -> x) ->
           chooseAmounts iid "Amount of Charges to Spend" (MaxAmountTarget x) [("Charges", (1, x))] attrs
       when (n == 0) $ assignDamage iid (attrs.ability 1) 2

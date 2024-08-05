@@ -19,7 +19,7 @@ instance HasAbilities DeceptiveMemories where
     [ restrictedAbility a 1 (InThreatAreaOf You)
         $ forced
         $ EntersThreatArea #after You (NotCard $ CardWithId $ toCardId a)
-    , restrictedAbility a 2 Here actionAbility
+    , skillTestAbility $ restrictedAbility a 2 Here actionAbility
     ]
 
 instance RunMessage DeceptiveMemories where
@@ -31,7 +31,8 @@ instance RunMessage DeceptiveMemories where
       chooseAndDiscardCard iid (attrs.ability 1)
       pure t
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      beginSkillTest iid (attrs.ability 2) iid #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 2) iid #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
       toDiscardBy iid (attrs.ability 2) attrs

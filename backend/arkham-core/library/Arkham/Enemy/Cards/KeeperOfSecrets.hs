@@ -25,7 +25,7 @@ instance HasAbilities KeeperOfSecrets where
   getAbilities (KeeperOfSecrets a) =
     withBaseAbilities a
       $ [ restrictedAbility a 1 CanPlaceDoomOnThis $ ForcedAbility $ PhaseEnds #when #mythos
-        , restrictedAbility a 2 OnSameLocation parleyAction_
+        , skillTestAbility $ restrictedAbility a 2 OnSameLocation parleyAction_
         ]
 
 instance RunMessage KeeperOfSecrets where
@@ -34,7 +34,8 @@ instance RunMessage KeeperOfSecrets where
       push $ placeDoom (toAbilitySource attrs 1) attrs 1
       pure e
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      push $ parley iid (attrs.ability 2) attrs #intellect (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid (attrs.ability 2) attrs #intellect (Fixed 3)
       pure e
     PassedThisSkillTest _ (isAbilitySource attrs 2 -> True) -> do
       push $ RemoveAllDoom (toAbilitySource attrs 2) (toTarget attrs)

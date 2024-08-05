@@ -5,6 +5,7 @@ module Arkham.Placement (
   placementToAttached,
   isOutOfPlayPlacement,
   isInPlayPlacement,
+  isHiddenPlacement,
   treacheryPlacementToPlacement,
 ) where
 
@@ -37,7 +38,7 @@ data Placement
   | Limbo
   | Global
   | OutOfPlay OutOfPlayZone
-  deriving stock (Show, Eq, Ord, Data)
+  deriving stock (Show, Eq, Ord, Data, Generic)
 
 instance HasField "attachedTo" Placement (Maybe Target) where
   getField = placementToAttached
@@ -94,6 +95,11 @@ isInPlayPlacement = \case
   HiddenInHand _ -> False
   OnTopOfDeck _ -> False
 
+isHiddenPlacement :: Placement -> Bool
+isHiddenPlacement = \case
+  HiddenInHand _ -> True
+  _ -> False
+
 data TreacheryPlacement
   = TreacheryAttachedTo Target
   | TreacheryInHandOf InvestigatorId
@@ -117,5 +123,9 @@ treacheryPlacementToPlacement = \case
   TreacheryLimbo -> Limbo
   TreacheryTopOfDeck iid -> OnTopOfDeck iid
 
-$(deriveJSON defaultOptions ''Placement)
 $(deriveJSON defaultOptions ''TreacheryPlacement)
+
+instance FromJSON Placement where
+  parseJSON o = genericParseJSON defaultOptions o <|> (treacheryPlacementToPlacement <$> parseJSON o)
+
+$(deriveToJSON defaultOptions ''Placement)

@@ -31,7 +31,6 @@ import Arkham.Source as X
 import Arkham.Target as X
 
 import Arkham.Action qualified as Action
-import Arkham.Asset.Uses qualified as Uses
 import Arkham.Capability
 import Arkham.Card
 import Arkham.Classes.HasGame
@@ -99,11 +98,12 @@ instance RunMessage LocationAttrs where
         let target = maybe (toTarget a) (ProxyTarget (toTarget a)) investigation.target
         push
           $ investigate
+            investigation.skillTest
             iid
             investigation.source
             target
             investigation.skillType
-            (LocationFieldCalculation a.id LocationShroud)
+            (LocationMaybeFieldCalculation a.id LocationShroud)
       pure a
     PassedSkillTest iid (Just Action.Investigate) source (Initiator target) _ n | isTarget a target -> do
       let clues = locationClues a
@@ -249,6 +249,8 @@ instance RunMessage LocationAttrs where
               pure $ a & tokensL %~ setTokens Clue clueCount & withoutCluesL .~ (clueCount == 0)
         else do
           pushM $ checkAfter $ Window.PlacedToken source target tType n
+          when (tType == Doom && a.doom == 0) do
+            pushM $ checkAfter $ Window.PlacedDoomCounterOnTargetWithNoDoom source target n
           when (tType == Damage) do
             windows' <- windows [Window.PlacedDamage source (toTarget a) n]
             pushAll windows'
@@ -265,6 +267,7 @@ instance RunMessage LocationAttrs where
           pure $ a & tokensL %~ setTokens Clue clueCount & withoutCluesL .~ (clueCount == 0)
         else pure $ a & tokensL %~ subtractTokens tType n
     PlacedLocation _ _ lid | lid == locationId -> do
+      pushM $ checkAfter $ Window.LocationEntersPlay lid
       if locationRevealed
         then do
           modifiers' <- getModifiers (toTarget a)
@@ -275,9 +278,9 @@ instance RunMessage LocationAttrs where
           let currentClues = countTokens Clue locationTokens
 
           pushAll
-            [ PlaceClues (toSource a) (toTarget a) locationClueCount
-            | locationClueCount > 0
-            ]
+            $ [ PlaceClues (toSource a) (toTarget a) locationClueCount
+              | locationClueCount > 0
+              ]
           pure $ a & withoutCluesL .~ (locationClueCount + currentClues == 0)
         else pure a
     RevealLocation miid lid | lid == locationId -> do
@@ -357,8 +360,9 @@ instance RunMessage LocationAttrs where
       let
         triggerSource = case source of
           ProxySource _ s -> s
-          _ -> InvestigatorSource iid
-      pushM $ mkInvestigateLocation iid triggerSource (toId a)
+          _ -> a.ability 101
+      sid <- getRandom
+      pushM $ mkInvestigateLocation sid iid triggerSource (toId a)
       pure a
     UseCardAbility iid source 102 _ _ | isSource a source -> do
       -- free because already paid for by ability
@@ -380,10 +384,14 @@ locationInvestigatorsWithClues :: HasGame m => LocationAttrs -> m [InvestigatorI
 locationInvestigatorsWithClues attrs =
   filterM (fieldMap InvestigatorClues (> 0)) =<< select (investigatorAt $ toId attrs)
 
-getModifiedShroudValueFor :: HasGame m => LocationAttrs -> m Int
+getModifiedShroudValueFor :: (HasCallStack, HasGame m) => LocationAttrs -> m Int
 getModifiedShroudValueFor attrs = do
   modifiers' <- getModifiers (toTarget attrs)
-  pure $ foldr applyPostModifier (foldr applyModifier (locationShroud attrs) modifiers') modifiers'
+  pure
+    $ foldr
+      applyPostModifier
+      (foldr applyModifier (fromJustNote "Missing shroud" $ locationShroud attrs) modifiers')
+      modifiers'
  where
   applyModifier (ShroudModifier m) n = max 0 (n + m)
   applyModifier _ n = n
@@ -393,7 +401,7 @@ getModifiedShroudValueFor attrs = do
 getInvestigateAllowed :: HasGame m => InvestigatorId -> LocationAttrs -> m Bool
 getInvestigateAllowed _iid attrs = do
   modifiers' <- getModifiers (toTarget attrs)
-  pure $ none isCannotInvestigate modifiers'
+  pure $ none isCannotInvestigate modifiers' && isJust (locationShroud attrs)
  where
   isCannotInvestigate CannotInvestigate {} = True
   isCannotInvestigate (CannotInvestigateLocation lid) = lid == toId attrs

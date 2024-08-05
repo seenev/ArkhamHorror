@@ -23,7 +23,8 @@ instance HasAbilities TheCouncilsCoffer2 where
     [ limitedAbility (MaxPer Cards.theCouncilsCoffer2 PerCampaign 1)
         $ restrictedAbility a 0 (if findWithDefault 0 Lock (assetUses a) == 0 then NoRestriction else Never)
         $ SilentForcedAbility AnyWindow
-    , restrictedAbility a 1 OnSameLocation
+    , skillTestAbility
+        $ restrictedAbility a 1 OnSameLocation
         $ ActionAbility []
         $ ActionCost 2
     ]
@@ -35,19 +36,16 @@ instance RunMessage TheCouncilsCoffer2 where
       pushAll
         $ [ chooseOne
             player
-            [ Label
-                "Search Deck"
-                [search iid attrs iid [(FromDeck, ShuffleBackIn)] AnyCard (PlayFoundNoCost iid 1)]
-            , Label
-                "Search Discard"
-                [search iid attrs iid [(FromDiscard, PutBack)] AnyCard (PlayFoundNoCost iid 1)]
+            [ Label "Search Deck" [search iid attrs iid [(FromDeck, ShuffleBackIn)] #any (PlayFoundNoCost iid 1)]
+            , Label "Search Discard" [search iid attrs iid [(FromDiscard, PutBack)] #any (PlayFoundNoCost iid 1)]
             ]
           | (iid, player) <- investigators
           ]
         <> [Exile (toTarget attrs)]
       pure a
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      let chooseSkillTest skillType = beginSkillTest iid (attrs.ability 1) iid skillType (Fixed 5)
+      sid <- getRandom
+      let chooseSkillTest skillType = beginSkillTest sid iid (attrs.ability 1) iid skillType (Fixed 5)
       player <- getPlayer iid
       push
         $ chooseOne

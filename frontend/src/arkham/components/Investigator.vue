@@ -51,7 +51,7 @@ const investigatorAction = computed(() => {
   return activateAbilityAction.value
 })
 
-const choices = computed(() => ArkhamGame.choices(props.game, props.investigator.id))
+const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
 
 function isAbility(v: Message): v is AbilityLabel {
   if (v.tag !== MessageType.ABILITY_LABEL) {
@@ -135,7 +135,7 @@ const image = computed(() => {
     return imgsrc("cards/04244.jpg");
   }
 
-  return imgsrc(`cards/${props.investigator.cardCode.replace('c', '')}.jpg`);
+  return imgsrc(`cards/${props.investigator.art.replace('c', '')}.jpg`);
 })
 
 const portraitImage = computed(() => {
@@ -165,6 +165,10 @@ function calculateSkill(base: number, skillType: string, modifiers: Modifier[]) 
     if (modifier.type.tag === "BaseSkillOf" && modifier.type.skillType === skillType) {
       modified = modifier.type.value
     }
+
+    if (modifier.type.tag === "BaseSkill" && props.game.skillTest && props.game.skillTest.skills.includes(skillType)) {
+      modified = modifier.type.contents
+    }
   })
 
   modifiers.forEach((modifier) => {
@@ -187,6 +191,7 @@ function calculateSkill(base: number, skillType: string, modifiers: Modifier[]) 
 }
 
 function useEffectAction(action: { contents: string[] }) {
+  console.log(action, choices.value)
   const choice = choices.value.findIndex((c) => c.tag === 'EffectActionButton' && c.effectId == action.contents[1])
   if (choice !== -1) {
     emit('choose', choice)

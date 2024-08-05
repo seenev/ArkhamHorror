@@ -145,7 +145,7 @@ resolveFirstUnresolved source iid strategy = \case
               modify'
                 ( (forceDrawL .~ Nothing)
                     . (chaosTokensL .~ remaining)
-                    . (setAsideChaosTokensL %~ (drawn <>))
+                    . (setAsideChaosTokensL %~ (<> drawn))
                 )
               pure (Resolved drawn, [])
             Just drawn -> do
@@ -153,12 +153,12 @@ resolveFirstUnresolved source iid strategy = \case
               modify'
                 ( (forceDrawL .~ Nothing)
                     . (chaosTokensL .~ remaining)
-                    . (setAsideChaosTokensL %~ ([drawn] <>))
+                    . (setAsideChaosTokensL %~ (<> [drawn]))
                 )
               pure (Resolved [drawn], [])
         Nothing -> do
           (drawn, remaining) <- splitAt 1 <$> shuffleM bagChaosTokens
-          modify' ((chaosTokensL .~ remaining) . (setAsideChaosTokensL %~ (drawn <>)))
+          modify' ((chaosTokensL .~ remaining) . (setAsideChaosTokensL %~ (<> drawn)))
           pure (Resolved drawn, [])
     Choose chooseSource n tokenStrategy steps tokens' ->
       pure (Decided $ ChooseMatch chooseSource n tokenStrategy steps tokens' AnyChaosToken, [])
@@ -503,16 +503,28 @@ instance RunMessage ChaosBag where
         & (chaosTokensL %~ filter (`notElem` tokensToPool))
         & (setAsideChaosTokensL %~ filter (`notElem` tokensToPool))
         & (tokenPoolL <>~ filter ((`elem` [#bless, #curse]) . (.face)) tokensToPool)
+    PassSkillTest -> do
+      removeAllMessagesMatching \case
+        NextChaosBagStep {} -> True
+        RunBag {} -> True
+        _ -> False
+      runMessage (ResetChaosTokens GameSource) c
+    FailSkillTest -> do
+      removeAllMessagesMatching \case
+        NextChaosBagStep {} -> True
+        RunBag {} -> True
+        _ -> False
+      runMessage (ResetChaosTokens GameSource) c
     ResetChaosTokens _source -> do
       returnAllBlessed <-
-        getIsSkillTest >>= \case
-          True -> hasModifier SkillTestTarget ReturnBlessedToChaosBag
-          False -> pure True
+        getSkillTestId >>= \case
+          Just sid -> hasModifier (SkillTestTarget sid) ReturnBlessedToChaosBag
+          Nothing -> pure True
 
       returnAllCursed <-
-        getIsSkillTest >>= \case
-          True -> hasModifier SkillTestTarget ReturnCursedToChaosBag
-          False -> pure True
+        getSkillTestId >>= \case
+          Just sid -> hasModifier (SkillTestTarget sid) ReturnCursedToChaosBag
+          Nothing -> pure True
 
       -- TODO: We need to decide which tokens to keep, i.e. Blessed Blade (4)
       (tokensToReturn, tokensToPool) <- flip partitionM chaosBagSetAsideChaosTokens \token -> do
@@ -651,9 +663,21 @@ instance RunMessage ChaosBag where
               <> formatAsSentence tokens'
               <> " chaos "
               <> (if length tokens' == 1 then "token" else "tokens")
+
+          -- the skill test handles revealing its own tokens so we only reveal
+          -- here if the source was something else and we have an investigator
+          -- to reveal "to"
+          let
+            revealF =
+              case (source, miid) of
+                (SkillTestSource _, _) -> const []
+                (_, Nothing) -> const []
+                (_, Just iid) -> map (RevealChaosToken source iid)
+
           pushAll
             ( FocusChaosTokens tokens'
                 : checkWindowMsgs
+                  <> revealF tokens'
                   <> [RequestedChaosTokens source miid tokens', UnfocusChaosTokens]
             )
           pure $ c & choiceL .~ Nothing
@@ -673,9 +697,18 @@ instance RunMessage ChaosBag where
           updatedChoice =
             replaceFirstChoice source iid SetAside groupChoice choice'
         pure $ c & choiceL ?~ updatedChoice
+    RevealChaosToken SkillTestSource {} _ token ->
+      pure
+        $ c
+        & setAsideChaosTokensL
+        %~ (nub . (<> [token]))
+        & revealedChaosTokensL
+        %~ (nub . (<> [token]))
+        & chaosTokensL
+        %~ filter (/= token)
     RevealChaosToken _source _iid token ->
       -- TODO: we may need a map of source to tokens here
-      pure $ c & revealedChaosTokensL %~ (token :)
+      pure $ c & revealedChaosTokensL %~ (<> [token])
     ReturnChaosTokens tokens' ->
       pure
         $ c
@@ -706,7 +739,7 @@ instance RunMessage ChaosBag where
         & revealedChaosTokensL
         %~ filter (/= token)
     SetChaosTokenAside token -> do
-      pure $ c & setAsideChaosTokensL %~ (token :)
+      pure $ c & setAsideChaosTokensL %~ (<> [token])
     UnsealChaosToken token -> do
       pure $ c & chaosTokensL %~ (token :)
     RemoveAllChaosTokens face ->

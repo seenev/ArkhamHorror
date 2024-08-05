@@ -35,7 +35,9 @@ instance HasAbilities LodgeJailor where
     withBaseAbilities
       attrs
       [ mkAbility attrs 1 $ ForcedAbility $ EnemySpawns Timing.After Anywhere $ EnemyWithId $ toId attrs
-      , restrictedAbility attrs 2 OnSameLocation $ ActionAbility [Action.Parley] (ActionCost 1)
+      , skillTestAbility
+          $ restrictedAbility attrs 2 OnSameLocation
+          $ ActionAbility [Action.Parley] (ActionCost 1)
       ]
 
 instance RunMessage LodgeJailor where
@@ -47,7 +49,8 @@ instance RunMessage LodgeJailor where
         : [PlaceKey (toTarget attrs) k | k <- maybeToList mKey]
       pure e
     UseCardAbility iid (isSource attrs -> True) 2 _ _ -> do
-      push $ parley iid (toAbilitySource attrs 2) attrs SkillIntellect (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid (toAbilitySource attrs 2) attrs SkillIntellect (Fixed 3)
       pure e
     PassedSkillTest iid _ (isAbilitySource attrs 2 -> True) SkillTestInitiatorTarget {} _ _ -> do
       let

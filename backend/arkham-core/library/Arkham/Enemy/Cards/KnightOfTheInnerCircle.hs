@@ -30,7 +30,8 @@ instance HasAbilities KnightOfTheInnerCircle where
   getAbilities (KnightOfTheInnerCircle attrs) =
     withBaseAbilities
       attrs
-      [ mkAbility attrs 1
+      [ skillTestAbility
+          $ mkAbility attrs 1
           $ ForcedAbility
           $ OrWindowMatcher
             [ Enters Timing.After You $ locationWithEnemy $ toId attrs
@@ -41,7 +42,8 @@ instance HasAbilities KnightOfTheInnerCircle where
 instance RunMessage KnightOfTheInnerCircle where
   runMessage msg e@(KnightOfTheInnerCircle attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) iid SkillAgility (Fixed 4)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) iid SkillAgility (Fixed 4)
       pure e
     FailedSkillTest iid _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ _ -> do
       push $ EnemyEngageInvestigator (toId attrs) iid

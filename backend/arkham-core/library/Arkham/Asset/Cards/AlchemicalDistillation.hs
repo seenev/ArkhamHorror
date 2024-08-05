@@ -15,7 +15,7 @@ import Arkham.Matcher
 import Arkham.Movement
 
 newtype AlchemicalDistillation = AlchemicalDistillation AssetAttrs
-  deriving anyclass (IsAsset)
+  deriving anyclass IsAsset
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 alchemicalDistillation :: AssetCard AlchemicalDistillation
@@ -28,7 +28,11 @@ instance HasModifiersFor AlchemicalDistillation where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities AlchemicalDistillation where
-  getAbilities (AlchemicalDistillation a) = [restrictedAbility a 1 ControlsThis $ actionAbilityWithCost (assetUseCost a Supply 1)]
+  getAbilities (AlchemicalDistillation a) =
+    [ skillTestAbility
+        $ restrictedAbility a 1 ControlsThis
+        $ actionAbilityWithCost (assetUseCost a Supply 1)
+    ]
 
 instance RunMessage AlchemicalDistillation where
   runMessage msg a@(AlchemicalDistillation attrs) = runQueueT $ case msg of
@@ -39,7 +43,11 @@ instance RunMessage AlchemicalDistillation where
             iid
             [ Label
                 "Empower (increase difficulty by 2)"
-                [ Msg.abilityModifier (attrs.ability 1) attrs (MetaModifier $ object ["empowered" .= True])
+                [ Msg.abilityModifier
+                    (AbilityRef (toSource attrs) 1)
+                    (attrs.ability 1)
+                    attrs
+                    (MetaModifier $ object ["empowered" .= True])
                 , Do msg
                 ]
             , Label "Do not empower" [Do msg]
@@ -52,7 +60,8 @@ instance RunMessage AlchemicalDistillation where
       pure a
     HandleTargetChoice iid (isAbilitySource attrs 1 -> True) (InvestigatorTarget iid') -> do
       empowered <- getMetaMaybe False attrs "empowered"
-      beginSkillTest iid (attrs.ability 1) iid' #intellect (Fixed $ if empowered then 3 else 1)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 1) iid' #intellect (Fixed $ if empowered then 3 else 1)
       pure a
     PassedThisSkillTestBy _ (isAbilitySource attrs 1 -> True) n -> do
       push $ Do msg

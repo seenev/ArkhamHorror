@@ -31,6 +31,7 @@ import Arkham.ChaosToken
 import Arkham.Choose
 import Arkham.ClassSymbol
 import Arkham.Cost
+import Arkham.Customization
 import Arkham.DamageEffect
 import Arkham.Deck
 import Arkham.DeckBuilding.Adjustment
@@ -118,7 +119,7 @@ storyWithChooseOne lead pids flavor choices =
     (mapFromList [(pid, Read flavor $ if pid == lead then choices else []) | pid <- pids])
 
 data AdvancementMethod = AdvancedWithClues | AdvancedWithOther
-  deriving stock (Generic, Eq, Show)
+  deriving stock (Generic, Eq, Show, Data)
   deriving anyclass (FromJSON, ToJSON)
 
 instance IsLabel "clues" AdvancementMethod where
@@ -128,7 +129,7 @@ instance IsLabel "other" AdvancementMethod where
   fromLabel = AdvancedWithOther
 
 data AgendaAdvancementMethod = AgendaAdvancedWithDoom | AgendaAdvancedWithOther
-  deriving stock (Generic, Eq, Show)
+  deriving stock (Generic, Eq, Show, Data)
   deriving anyclass (FromJSON, ToJSON)
 
 instance IsLabel "doom" AgendaAdvancementMethod where
@@ -245,13 +246,9 @@ createCardEffect
   -> Message
 createCardEffect def mMeta (toSource -> source) (toTarget -> target) = CreateEffect (toCardCode def) mMeta source target
 
-data AbilityRef = AbilityRef Source Int
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
-getChoiceAmount :: Text -> [(Text, Int)] -> Int
+getChoiceAmount :: Text -> [(NamedUUID, Int)] -> Int
 getChoiceAmount key choices =
-  let choicesMap = mapFromList @(Map Text Int) choices
+  let choicesMap = mapFromList @(Map Text Int) $ map (first nuName) choices
    in findWithDefault 0 key choicesMap
 
 class IsMessage msg where
@@ -290,27 +287,27 @@ instance IsMessage (EnemyCreation Message) where
   {-# INLINE toMessage #-}
 
 data ReplaceStrategy = DefaultReplace | Swap
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 data StoryMode = ResolveIt | DoNotResolveIt
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 data IncludeDiscard = IncludeDiscard | ExcludeDiscard
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 data SearchType = Searching | Looking | Revealing
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 newtype FromSkillType = FromSkillType SkillType
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 newtype ToSkillType = ToSkillType SkillType
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 pattern BeginSkillTest :: SkillTest -> Message
@@ -318,15 +315,15 @@ pattern BeginSkillTest skillTest <- BeginSkillTestWithPreMessages' [] skillTest
   where
     BeginSkillTest skillTest = BeginSkillTestWithPreMessages' [] skillTest
 
-pattern AssetDamage :: AssetId -> Source -> Int -> Int -> Message
-pattern AssetDamage aid source damage horror <- AssetDamageWithCheck aid source damage horror True
+pattern DealAssetDamage :: AssetId -> Source -> Int -> Int -> Message
+pattern DealAssetDamage aid source damage horror <- DealAssetDamageWithCheck aid source damage horror True
   where
-    AssetDamage aid source damage horror = AssetDamageWithCheck aid source damage horror True
+    DealAssetDamage aid source damage horror = DealAssetDamageWithCheck aid source damage horror True
 
 type IsSameAction = Bool
 
 data CanAdvance = CanAdvance | CanNotAdvance
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 class AndThen a where
@@ -337,7 +334,10 @@ instance AndThen (CardDraw Message) where
 
 data Message
   = UseAbility InvestigatorId Ability [Window]
+  | MoveWithSkillTest Message
+  | NextSkillTest SkillTestId
   | AddSubscriber Target
+  | WithSource Source Message
   | SetInvestigator PlayerId Investigator
   | ResolvedAbility Ability -- INTERNAL, See Arbiter of Fates
   | -- Story Card Messages
@@ -374,7 +374,6 @@ data Message
   | AdvanceCurrentAgenda
   | ReplaceLocation LocationId Card ReplaceStrategy
   | ReplaceEnemy EnemyId Card ReplaceStrategy
-  | ReplacedLocation LocationId LocationId
   | ReplaceAgenda AgendaId Card
   | RevertAgenda AgendaId
   | ResetAgendaDeckToStage Int
@@ -391,6 +390,7 @@ data Message
   | -- Adding Cards to Hand
     AddFocusedToHand InvestigatorId Target Zone CardId
   | AddToHand InvestigatorId [Card]
+  | AddToHandQuiet InvestigatorId [Card] -- used for playing cards
   | ReturnToHand InvestigatorId Target
   | -- Adding Cards to Deck
     AddFocusedToTopOfDeck InvestigatorId Target CardId
@@ -400,6 +400,7 @@ data Message
   | -- Slot Messages
     AddSlot InvestigatorId SlotType Slot
   | RemoveSlot InvestigatorId SlotType
+  | RemoveSlotFrom InvestigatorId Source SlotType
   | -- Adding Cards to Encounter Deck
     AddToEncounterDeck EncounterCard
   | -- Scenario Deck Messages
@@ -441,16 +442,20 @@ data Message
   | AllDrawEncounterCard
   | AllInvestigatorsResigned
   | AllRandomDiscard Source CardMatcher
-  | AssetDamageWithCheck AssetId Source Int Int Bool
-  | AssetDefeated AssetId
+  | DealAssetDamageWithCheck AssetId Source Int Int Bool
+  | DealAssetDirectDamage AssetId Source Int Int
+  | AssignAssetDamageWithCheck AssetId Source Int Int Bool
+  | AssetDefeated Source AssetId
   | -- Attach
     AttachAsset AssetId Target
   | AttachEvent EventId Target
   | AttachStoryTreacheryTo TreacheryId Card Target
-  | AttackEnemy InvestigatorId EnemyId Source (Maybe Target) SkillType
+  | AttackEnemy SkillTestId InvestigatorId EnemyId Source (Maybe Target) SkillType
   | BeforeRevealChaosTokens
+  | AfterRevealChaosTokens
   | BeforeSkillTest SkillTest
   | ChangeSkillTestType SkillTestType SkillTestBaseValue
+  | IncreaseSkillTestDifficulty Int
   | -- Game State Control
     BeginGame
   | Begin Phase
@@ -460,6 +465,7 @@ data Message
   | ReplaceSkillTestSkill FromSkillType ToSkillType
   | BeginSkillTestWithPreMessages Bool [Message] SkillTest
   | BeginSkillTestWithPreMessages' [Message] SkillTest
+  | RepeatSkillTest SkillTestId SkillTest
   | BeginSkillTestAfterFast
   | SetSkillTestTarget Target
   | SetSkillTestResolveFailureInvestigator InvestigatorId
@@ -477,6 +483,8 @@ data Message
   | CheckDefeated Source Target
   | AssignDamage Target
   | CancelAssignedDamage Target Int Int
+  | AssignedDamage Target
+  | AssignedHealing Target
   | CheckHandSize InvestigatorId
   | CheckWindow [InvestigatorId] [Window]
   | ChooseOneRewardByEachPlayer [CardDef] [InvestigatorId]
@@ -520,6 +528,7 @@ data Message
   | -- end  new payment bs
     CreateWindowModifierEffect EffectWindow (EffectMetadata Window Message) Source Target
   | CreateChaosTokenEffect (EffectMetadata Window Message) Source ChaosToken
+  | CreateOnRevealChaosTokenEffect SkillTestId ChaosTokenMatcher Source Target [Message]
   | CreateAssetAt AssetId Card Placement
   | CreateEventAt InvestigatorId Card Placement
   | PlaceAsset AssetId Placement
@@ -528,7 +537,7 @@ data Message
   | PlaceSkill SkillId Placement
   | PlaceKey Target ArkhamKey
   | CreateStoryAssetAtLocationMatching Card LocationMatcher
-  | CreateChaosTokenValueEffect Int Source Target
+  | CreateChaosTokenValueEffect SkillTestId Int Source Target
   | CreateWeaknessInThreatArea Card InvestigatorId
   | CreatedEffect EffectId (Maybe (EffectMetadata Window Message)) Source Target
   | CrossOutRecord CampaignLogKey
@@ -545,6 +554,7 @@ data Message
   | DiscardTopOfEncounterDeck InvestigatorId Int Source (Maybe Target)
   | DiscardTopOfEncounterDeckWithDiscardedCards InvestigatorId Int Source (Maybe Target) [EncounterCard]
   | Discarded Target Source Card
+  | DiscardedCard CardId
   | DiscardedTopOfEncounterDeck InvestigatorId [EncounterCard] Source Target
   | DiscardedTopOfDeck InvestigatorId [PlayerCard] Source Target
   | DiscoverClues InvestigatorId Discover
@@ -579,6 +589,7 @@ data Message
   | EnemiesAttack
   | EnemyWillAttack EnemyAttackDetails
   | EnemyAttack EnemyAttackDetails
+  | HandleElusive EnemyId
   | InitiateEnemyAttack EnemyAttackDetails
   | PerformEnemyAttack EnemyId -- Internal
   | AfterEnemyAttack EnemyId [Message]
@@ -603,16 +614,15 @@ data Message
   | EnemySpawnEngagedWithPrey EnemyId
   | EnemySpawnEngagedWith EnemyId InvestigatorMatcher
   | EnemySpawnFromVoid (Maybe InvestigatorId) LocationId EnemyId
-  | EnemySpawnedAt LocationId EnemyId
   | EngageEnemy InvestigatorId EnemyId (Maybe Target) Bool
-  | EvadeEnemy InvestigatorId EnemyId Source (Maybe Target) SkillType Bool
+  | EvadeEnemy SkillTestId InvestigatorId EnemyId Source (Maybe Target) SkillType Bool
   | Exhaust Target
   | ExhaustThen Target [Message]
   | FailSkillTest
   | FailedAttackEnemy InvestigatorId EnemyId
   | FailedSkillTest InvestigatorId (Maybe Action) Source Target SkillTestType Int
-  | ChoseEnemy InvestigatorId Source EnemyId
-  | FightEnemy InvestigatorId EnemyId Source (Maybe Target) SkillType Bool
+  | ChoseEnemy SkillTestId InvestigatorId Source EnemyId
+  | FightEnemy SkillTestId InvestigatorId EnemyId Source (Maybe Target) SkillType Bool
   | FindAndDrawEncounterCard InvestigatorId CardMatcher IncludeDiscard
   | FindEncounterCard InvestigatorId Target [ScenarioZone] CardMatcher
   | FinishedWithMulligan InvestigatorId
@@ -635,6 +645,8 @@ data Message
   | HealAllDamage Target Source
   | HealAllHorror Target Source
   | HealAllDamageAndHorror Target Source
+  | ExcessHealDamage InvestigatorId Int
+  | ExcessHealHorror InvestigatorId Int
   | HealDamage Target Source Int
   | HealHorror Target Source Int
   | HealDamageDelayed Target Source Int
@@ -707,6 +719,8 @@ data Message
   | InvestigatorPlaceCluesOnLocation InvestigatorId Source Int
   | InvestigatorPlayAsset InvestigatorId AssetId
   | InvestigatorClearUnusedAssetSlots InvestigatorId
+  | InvestigatorAdjustAssetSlots InvestigatorId AssetId
+  | InvestigatorAdjustSlot InvestigatorId Slot SlotType SlotType
   | InvestigatorPlayedAsset InvestigatorId AssetId
   | InvestigatorPlayEvent InvestigatorId EventId (Maybe Target) [Window] Zone
   | FinishedEvent EventId
@@ -748,6 +762,7 @@ data Message
   | NextChaosBagStep Source (Maybe InvestigatorId) RequestedChaosTokenStrategy
   | Noop
   | PassSkillTest
+  | PassSkillTestBy Int
   | PassedSkillTest InvestigatorId (Maybe Action) Source Target SkillTestType Int
   | PaidAbilityCost InvestigatorId (Maybe Action) Payment
   | PayCardCost InvestigatorId Card [Window]
@@ -764,7 +779,9 @@ data Message
   | PlaceLocationMatching CardMatcher
   | PlaceTokens Source Target Token Int
   | RemoveTokens Source Target Token Int
+  | ClearTokens Target
   | MoveTokens Source Source Target Token Int
+  | MoveTokensNoDefeated Source Source Target Token Int
   | PlaceUnderneath Target [Card]
   | PlacedUnderneath Target Card
   | PlaceNextTo Target [Card]
@@ -774,6 +791,7 @@ data Message
   | PlayCard InvestigatorId Card (Maybe Target) Payment [Window] Bool
   | CardEnteredPlay InvestigatorId Card
   | ResolvedCard InvestigatorId Card
+  | ResolvedPlayCard InvestigatorId Card
   | PlayerWindow InvestigatorId [UI Message] Bool
   | PutCampaignCardIntoPlay InvestigatorId CardDef
   | PutCardIntoPlay InvestigatorId Card (Maybe Target) Payment [Window]
@@ -792,6 +810,7 @@ data Message
   | CrossOutRecordSetEntries CampaignLogKey [SomeRecorded]
   | RefillSlots InvestigatorId
   | Remember ScenarioLogKey
+  | ScenarioCountSet ScenarioCountKey Int
   | ScenarioCountIncrementBy ScenarioCountKey Int
   | ScenarioCountDecrementBy ScenarioCountKey Int
   | RemoveAllCopiesOfCardFromGame InvestigatorId CardCode
@@ -844,7 +863,7 @@ data Message
   | ReturnChaosTokensToPool [ChaosToken]
   | Resign InvestigatorId
   | ResignWith Target
-  | ResolveAmounts InvestigatorId [(Text, Int)] Target
+  | ResolveAmounts InvestigatorId [(NamedUUID, Int)] Target
   | ResolveEvent InvestigatorId EventId (Maybe Target) [Window]
   | ResolveEventChoice InvestigatorId EventId Int (Maybe Target) [Window]
   | ResolveSkill SkillId
@@ -856,10 +875,11 @@ data Message
   | RevealLocation (Maybe InvestigatorId) LocationId
   | UnrevealLocation LocationId
   | RevealSkillTestChaosTokens InvestigatorId
+  | RevealSkillTestChaosTokensAgain InvestigatorId -- meant for when we reveal during resolving
   | RevealChaosToken Source InvestigatorId ChaosToken
   | Revelation InvestigatorId Source
   | RevelationChoice InvestigatorId Source Int
-  | RevelationSkillTest InvestigatorId Source SkillType SkillTestDifficulty
+  | RevelationSkillTest SkillTestId InvestigatorId Source SkillType SkillTestDifficulty
   | Run [Message]
   | RunBag Source (Maybe InvestigatorId) RequestedChaosTokenStrategy
   | RunDrawFromBag Source (Maybe InvestigatorId) RequestedChaosTokenStrategy
@@ -874,12 +894,13 @@ data Message
       Source
       Target
       [(Zone, ZoneReturnStrategy)]
-      CardMatcher
+      ExtendedCardMatcher
       FoundCardsStrategy
   | ResolveSearch InvestigatorId
   | SearchFound InvestigatorId Target DeckSignifier [Card]
   | FoundCards (Map Zone [Card])
   | SearchNoneFound InvestigatorId Target
+  | UpdateSearchReturnStrategy InvestigatorId Zone ZoneReturnStrategy
   | SetActions InvestigatorId Source Int
   | SetEncounterDeck (Deck EncounterCard)
   | SetLayout [GridTemplateRow]
@@ -908,8 +929,8 @@ data Message
   | SkillTestApplyResultsAfter
   | SkillTestAsk Message
   | SkillTestCommitCard InvestigatorId Card
-  | SkillTestEnds InvestigatorId Source
-  | SkillTestEnded
+  | SkillTestEnds SkillTestId InvestigatorId Source
+  | SkillTestEnded SkillTestId
   | AfterSkillTestEnds Source Target SkillTest.SkillTestResult
   | EndSkillTestWindow
   | SkillTestResults SkillTestResultsData
@@ -936,6 +957,7 @@ data Message
   | Surge InvestigatorId Source
   | TakeActions InvestigatorId [Action] Cost
   | TakeControlOfAsset InvestigatorId AssetId
+  | LoseControlOfAsset AssetId
   | ReplaceInvestigatorAsset InvestigatorId AssetId Card
   | ReplacedInvestigatorAsset InvestigatorId AssetId
   | TakeControlOfSetAsideAsset InvestigatorId Card
@@ -945,12 +967,11 @@ data Message
   | TakeStartingResources InvestigatorId
   | TakenActions InvestigatorId [Action]
   | PerformedActions InvestigatorId [Action]
-  | ChosenEvadeEnemy Source EnemyId
+  | ChosenEvadeEnemy SkillTestId Source EnemyId
   | TriggerSkillTest InvestigatorId
-  | TryEvadeEnemy InvestigatorId EnemyId Source (Maybe Target) SkillType
+  | TryEvadeEnemy SkillTestId InvestigatorId EnemyId Source (Maybe Target) SkillType
   | UnfocusCards
   | ClearFound Zone
-  | UnfocusTargets
   | UnfocusChaosTokens
   | SealChaosToken ChaosToken
   | SealedChaosToken ChaosToken Card
@@ -985,10 +1006,8 @@ data Message
   | UndoAction
   | BeginAction
   | FinishAction
-  | BeginCardPayment Card
-  | FinishCardPayment Card
   | ReplaceCard CardId Card
-  | UpdateHistory InvestigatorId History
+  | UpdateHistory InvestigatorId HistoryItem
   | -- The Forgotten Age
     PickSupply InvestigatorId Supply
   | UseSupply InvestigatorId Supply
@@ -997,10 +1016,12 @@ data Message
   | SetScenarioMeta Value
   | DoStep Int Message
   | ForInvestigator InvestigatorId Message
+  | ForTarget Target Message
   | ForPlayer PlayerId Message
+  | ForChoice Int Message
+  | ForSkillType SkillType Message
   | -- The Circle Undone
-    BecomePrologueInvestigator InvestigatorId InvestigatorId
-  | PutLocationInFrontOf InvestigatorId LocationId
+    PutLocationInFrontOf InvestigatorId LocationId
   | PutLocationInCenter LocationId
   | PlaceBreaches Target Int
   | RemoveBreaches Target Int
@@ -1025,12 +1046,13 @@ data Message
   | IfEnemyExists EnemyMatcher [Message]
   | ExcessDamage EnemyId [Message]
   | AddDeckBuildingAdjustment InvestigatorId DeckBuildingAdjustment
+  | IncreaseCustomization InvestigatorId CardCode Customization [CustomizationChoice]
   | -- Commit
     Do Message
   | DoBatch BatchId Message
   | -- UI
     ClearUI
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 $(deriveJSON defaultOptions ''Message)
 
@@ -1054,7 +1076,7 @@ uiToRun = \case
   EvadeLabel _ msgs -> Run msgs
   FightLabel _ msgs -> Run msgs
   EngageLabel _ msgs -> Run msgs
-  AbilityLabel iid ab windows msgs -> Run $ UseAbility iid ab windows : msgs
+  AbilityLabel iid ab windows before msgs -> Run $ before <> [UseAbility iid ab windows] <> msgs
   ComponentLabel _ msgs -> Run msgs
   EndTurnButton _ msgs -> Run msgs
   StartSkillTestButton iid -> Run [StartSkillTest iid]
@@ -1063,8 +1085,9 @@ uiToRun = \case
   EffectActionButton _ _ msgs -> Run msgs
   Done _ -> Run []
   SkipTriggersButton _ -> Run []
+  CardPile _ msgs -> Run msgs
 
-chooseOrRunOne :: PlayerId -> [UI Message] -> Message
+chooseOrRunOne :: HasCallStack => PlayerId -> [UI Message] -> Message
 chooseOrRunOne _ [x] = uiToRun x
 chooseOrRunOne pid msgs = chooseOne pid msgs
 
@@ -1107,7 +1130,7 @@ chooseSome1 pid doneText msgs = Ask pid (ChooseSome1 doneText msgs)
 chooseUpToN :: PlayerId -> Int -> Text -> [UI Message] -> Message
 chooseUpToN _ _ _ [] = throw $ InvalidState "No messages for chooseSome"
 chooseUpToN pid n doneText msgs =
-  Ask pid (ChooseUpToN n $ Label doneText [] : msgs)
+  Ask pid (ChooseUpToN n $ Done doneText : msgs)
 
 chooseN :: PlayerId -> Int -> [UI Message] -> Message
 chooseN _ _ [] = throw $ InvalidState "No messages for chooseN"
@@ -1119,20 +1142,19 @@ chooseOrRunN _ n msgs | length msgs == n = Run $ map uiToRun msgs
 chooseOrRunN pid n msgs = Ask pid (ChooseN n msgs)
 
 chooseAmounts
-  :: Targetable target
+  :: (Targetable target, MonadRandom m)
   => PlayerId
   -> Text
   -> AmountTarget
   -> [(Text, (Int, Int))]
   -> target
-  -> Message
-chooseAmounts pid label total choiceMap (toTarget -> target) =
-  Ask
-    pid
-    (ChooseAmounts label total amountChoices target)
+  -> m Message
+chooseAmounts pid label total choiceMap (toTarget -> target) = do
+  rs <- getRandoms
+  pure $ Ask pid (ChooseAmounts label total (amountChoices rs) target)
  where
-  amountChoices = map toAmountChoice choiceMap
-  toAmountChoice (l, (m, n)) = AmountChoice l m n
+  amountChoices rs = map toAmountChoice (zip rs choiceMap)
+  toAmountChoice (choiceId, (l, (m, n))) = AmountChoice choiceId l m n
 
 chooseUpgradeDeck :: PlayerId -> Message
 chooseUpgradeDeck pid = Ask pid ChooseUpgradeDeck

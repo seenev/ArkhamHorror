@@ -17,7 +17,7 @@ import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Import.Lifted
 
 newtype RestlessJourneyFallacy = RestlessJourneyFallacy TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 restlessJourneyFallacy :: TreacheryCard RestlessJourneyFallacy
@@ -31,7 +31,7 @@ instance HasModifiersFor RestlessJourneyFallacy where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities RestlessJourneyFallacy where
-  getAbilities (RestlessJourneyFallacy a) = [restrictedAbility a 1 InYourHand $ FastAbility Free]
+  getAbilities (RestlessJourneyFallacy a) = [skillTestAbility $ restrictedAbility a 1 InYourHand $ FastAbility Free]
 
 instance RunMessage RestlessJourneyFallacy where
   runMessage msg t@(RestlessJourneyFallacy attrs) = runQueueT $ case msg of
@@ -61,9 +61,10 @@ restlessJourneyFallacyEffect = cardEffect RestlessJourneyFallacyEffect Cards.res
 instance RunMessage RestlessJourneyFallacyEffect where
   runMessage msg e@(RestlessJourneyFallacyEffect attrs) = runQueueT $ case msg of
     CreatedEffect eid _ source (InvestigatorTarget iid) | eid == attrs.id -> do
-      beginSkillTest iid source iid #intellect (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid source iid #intellect (Fixed 3)
       pure e
-    SkillTestEnds _iid (isSource attrs -> True) -> disableReturn e
+    SkillTestEnds _ _iid (isSource attrs -> True) -> disableReturn e
     FailedThisSkillTest _iid source | attrs.source == source -> do
       placeDoomOnAgendaAndCheckAdvance 1
       disableReturn e

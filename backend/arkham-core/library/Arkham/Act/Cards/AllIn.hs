@@ -23,11 +23,12 @@ instance HasAbilities AllIn where
   getAbilities (AllIn x) =
     withBaseAbilities x
       $ guard (onSide A x)
-      *> [ restrictedAbility
-            (proxied (AssetMatcherSource $ assetIs Assets.drFrancisMorgan) x)
-            1
-            (Uncontrolled <> OnSameLocation)
-            parleyAction_
+      *> [ skillTestAbility
+            $ restrictedAbility
+              (proxied (AssetMatcherSource $ assetIs Assets.drFrancisMorgan) x)
+              1
+              (Uncontrolled <> OnSameLocation)
+              parleyAction_
          , restrictedAbility x 1 AllUndefeatedInvestigatorsResigned
             $ Objective
             $ forced AnyWindow
@@ -44,7 +45,8 @@ instance RunMessage AllIn where
       pure a
     UseCardAbility iid (ProxySource _ source) 1 _ _ | isSource attrs source && onSide A attrs -> do
       aid <- selectJust $ assetIs Assets.drFrancisMorgan
-      push $ parley iid source aid #willpower (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid source aid #willpower (Fixed 3)
       pure a
     PassedThisSkillTest iid (isSource attrs -> True) | onSide A attrs -> do
       aid <- selectJust $ assetIs Assets.drFrancisMorgan

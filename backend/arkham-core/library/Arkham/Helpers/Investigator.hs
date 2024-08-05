@@ -24,8 +24,10 @@ import Arkham.Helpers.Source
 import Arkham.Id
 import Arkham.Investigator.Types
 import Arkham.Location.Types (Field (..))
-import Arkham.Matcher hiding (InvestigatorDefeated)
-import Arkham.Message (Message (InvestigatorMulligan))
+import Arkham.Matcher hiding (InvestigatorDefeated, InvestigatorResigned)
+import Arkham.Message (
+  Message (HealDamageDirectly, HealHorrorDirectly, InvestigatorMulligan, RunWindow),
+ )
 import Arkham.Name
 import Arkham.Placement
 import Arkham.Projection
@@ -33,9 +35,11 @@ import Arkham.SkillType
 import Arkham.Source
 import Arkham.Stats
 import Arkham.Target
+import Arkham.Window (Window (..), WindowType (Healed))
 import Data.Foldable (foldrM)
 import Data.Function (on)
 import Data.List (nubBy)
+import Data.Monoid
 
 getSkillValue :: HasGame m => SkillType -> InvestigatorId -> m Int
 getSkillValue st iid = do
@@ -113,12 +117,13 @@ baseSkillValueFor skill _maction iid = do
   pure $ foldr applyAfterModifier (foldr applyModifier baseValue modifiers) modifiers
  where
   applyModifier (BaseSkillOf skillType m) _ | skillType == skill = m
+  applyModifier (BaseSkill m) _ = m
   applyModifier _ n = n
   applyAfterModifier (SetSkillValue skillType m) _ | skillType == skill = m
   applyAfterModifier _ n = n
 
 data DamageFor = DamageForEnemy | DamageForInvestigator
-  deriving stock (Eq)
+  deriving stock Eq
 
 damageValueFor :: HasGame m => Int -> InvestigatorId -> DamageFor -> m Int
 damageValueFor baseValue iid damageFor = do
@@ -182,6 +187,9 @@ getCanSpendClues attrs = do
  where
   match CannotSpendClues {} = True
   match _ = False
+
+providedSlot :: Sourceable source => InvestigatorAttrs -> source -> Bool
+providedSlot attrs source = any (isSlotSource source) $ concat $ toList (investigatorSlots attrs)
 
 removeFromSlots
   :: AssetId -> Map SlotType [Slot] -> Map SlotType [Slot]
@@ -518,6 +526,10 @@ canHaveDamageHealed a = selectAny . HealableInvestigator (toSource a) DamageType
 additionalActionCovers
   :: HasGame m => Source -> [Action] -> AdditionalAction -> m Bool
 additionalActionCovers source actions (AdditionalAction _ _ aType) = case aType of
+  PlayCardRestrictedAdditionalAction matcher -> case source of
+    CardSource c -> elem c <$> select matcher
+    PlayerCardSource pc -> elem (toCard pc) <$> select matcher
+    _ -> pure False
   TraitRestrictedAdditionalAction t actionRestriction -> case actionRestriction of
     NoRestriction -> member t <$> sourceTraits source
     AbilitiesOnly -> case source of
@@ -553,6 +565,16 @@ checkAll (toId -> iid) capabilities = iid <=~> fold capabilities
 
 searchBonded :: (HasGame m, AsId iid, IdOf iid ~ InvestigatorId) => iid -> CardDef -> m [Card]
 searchBonded (asId -> iid) def = fieldMap InvestigatorBondedCards (filter ((== def) . toCardDef)) iid
+
+searchBondedJust :: (HasGame m, AsId iid, IdOf iid ~ InvestigatorId) => iid -> CardDef -> m Card
+searchBondedJust (asId -> iid) def =
+  fromJustNote "must be"
+    . listToMaybe
+    <$> fieldMap InvestigatorBondedCards (filter ((== def) . toCardDef)) iid
+
+searchBondedFor
+  :: (HasGame m, AsId iid, IdOf iid ~ InvestigatorId) => iid -> CardMatcher -> m [Card]
+searchBondedFor (asId -> iid) matcher = fieldMap InvestigatorBondedCards (filter (`cardMatch` matcher)) iid
 
 -- TODO: Decide if we want to use or keep these instances, these let you do
 -- >       canModifyDeck <- can.manipulate.deck attrs
@@ -595,3 +617,34 @@ getInMulligan = fromQueue (any isMulligan)
 
 setMeta :: ToJSON a => a -> InvestigatorAttrs -> InvestigatorAttrs
 setMeta meta attrs = attrs & metaL .~ toJSON meta
+
+healAdditional
+  :: (Sourceable source, HasQueue Message m) => source -> DamageType -> [Window] -> Int -> m ()
+healAdditional (toSource -> source) dType ws' additional = do
+  -- this is meant to heal additional so we'd directly heal one more
+  -- (without triggering a window), and then overwrite the original window
+  -- to heal for one more
+  let
+    updateHealed = \case
+      Window timing (Healed dType' t s n) mBatchId
+        | dType == dType' ->
+            Window timing (Healed dType' t s (n + additional)) mBatchId
+      other -> other
+    getHealedTarget = \case
+      (windowType -> Healed dType' t _ _) | dType == dType' -> Just t
+      _ -> Nothing
+    healedTarget =
+      fromJustNote "wrong call"
+        $ getFirst
+        $ foldMap (First . getHealedTarget) ws'
+
+  replaceMessageMatching
+    \case
+      RunWindow _ ws -> ws == ws'
+      _ -> False
+    \case
+      RunWindow iid' ws -> [RunWindow iid' $ map updateHealed ws]
+      _ -> error "invalid window"
+  case dType of
+    HorrorType -> push $ HealHorrorDirectly healedTarget source 1
+    DamageType -> push $ HealDamageDirectly healedTarget source 1

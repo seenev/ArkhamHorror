@@ -14,6 +14,7 @@ import Arkham.Effect.Types
 import Arkham.Effect.Window
 import Arkham.EffectMetadata
 import Arkham.Id
+import Arkham.Matcher
 import Arkham.Message
 import Arkham.Modifier
 import Arkham.Source
@@ -40,6 +41,7 @@ import Arkham.Asset.Assets (
   azureFlame3Effect,
   azureFlame5Effect,
   azureFlameEffect,
+  baseballBat2Effect,
   baseballBatEffect,
   charlesRossEsqEffect,
   clairvoyance3Effect,
@@ -48,15 +50,18 @@ import Arkham.Asset.Assets (
   crystalPendulumEffect,
   daisysToteBagAdvancedEffect,
   disciplinePrescienceOfFateEffect,
+  eldritchTongueEffect,
   empiricalHypothesisEffect,
   eyeOfChaos4Effect,
   eyeOfChaosEffect,
   eyeOfTheDjinnVesselOfGoodAndEvil2Effect,
+  eyesOfValusiaTheMothersCunning4Effect,
   fence1Effect,
   fieldworkEffect,
   fireExtinguisher1Effect,
   gildedVoltoEffect,
   grapplingHookEffect,
+  graysAnatomyTheDoctorsBible5Effect,
   gregoryGryEffect,
   grislyTotemSeeker3Effect,
   grislyTotemSurvivor3Effect,
@@ -77,6 +82,7 @@ import Arkham.Asset.Assets (
   mrPeabodyEffect,
   oldBookOfLore3Effect,
   pnakoticManuscripts5Effect,
+  prismaticSpectaclesLensToTheOtherworld2Effect,
   riteOfSeekingEffect,
   showmanshipEffect,
   shrivellingEffect,
@@ -85,8 +91,8 @@ import Arkham.Asset.Assets (
   sixthSense4Effect,
   sixthSenseEffect,
   songOfTheDead2Effect,
+  steadyHanded1Effect,
   thirtyFiveWinchesterEffect,
-  twilightBladeEffect,
   wellConnected3Effect,
   wellConnectedEffect,
   wither4Effect,
@@ -105,28 +111,36 @@ import Arkham.Enemy.Enemies (
 import Arkham.Event.Events (
   aChanceEncounterEffect,
   actOfDesperationEffect,
+  atACrossroads1Effect,
   backstab3Effect,
+  bideYourTimeEffect,
   bindMonster2Effect,
   blackMarket2Effect,
   blindingLight2Effect,
   blindingLightEffect,
   callingInFavorsEffect,
   cheapShot2Effect,
+  dawnStar1Effect,
   eideticMemory3Effect,
+  explosiveWardEffect,
   exposeWeakness1Effect,
   exposeWeakness3Effect,
   fightOrFlightEffect,
   followedEffect,
   getBehindMeEffect,
+  hitAndRunEffect,
+  illPayYouBackEffect,
   imDoneRunninEffect,
   improvisationEffect,
-  letMeHandleThisEffect,
   marksmanship1Effect,
   mystifyingSongEffect,
+  onTheLamAdvancedEffect,
+  oneInTheChamberEffect,
   pilfer3Effect,
   sleightOfHandEffect,
   slipAway2Effect,
   snipe1Effect,
+  spectralRazor2Effect,
   spectralRazorEffect,
   stormOfSpirits3Effect,
   stormOfSpiritsEffect,
@@ -216,10 +230,10 @@ createEffect cardCode meffectMetadata source target = do
   pure (eid, lookupEffect cardCode eid meffectMetadata source target)
 
 createChaosTokenValueEffect
-  :: MonadRandom m => Int -> Source -> Target -> m (EffectId, Effect)
-createChaosTokenValueEffect n source target = do
+  :: MonadRandom m => SkillTestId -> Int -> Source -> Target -> m (EffectId, Effect)
+createChaosTokenValueEffect sid n source target = do
   eid <- getRandom
-  pure (eid, buildChaosTokenValueEffect eid n source target)
+  pure (eid, buildChaosTokenValueEffect sid eid n source target)
 
 createWindowModifierEffect
   :: MonadRandom m
@@ -244,6 +258,18 @@ createChaosTokenEffect
 createChaosTokenEffect effectMetadata source token = do
   eid <- getRandom
   pure (eid, buildChaosTokenEffect eid effectMetadata source token)
+
+createOnRevealChaosTokenEffect
+  :: MonadRandom m
+  => SkillTestId
+  -> ChaosTokenMatcher
+  -> Source
+  -> Target
+  -> [Message]
+  -> m (EffectId, Effect)
+createOnRevealChaosTokenEffect sid matchr source target messages = do
+  eid <- getRandom
+  pure (eid, buildOnRevealChaosTokenEffect eid sid matchr source target messages)
 
 createSurgeEffect
   :: (MonadRandom m, Sourceable source, Targetable target)
@@ -272,12 +298,12 @@ lookupEffect cardCode eid mmetadata source target =
     Nothing -> error $ "Unknown effect: " <> show cardCode
     Just (SomeEffect f) -> Effect $ f (eid, mmetadata, source, target)
 
-buildChaosTokenValueEffect :: EffectId -> Int -> Source -> Target -> Effect
-buildChaosTokenValueEffect eid n source =
+buildChaosTokenValueEffect :: SkillTestId -> EffectId -> Int -> Source -> Target -> Effect
+buildChaosTokenValueEffect sid eid n source =
   buildWindowModifierEffect
     eid
     (EffectModifiers [Modifier source (ChaosTokenValueModifier n) False])
-    EffectSkillTestWindow
+    (EffectSkillTestWindow sid)
     source
 
 buildWindowModifierEffect
@@ -294,6 +320,14 @@ buildChaosTokenEffect
   :: EffectId -> EffectMetadata Window Message -> Source -> ChaosToken -> Effect
 buildChaosTokenEffect eid metadata source token =
   Effect $ chaosTokenEffect' eid metadata source token
+
+buildOnRevealChaosTokenEffect
+  :: EffectId -> SkillTestId -> ChaosTokenMatcher -> Source -> Target -> [Message] -> Effect
+buildOnRevealChaosTokenEffect eid sid matchr source token msgs =
+  Effect $ onRevealChaosTokenEffect' eid sid matchr source token msgs
+
+effectIsForNextGame :: Effect -> Bool
+effectIsForNextGame e = e.window == Just EffectSetupWindow
 
 instance FromJSON Effect where
   parseJSON = withObject "Effect" $ \o -> do
@@ -327,7 +361,6 @@ allEffects =
     , ("03005", SomeEffect williamYorickEffect)
     , ("03012", SomeEffect thePaintedWorldEffect)
     , ("03018", SomeEffect improvisationEffect)
-    , ("03022", SomeEffect letMeHandleThisEffect)
     , ("03024", SomeEffect fieldworkEffect)
     , ("03029", SomeEffect sleightOfHandEffect)
     , ("03031", SomeEffect lockpicks1Effect)
@@ -425,8 +458,21 @@ allEffects =
     , ("08087", SomeEffect snipe1Effect)
     , ("09008", SomeEffect kymaniJonesEffect)
     , ("09009", SomeEffect grapplingHookEffect)
+    , ("09029", SomeEffect oneInTheChamberEffect)
     , ("09041", SomeEffect empiricalHypothesisEffect)
-    , ("50013", SomeEffect twilightBladeEffect)
+    , ("09058", SomeEffect graysAnatomyTheDoctorsBible5Effect)
+    , ("09066", SomeEffect hitAndRunEffect)
+    , ("09087", SomeEffect explosiveWardEffect)
+    , ("09109", SomeEffect atACrossroads1Effect)
+    , ("09113", SomeEffect baseballBat2Effect)
+    , ("10035", SomeEffect eyesOfValusiaTheMothersCunning4Effect)
+    , ("10053", SomeEffect steadyHanded1Effect)
+    , ("10056", SomeEffect prismaticSpectaclesLensToTheOtherworld2Effect)
+    , ("10072", SomeEffect illPayYouBackEffect)
+    , ("10102", SomeEffect spectralRazor2Effect)
+    , ("10128", SomeEffect eldritchTongueEffect)
+    , ("10129", SomeEffect bideYourTimeEffect)
+    , ("10131", SomeEffect dawnStar1Effect)
     , ("50044", SomeEffect jeremiahPierceEffect)
     , ("52007", SomeEffect alchemicalTransmutation2Effect)
     , ("52008", SomeEffect stormOfSpirits3Effect)
@@ -462,7 +508,9 @@ allEffects =
     , ("84014", SomeEffect restaurantEffect)
     , ("84042", SomeEffect chillingPresenceEffect)
     , ("90002", SomeEffect daisysToteBagAdvancedEffect)
+    , ("90009", SomeEffect onTheLamAdvancedEffect)
     , ("wmode", SomeEffect windowModifierEffect)
     , ("tokef", SomeEffect chaosTokenEffect)
+    , ("ontok", SomeEffect onRevealChaosTokenEffect)
     , ("surge", SomeEffect surgeEffect)
     ]

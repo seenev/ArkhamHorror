@@ -415,7 +415,7 @@ search
   -> source
   -> target
   -> [(Zone, ZoneReturnStrategy)]
-  -> CardMatcher
+  -> ExtendedCardMatcher
   -> FoundCardsStrategy
   -> Message
 search iid (toSource -> source) (toTarget -> target) zones matcher strategy = Do (Search Searching iid source target zones matcher strategy)
@@ -426,7 +426,7 @@ lookAt
   -> source
   -> target
   -> [(Zone, ZoneReturnStrategy)]
-  -> CardMatcher
+  -> ExtendedCardMatcher
   -> FoundCardsStrategy
   -> Message
 lookAt iid (toSource -> source) (toTarget -> target) = Search Looking iid source target
@@ -438,7 +438,7 @@ revealing
   -> target
   -> Zone
   -> Message
-revealing iid (toSource -> source) (toTarget -> target) zone = Search Revealing iid source target [(zone, PutBack)] AnyCard ReturnCards
+revealing iid (toSource -> source) (toTarget -> target) zone = Search Revealing iid source target [(zone, PutBack)] (basic AnyCard) ReturnCards
 
 takeResources :: Sourceable source => InvestigatorId -> source -> Int -> Message
 takeResources iid (toSource -> source) n = TakeResources iid n source False
@@ -457,6 +457,9 @@ nonAttackEnemyDamage source damage enemy = EnemyDamage enemy (nonAttack source d
 
 placeDoom :: (Sourceable source, Targetable target) => source -> target -> Int -> Message
 placeDoom (toSource -> source) (toTarget -> target) n = PlaceDoom source target n
+
+placeHorror :: (Sourceable source, Targetable target) => source -> target -> Int -> Message
+placeHorror (toSource -> source) (toTarget -> target) n = PlaceHorror source target n
 
 addToVictory :: Targetable target => target -> Message
 addToVictory (toTarget -> target) = AddToVictory target
@@ -523,3 +526,23 @@ placeDoomOnAgendaAndCheckAdvance = PlaceDoomOnAgenda 1 CanAdvance
 handleTargetChoice
   :: (Sourceable source, Targetable target) => InvestigatorId -> source -> target -> Message
 handleTargetChoice iid (toSource -> source) (toTarget -> target) = HandleTargetChoice iid source target
+
+handleSkillTestNesting :: HasQueue Message m => SkillTestId -> Message -> a -> m a -> m a
+handleSkillTestNesting sid msg a action = do
+  push $ NextSkillTest sid
+  inSkillTestWindow <- fromQueue $ elem EndSkillTestWindow
+  if inSkillTestWindow
+    then do
+      msgs <- popMessagesMatching \case
+        MoveWithSkillTest _ -> True
+        _ -> False
+      insertAfterMatching (msg : msgs) (== EndSkillTestWindow)
+      pure a
+    else do
+      mapQueue \case
+        MoveWithSkillTest x -> x
+        x -> x
+      action
+
+handleSkillTestNesting_ :: HasQueue Message m => SkillTestId -> Message -> m () -> m ()
+handleSkillTestNesting_ sid msg action = handleSkillTestNesting sid msg () action

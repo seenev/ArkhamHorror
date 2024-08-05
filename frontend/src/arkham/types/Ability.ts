@@ -4,6 +4,16 @@ import { Cost, costDecoder } from '@/arkham/types/Cost';
 import { Action, actionDecoder } from '@/arkham/types/Action';
 import { SkillType, skillTypeDecoder } from '@/arkham/types/SkillType';
 
+export type ServitorAbility = {
+  tag: "ServitorAbility"
+  action: Action
+}
+
+export const servitorAbilityDecoder = JsonDecoder.object<ServitorAbility>({
+  tag: JsonDecoder.isExactly("ServitorAbility"),
+  action: actionDecoder
+}, 'ServitorAbility')
+
 export type FastAbility = {
   tag: "FastAbility"
   cost: Cost
@@ -37,6 +47,19 @@ export const customizationReactionDecoder = JsonDecoder.object<CustomizationReac
   label: JsonDecoder.string,
   cost: costDecoder
 }, 'CustomizationReaction')
+
+export type ConstantReaction = {
+  tag: "ConstantReaction"
+  label: string
+  cost: Cost
+  // window :: WindowMatcher
+}
+
+export const constantReactionDecoder = JsonDecoder.object<ConstantReaction>({
+  tag: JsonDecoder.isExactly("ConstantReaction"),
+  label: JsonDecoder.string,
+  cost: costDecoder
+}, 'ConstantReaction')
 
 export type ActionAbility = {
   tag: "ActionAbility"
@@ -133,7 +156,7 @@ export const hauntedDecoder = JsonDecoder.object<Haunted>({
 }, 'Haunted')
 
 
-export type AbilityType = FastAbility | ReactionAbility | CustomizationReaction | ActionAbility | ActionAbilityWithSkill | ActionAbilityWithBefore | SilentForcedAbility | ForcedAbility | ForcedAbilityWithCost | AbilityEffect | Objective | Haunted
+export type AbilityType = ServitorAbility | FastAbility | ReactionAbility | CustomizationReaction | ConstantReaction | ActionAbility | ActionAbilityWithSkill | ActionAbilityWithBefore | SilentForcedAbility | ForcedAbility | ForcedAbilityWithCost | AbilityEffect | Objective | Haunted
 
 export type ForcedWhen = {
   tag: "ForcedWhen"
@@ -147,9 +170,11 @@ export const forcedWhenDecoder = JsonDecoder.object<ForcedWhen>({
 
 
 export const abilityTypeDecoder: JsonDecoder.Decoder<AbilityType> = JsonDecoder.oneOf<AbilityType>([
+  servitorAbilityDecoder,
   fastAbilityDecoder,
   reactionAbilityDecoder,
   customizationReactionDecoder,
+  constantReactionDecoder,
   actionAbilityDecoder,
   actionAbilityWithSkillDecoder,
   actionAbilityWithBeforeDecoder,

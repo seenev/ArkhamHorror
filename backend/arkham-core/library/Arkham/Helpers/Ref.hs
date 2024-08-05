@@ -30,6 +30,10 @@ targetToMaybeCard = \case
   CardTarget c -> pure $ Just c
   SearchedCardTarget cId -> Just <$> getCard cId
   CardIdTarget cId -> Just <$> getCard cId
+  BothTarget a b -> do
+    aCard <- targetToMaybeCard a
+    bCard <- targetToMaybeCard b
+    pure $ aCard <|> bCard
   _ -> pure Nothing
 
 sourceToCard :: (HasCallStack, HasGame m) => Source -> m Card
@@ -52,7 +56,7 @@ sourceToTarget = \case
   ChaosTokenEffectSource _ -> error "not implemented"
   AgendaSource aid -> AgendaTarget aid
   LocationSource lid -> LocationTarget lid
-  SkillTestSource -> SkillTestTarget
+  SkillTestSource sid -> SkillTestTarget sid
   TreacherySource tid -> TreacheryTarget tid
   EventSource eid -> EventTarget eid
   SkillSource sid -> SkillTarget sid
@@ -86,6 +90,7 @@ sourceToTarget = \case
 
 targetToSource :: Target -> Source
 targetToSource = \case
+  ThisTarget -> error "not converted"
   InvestigatorTarget iid -> InvestigatorSource iid
   InvestigatorHandTarget iid -> InvestigatorSource iid
   InvestigatorDiscardTarget iid -> InvestigatorSource iid
@@ -96,7 +101,7 @@ targetToSource = \case
   PhaseTarget _ -> error "no need"
   LocationTarget lid -> LocationSource lid
   (SetAsideLocationsTarget _) -> error "can not convert"
-  SkillTestTarget -> SkillTestSource
+  SkillTestTarget sid -> SkillTestSource sid
   TreacheryTarget tid -> TreacherySource tid
   EncounterDeckTarget -> error "can not covert"
   ScenarioDeckTarget -> error "can not covert"

@@ -34,17 +34,41 @@ data Ability = Ability
   , abilityDelayAdditionalCosts :: Bool
   , abilityBasic :: Bool
   , abilityAdditionalCosts :: [Cost]
+  , abilityRequestor :: Source
+  , abilityTriggersSkillTest :: Bool
   }
   deriving stock (Show, Ord, Data)
 
+skillTestAbility :: Ability -> Ability
+skillTestAbility ab = ab {abilityTriggersSkillTest = True}
+
+notSkillTestAbility :: Ability -> Ability
+notSkillTestAbility ab = ab {abilityTriggersSkillTest = False}
+
+setRequestor :: Sourceable source => source -> Ability -> Ability
+setRequestor source ab = ab {abilityRequestor = toSource source}
+
 instance HasCost Ability where
   overCost f ab = ab {Arkham.Ability.Types.abilityType = overCost f (abilityType ab)}
+
+instance HasField "requestor" Ability Source where
+  getField = abilityRequestor
 
 instance HasField "source" Ability Source where
   getField = abilitySource
 
 instance HasField "index" Ability Int where
   getField = abilityIndex
+
+instance HasField "ref" Ability AbilityRef where
+  getField = abilityToRef
+
+data AbilityRef = AbilityRef Source Int
+  deriving stock (Show, Eq, Generic, Data)
+  deriving anyclass (ToJSON, FromJSON)
+
+abilityToRef :: Ability -> AbilityRef
+abilityToRef a = AbilityRef a.source a.index
 
 data AbilityMetadata
   = IntMetadata Int
@@ -105,9 +129,11 @@ instance FromJSON Ability where
     abilityTooltip <- o .:? "tooltip"
     abilityCanBeCancelled <- o .: "canBeCancelled"
     abilityDisplayAsAction <- o .: "displayAsAction"
-    abilityDelayAdditionalCosts <- o .:? "delayAdditionalCosts" .!= False
-    abilityBasic <- o .:? "basic" .!= False
-    abilityAdditionalCosts <- o .:? "additionalCosts" .!= []
+    abilityDelayAdditionalCosts <- o .: "delayAdditionalCosts"
+    abilityBasic <- o .: "basic"
+    abilityAdditionalCosts <- o .: "additionalCosts"
+    abilityRequestor <- o .:? "requestor" .!= abilitySource
+    abilityTriggersSkillTest <- o .:? "triggersSkillTest" .!= False
     pure Ability {..}
 
 newtype DifferentAbility = DifferentAbility Ability

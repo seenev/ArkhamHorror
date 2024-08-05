@@ -103,7 +103,6 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
         let deck' = deck <> hand <> discard
         push $ LoadDeck iid (Deck deck')
     pure a
-  Setup -> a <$ pushAllEnd [BeginGame, BeginRound, Begin InvestigationPhase]
   BeginGame -> do
     mFalseAwakening <- getMaybeCampaignStoryCard Treacheries.falseAwakening
     for_ mFalseAwakening \falseAwakening -> do
@@ -145,7 +144,7 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
         (deck', randomWeaknesses) <- addRandomBasicWeaknessIfNeeded playerCount deck
         weaknesses <- traverse (`genPlayerCardWith` setPlayerCardOwner iid) randomWeaknesses
         pid <- getPlayer iid
-        let purchaseTrauma = initDeckTrauma deck' iid pid (toTarget a)
+        purchaseTrauma <- initDeckTrauma deck' iid pid (toTarget a)
 
         pushAll
           $ LoadDeck iid (withDeck (<> weaknesses) deck')
@@ -363,6 +362,9 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
   Remember logKey -> do
     send $ "Remember \"" <> format logKey <> "\""
     pure $ a & logL %~ insertSet logKey
+  ScenarioCountSet logKey n -> do
+    pushM $ checkWindows [mkAfter $ Window.ScenarioCountIncremented logKey]
+    pure $ a & countsL %~ Map.alter (const (Just n)) logKey
   ScenarioCountIncrementBy logKey n -> do
     pushM $ checkWindows [mkAfter $ Window.ScenarioCountIncremented logKey]
     pure $ a & countsL %~ Map.alter (Just . maybe n (+ n)) logKey
@@ -454,7 +456,7 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
     VengeanceCard _ -> error "vengeance card"
   PutCardOnBottomOfDeck _ Deck.EncounterDeck card -> case card of
     EncounterCard ec -> do
-      let encounterDeck = withDeck (<> [ec]) scenarioEncounterDeck
+      let encounterDeck = withDeck ((<> [ec]) . deleteFirst ec) scenarioEncounterDeck
       pure
         $ a
         & (setAsideCardsL %~ deleteFirstMatch (== card))
@@ -697,12 +699,13 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
           pushAll [ShuffleEncounterDiscardBackIn, Do (DrawCards iid drawing)]
         pure a
       -- This case should not happen but this safeguards against it
-      (card : encounterDeck) -> do
-        when (null encounterDeck) $ do
+      xs -> do
+        let (drew, rest) = splitAt drawing.amount xs
+        push $ DrewCards iid $ finalizeDraw drawing $ map toCard drew
+        when (null rest) $ do
           windows' <- checkWindows [mkWhen Window.EncounterDeckRunsOutOfCards]
           pushAll [windows', ShuffleEncounterDiscardBackIn]
-        pushAll [UnsetActiveCard, InvestigatorDrewEncounterCard iid card]
-        pure $ a & (deckLens handler .~ Deck encounterDeck)
+        pure $ a & (deckLens handler .~ Deck rest)
   Search searchType iid _ EncounterDeckTarget _ _ _ -> do
     case searchType of
       Searching ->
@@ -756,7 +759,7 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
           )
           mempty
           cardSources
-      targetCards = filter (`cardMatch` cardMatcher) $ concat $ toList foundCards
+    targetCards <- filterM (`extendedCardMatch` cardMatcher) $ concat $ toList foundCards
     pushBatch batchId $ EndSearch iid source EncounterDeckTarget cardSources
     player <- getPlayer iid
 
@@ -1129,8 +1132,9 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
     deck' <- shuffleM $ fromMaybe [] (view (decksL . at deckKey) a)
     pure $ a & decksL . at deckKey ?~ deck'
   ShuffleCardsIntoDeck (Deck.ScenarioDeckByKey deckKey) cards -> do
-    deck' <-
-      shuffleM $ cards <> maybe [] (filter (`notElem` cards)) (view (decksL . at deckKey) a)
+    let
+      filterOutCards = filter (`notElem` cards)
+    deck' <- shuffleM $ cards <> maybe [] filterOutCards (view (decksL . at deckKey) a)
     pure
       $ a
       & decksL
@@ -1139,6 +1143,7 @@ runScenarioAttrs msg a@ScenarioAttrs {..} = case msg of
       & discardL
       %~ filter
         ((`notElem` cards) . EncounterCard)
+      & (victoryDisplayL %~ filterOutCards)
   RemoveLocation lid -> do
     investigatorIds <-
       select $ Matcher.InvestigatorAt $ Matcher.LocationWithId lid

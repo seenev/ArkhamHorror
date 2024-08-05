@@ -42,11 +42,13 @@ import Arkham.Token
 import Arkham.Token qualified as Token
 import Arkham.Trait
 import Control.Lens (_Just)
+import Data.Aeson.TH
 import Data.Data
 import Data.Text qualified as T
 import GHC.Records
 
 instance Data Investigator where
+  gfoldl k z (Investigator a) = z Investigator `k` a
   gunfold _ _ _ = error "gunfold(Investigator)"
   toConstr _ = error "toConstr(Investigator)"
   dataTypeOf _ = error "dataTypeOf(Investigator)"
@@ -72,6 +74,7 @@ class
   , HasChaosTokenValue a
   , RunMessage a
   , Entity a
+  , Data a
   , EntityId a ~ InvestigatorId
   , EntityAttrs a ~ InvestigatorAttrs
   ) =>
@@ -130,6 +133,7 @@ data instance Field Investigator :: Type -> Type where
   InvestigatorUnhealedHorrorThisRound :: Field Investigator Int
   InvestigatorMeta :: Field Investigator Value
   InvestigatorBeganRoundAt :: Field Investigator (Maybe LocationId)
+  InvestigatorSearch :: Field Investigator (Maybe InvestigatorSearch)
   --
   InvestigatorSupplies :: Field Investigator [Supply]
 
@@ -268,7 +272,7 @@ data InvestigatorAttrs = InvestigatorAttrs
   , -- deck building
     investigatorDeckBuildingAdjustments :: [DeckBuildingAdjustment]
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Data)
 
 instance HasCardCode InvestigatorAttrs where
   toCardCode = investigatorCardCode
@@ -276,18 +280,17 @@ instance HasCardCode InvestigatorAttrs where
 instance HasCardCode (With InvestigatorAttrs meta) where
   toCardCode (With x _) = investigatorCardCode x
 
-data InvestigatorSearch = InvestigatorSearch
+data InvestigatorSearch = MkInvestigatorSearch
   { searchingType :: SearchType
   , searchingInvestigator :: InvestigatorId
   , searchingSource :: Source
   , searchingTarget :: Target
   , searchingZones :: [(Zone, ZoneReturnStrategy)]
-  , searchingMatcher :: CardMatcher
+  , searchingMatcher :: ExtendedCardMatcher
   , searchingFoundCardsStrategy :: FoundCardsStrategy
   , searchingFoundCards :: Map Zone [Card]
   }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (ToJSON, FromJSON)
+  deriving stock (Show, Eq, Data)
 
 investigatorDoom :: InvestigatorAttrs -> Int
 investigatorDoom = countTokens Doom . investigatorTokens
@@ -305,7 +308,7 @@ investigatorSanityDamage :: InvestigatorAttrs -> Int
 investigatorSanityDamage = countTokens Horror . investigatorTokens
 
 data DrawingCards = DrawingCards Deck.DeckSignifier Int [Card]
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 instance HasTraits InvestigatorAttrs where
@@ -321,72 +324,6 @@ instance ToGameLoggerFormat InvestigatorAttrs where
 
 instance Be InvestigatorId InvestigatorMatcher where
   be = InvestigatorWithId
-
-instance ToJSON InvestigatorAttrs where
-  toJSON = genericToJSON $ aesonOptions $ Just "investigator"
-  toEncoding = genericToEncoding $ aesonOptions $ Just "investigator"
-
-instance FromJSON InvestigatorAttrs where
-  parseJSON = withObject "InvestigatorAttrs" $ \o -> do
-    investigatorId <- o .: "id"
-    investigatorPlayerId <- o .: "playerId"
-    investigatorName <- o .: "name"
-    investigatorCardCode <- o .: "cardCode"
-    investigatorArt <- o .: "art"
-    investigatorClass <- o .: "class"
-    investigatorHealth <- o .: "health"
-    investigatorAssignedHealthDamage <- o .: "assignedHealthDamage"
-    investigatorAssignedHealthHeal <- (o .:? "assignedHealthHeal" .!= mempty) <|> pure mempty
-    investigatorSanity <- o .: "sanity"
-    investigatorAssignedSanityDamage <- o .: "assignedSanityDamage"
-    investigatorAssignedSanityHeal <- (o .:? "assignedSanityHeal" .!= mempty) <|> pure mempty
-    investigatorWillpower <- o .: "willpower"
-    investigatorIntellect <- o .: "intellect"
-    investigatorCombat <- o .: "combat"
-    investigatorAgility <- o .: "agility"
-    investigatorTokens <- o .: "tokens"
-    investigatorPlacement <- o .:? "placement" .!= Unplaced
-    investigatorActionsTaken <- o .: "actionsTaken"
-    investigatorActionsPerformed <- o .: "actionsPerformed"
-    investigatorRemainingActions <- o .: "remainingActions"
-    investigatorEndedTurn <- o .: "endedTurn"
-    investigatorDeck <- o .: "deck"
-    investigatorDecks <- o .: "decks"
-    investigatorDiscard <- o .: "discard"
-    investigatorHand <- o .: "hand"
-    investigatorTraits <- o .: "traits"
-    investigatorDefeated <- o .: "defeated"
-    investigatorResigned <- o .: "resigned"
-    investigatorKilled <- o .: "killed"
-    investigatorDrivenInsane <- o .: "drivenInsane"
-    investigatorSlots <- o .: "slots"
-    investigatorXp <- o .: "xp"
-    investigatorPhysicalTrauma <- o .: "physicalTrauma"
-    investigatorMentalTrauma <- o .: "mentalTrauma"
-    investigatorStartsWith <- o .: "startsWith"
-    investigatorStartsWithInHand <- o .: "startsWithInHand"
-    investigatorCardsUnderneath <- o .: "cardsUnderneath"
-    investigatorSearch <- o .: "search"
-    investigatorMovement <- o .: "movement"
-    investigatorUsedAbilities <- o .: "usedAbilities"
-    investigatorUsedAdditionalActions <- o .: "usedAdditionalActions"
-    investigatorMulligansTaken <- o .: "mulligansTaken"
-    investigatorBondedCards <- o .: "bondedCards"
-    investigatorMeta <- o .:? "meta" .!= Null
-    investigatorUnhealedHorrorThisRound <- o .:? "unhealedHorrorThisRound" .!= 0
-    investigatorHorrorHealed <- o .: "horrorHealed"
-    investigatorSupplies <- o .: "supplies"
-    investigatorDrawnCards <- o .: "drawnCards"
-    investigatorIsYithian <- o .: "isYithian"
-    investigatorKeys <- o .: "keys"
-    investigatorLog <- o .:? "log" .!= mempty
-    investigatorDiscarding <- o .: "discarding"
-    investigatorDiscover <- o .:? "discover"
-    investigatorDrawing <- o .:? "drawing"
-    investigatorDeckBuildingAdjustments <- o .:? "deckBuildingAdjustments" .!= mempty
-    investigatorBeganRoundAt <- o .:? "beganRoundAt"
-
-    pure InvestigatorAttrs {..}
 
 instance Is InvestigatorAttrs InvestigatorId where
   is = (==) . toId
@@ -449,6 +386,9 @@ instance HasField "discard" InvestigatorAttrs [PlayerCard] where
 
 instance HasField "ability" InvestigatorAttrs (Int -> Source) where
   getField this = toAbilitySource this
+
+instance HasField "doom" InvestigatorAttrs Int where
+  getField = countTokens Doom . investigatorTokens
 
 data Investigator = forall a. IsInvestigator a => Investigator a
 
@@ -538,3 +478,6 @@ searchingFoundCardsL = lens searchingFoundCards $ \m x -> m {searchingFoundCards
 
 foundCardsL :: Traversal' InvestigatorAttrs (Map Zone [Card])
 foundCardsL = searchL . _Just . searchingFoundCardsL
+
+$(deriveJSON defaultOptions ''InvestigatorSearch)
+$(deriveJSON (aesonOptions $ Just "investigator") ''InvestigatorAttrs)

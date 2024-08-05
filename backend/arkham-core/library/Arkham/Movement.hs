@@ -19,10 +19,10 @@ data Movement = Movement
   , movePayAdditionalCosts :: Bool
   , moveAfter :: [Message]
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data MovementMeans = Direct | OneAtATime | Towards
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 uncancellableMove :: Movement -> Movement
 uncancellableMove m = m {moveCancelable = False}
@@ -31,7 +31,7 @@ afterMove :: [Message] -> Movement -> Movement
 afterMove msgs m = m {moveAfter = msgs}
 
 data Destination = ToLocation LocationId | ToLocationMatching LocationMatcher
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 move
   :: (Targetable target, Sourceable source)
@@ -67,6 +67,23 @@ moveToMatch (toSource -> moveSource) (toTarget -> moveTarget) matcher =
     , moveAfter = []
     }
 
+moveTowardsMatching
+  :: (Targetable target, Sourceable source)
+  => source
+  -> target
+  -> LocationMatcher
+  -> Movement
+moveTowardsMatching (toSource -> moveSource) (toTarget -> moveTarget) matcher =
+  Movement
+    { moveSource
+    , moveTarget
+    , moveDestination = ToLocationMatching matcher
+    , moveMeans = Towards
+    , moveCancelable = True
+    , movePayAdditionalCosts = True
+    , moveAfter = []
+    }
+
 moveToLocationMatcher :: Movement -> LocationMatcher
 moveToLocationMatcher = destinationToLocationMatcher . moveDestination
 
@@ -77,16 +94,4 @@ destinationToLocationMatcher = \case
 
 $(deriveJSON defaultOptions ''MovementMeans)
 $(deriveJSON defaultOptions ''Destination)
-
-instance FromJSON Movement where
-  parseJSON = withObject "Movement" $ \o -> do
-    moveSource <- o .: "moveSource"
-    moveTarget <- o .: "moveTarget"
-    moveDestination <- o .: "moveDestination"
-    moveMeans <- o .: "moveMeans"
-    moveCancelable <- o .: "moveCancelable"
-    movePayAdditionalCosts <- o .: "movePayAdditionalCosts"
-    moveAfter <- o .:? "moveAfter" .!= []
-    pure Movement {..}
-
-$(deriveToJSON defaultOptions ''Movement)
+$(deriveJSON defaultOptions ''Movement)

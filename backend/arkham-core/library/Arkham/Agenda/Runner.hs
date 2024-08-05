@@ -33,6 +33,9 @@ instance RunMessage AgendaAttrs where
     PlaceUnderneath target cards | isTarget a target -> do
       pure $ a & cardsUnderneathL %~ (<> cards)
     PlaceDoom source (isTarget a -> True) n -> do
+      when (a.doom == 0) do
+        pushM $ checkAfter $ Window.PlacedDoomCounterOnTargetWithNoDoom source (toTarget a) n
+
       wouldDo msg (Window.WouldPlaceDoom source (toTarget a) n) (Window.PlacedDoom source (toTarget a) n)
       pure a
     DoBatch _ (PlaceDoom _ (isTarget a -> True) n) -> do
@@ -95,11 +98,13 @@ instance RunMessage AgendaAttrs where
               <$> selectAgg Sum AgendaDoom (NotAgenda $ AgendaWithId $ toId a)
           totalDoom <- subtract otherAgendaDoom <$> getDoomCount
           when (totalDoom >= modifiedPerPlayerDoomThreshold) $ do
-            leadInvestigatorId <- getLeadInvestigatorId
+            whenWindow <- checkWhen $ Window.AgendaAdvance agendaId
+            afterWindow <- checkAfter $ Window.AgendaAdvance agendaId
             pushAll
-              [ CheckWindow [leadInvestigatorId] [mkWhen (Window.AgendaAdvance agendaId)]
+              [ whenWindow
               , RemoveAllDoomFromPlay agendaRemoveDoomMatchers
               , AdvanceAgenda agendaId
+              , afterWindow
               ]
           pure a
     RemoveAllDoom _ (isTarget a -> True) -> do

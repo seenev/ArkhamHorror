@@ -35,7 +35,7 @@ instance HasAbilities HotelGuest where
           (exists $ EnemyWithId (toId a) <> EnemyAt (LocationWithTrait CrimeScene))
           $ ForcedAbility
           $ PhaseEnds #when #enemy
-      , restrictedAbility a 2 OnSameLocation parleyAction_
+      , skillTestAbility $ restrictedAbility a 2 OnSameLocation parleyAction_
       ]
 
 instance RunMessage HotelGuest where
@@ -45,10 +45,11 @@ instance RunMessage HotelGuest where
       pure e
     UseThisAbility iid (isSource attrs -> True) 2 -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel skill [beginSkillTest iid (toAbilitySource attrs 2) attrs skill (Fixed 3)]
+          [ SkillLabel skill [parley sid iid (toAbilitySource attrs 2) attrs skill (Fixed 3)]
           | skill <- [#willpower, #intellect]
           ]
       pure e

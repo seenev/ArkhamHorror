@@ -71,7 +71,7 @@ spec = describe "Mandy Thompson" $ do
           (TestSource mempty)
           EncounterDeckTarget
           [fromTopOfDeck 3]
-          AnyCard
+          #any
           (DrawFound (toId roland) 1)
       useReaction
       chooseOptionMatching "3 additional cards" \case
@@ -101,7 +101,7 @@ spec = describe "Mandy Thompson" $ do
           (TestSource mempty)
           EncounterDeckTarget
           [fromTopOfDeck 3]
-          AnyCard
+          #any
           (DrawFound (toId roland) 1)
       useReaction
       chooseOptionMatching "1 additional target" \case
@@ -119,7 +119,8 @@ spec = describe "Mandy Thompson" $ do
       cards@(c1 : rest) <- testPlayerCards 3
       withProp @"deck" (Deck cards) self
       setChaosTokens [ElderSign]
-      runSkillTest self #agility 100
+      sid <- getRandom
+      runSkillTest sid self #agility 100
       chooseTarget c1
       self.hand `shouldReturn` map toCard [c1]
       (unDeck <$> self.deck) `shouldMatchListM` rest
@@ -130,7 +131,8 @@ spec = describe "Mandy Thompson" $ do
       withProp @"agility" 0 self
       withProp @"deck" (Deck (manualDexterity : rest)) self
       setChaosTokens [ElderSign]
-      runSkillTest self #agility 2
+      sid <- getRandom
+      runSkillTest sid self #agility 2
       chooseTarget manualDexterity
       chooseOptionMatching "Commit" \case
         Label "Commit to skill test" _ -> True

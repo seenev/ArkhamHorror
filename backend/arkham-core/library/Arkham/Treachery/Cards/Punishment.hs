@@ -10,7 +10,7 @@ import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Import.Lifted hiding (EnemyDefeated)
 
 newtype Punishment = Punishment TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 punishment :: TreacheryCard Punishment
@@ -28,7 +28,11 @@ instance HasModifiersFor Punishment where
 
 instance HasAbilities Punishment where
   getAbilities (Punishment a) =
-    [restrictedAbility a 1 (InThreatAreaOf You) $ forced $ EnemyDefeated #after Anyone ByAny AnyEnemy]
+    [ skillTestAbility
+        $ restrictedAbility a 1 (InThreatAreaOf You)
+        $ forced
+        $ EnemyDefeated #after Anyone ByAny AnyEnemy
+    ]
 
 instance RunMessage Punishment where
   runMessage msg t@(Punishment attrs) = runQueueT $ case msg of
@@ -39,7 +43,8 @@ instance RunMessage Punishment where
       assignDamage iid (attrs.ability 1) 1
       pure t
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      beginSkillTest iid (attrs.ability 2) attrs #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 2) attrs #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
       toDiscardBy iid (attrs.ability 2) attrs

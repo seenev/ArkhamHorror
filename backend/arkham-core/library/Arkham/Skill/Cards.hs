@@ -5,6 +5,7 @@ import Arkham.Card.CardDef
 import Arkham.Card.CardType
 import Arkham.ClassSymbol
 import Arkham.CommitRestriction
+import Arkham.Customization
 import Arkham.GameValue
 import Arkham.Id
 import Arkham.Keyword qualified as Keyword
@@ -30,12 +31,15 @@ allPlayerSkillCards =
     $ concatMap
       toCardCodePairs
       [ ableBodied
+      , accursed
       , allIn5
+      , analysis
       , anythingYouCanDoBetter
       , arrogance
       , asYouWish
       , beloved
       , bruteForce1
+      , calculatedRisk
       , copycat3
       , cunning
       , curiosity
@@ -49,20 +53,26 @@ allPlayerSkillCards =
       , defiance
       , defiance2
       , desperateSearch
+      , diabolicalLuck
       , doubleOrNothing
       , dreamParasite
       , dreamsOfTheDeepTheDeepGate
       , enraptured
       , essenceOfTheDream
+      , esotericMethod1
       , eureka
       , expeditiousRetreat1
       , fearless
       , fearless2
       , fey1
       , fightingLessons
+      , ghastlyPossession1
+      , grizzled
+      , gumption1
       , guts
       , guts2
       , hatchetMan
+      , helpingHand
       , inquiringMind
       , inspiringPresence
       , intrepid
@@ -70,8 +80,11 @@ allPlayerSkillCards =
       , lastChance
       , leadership
       , leadership2
+      , lightfooted
+      , longShot
       , manualDexterity
       , manualDexterity2
+      , mesmericInfluence1
       , momentum1
       , nauticalProwess
       , neitherRainNorSnow
@@ -85,11 +98,14 @@ allPlayerSkillCards =
       , overpower2
       , perception
       , perception2
+      , persistence1
       , planOfAction
       , predestined
       , prescient
       , promiseOfPower
       , prophesy
+      , providential2
+      , purified
       , quickThinking
       , reckless
       , recklessAssault
@@ -107,6 +123,7 @@ allPlayerSkillCards =
       , steadfast
       , strengthInNumbers1
       , strokeOfLuck2
+      , strongArmed1
       , stunningBlow
       , surprisingFind1
       , surveyTheArea1
@@ -125,6 +142,8 @@ allPlayerSkillCards =
       , viciousBlow
       , viciousBlow2
       , watchThis
+      , wellDressed
+      , wellFunded
       , whispersFromTheDeep
       ]
 
@@ -721,6 +740,145 @@ fightingLessons =
     { cdCardTraits = setFromList [Practiced]
     , cdCommitRestrictions = [OnlyTestWithActions [#fight, #evade]]
     , cdCardInHandEffects = True
+    }
+
+helpingHand :: CardDef
+helpingHand =
+  (skill "09031" "Helping Hand" [] Guardian)
+    { cdCardTraits = setFromList [Innate]
+    , cdCommitRestrictions = [MaxOnePerTest]
+    }
+
+analysis :: CardDef
+analysis =
+  (skill "09049" "Analysis" [#wild] Seeker)
+    { cdCardTraits = setFromList [Practiced]
+    }
+
+calculatedRisk :: CardDef
+calculatedRisk =
+  (skill "09070" "Calculated Risk" [] Rogue)
+    { cdCardTraits = setFromList [Gambit, Fated]
+    , cdCommitRestrictions = [OnlyYourTest, OnlyTestDuringYourTurn, MaxOnePerTest]
+    }
+
+ghastlyPossession1 :: CardDef
+ghastlyPossession1 =
+  (skill "09090" "Ghastly Possession" [#wild] Mystic)
+    { cdCardTraits = setFromList [Innate, Spell]
+    , cdLevel = Just 1
+    }
+
+grizzled :: CardDef
+grizzled =
+  (skill "09101" "Grizzled" [#wild] Survivor)
+    { cdCardTraits = setFromList [Innate, Developed]
+    , cdKeywords = setFromList [Keyword.Customizable]
+    , cdCardInHandEffects = True
+    , cdCardInDiscardEffects = True
+    , cdCustomizations =
+        mapFromList
+          [ (ChoicePlaceholder, 0)
+          , (Specialist, 1)
+          , (Specialist2, 2)
+          , (Nemesis, 3)
+          , (MythosHardened, 4)
+          , (AlwaysPrepared, 5)
+          ]
+    }
+
+gumption1 :: CardDef
+gumption1 =
+  (skill "09112" "Gumption" [] Survivor)
+    { cdCardTraits = setFromList [Innate]
+    , cdCommitRestrictions = [MaxOnePerTest]
+    , cdLevel = Just 1
+    }
+
+purified :: CardDef
+purified =
+  (skill "10029" "Purified" [] Guardian)
+    { cdCardTraits = setFromList [Innate, Blessed]
+    , cdCommitRestrictions = [MaxOnePerTest]
+    }
+
+strongArmed1 :: CardDef
+strongArmed1 =
+  (skill "10031" "Strong-Armed" [#combat, #agility] Guardian)
+    { cdCardTraits = setFromList [Innate]
+    , cdLevel = Just 1
+    }
+
+wellFunded :: CardDef
+wellFunded =
+  (skill "10051" "Well-Funded" [#wild] Seeker)
+    { cdCardTraits = setFromList [Fortune]
+    , cdCardInHandEffects = True
+    }
+
+esotericMethod1 :: CardDef
+esotericMethod1 =
+  (skill "10055" "Esoteric Method" [#wild, #wild, #wild, #wild] Seeker)
+    { cdCardTraits = setFromList [Practiced, Cursed]
+    , cdLevel = Just 1
+    }
+
+diabolicalLuck :: CardDef
+diabolicalLuck =
+  (skill "10075" "Diabolical Luck" [#wild] Rogue)
+    { cdCardTraits = setFromList [Fortune, Cursed]
+    , cdCardInHandEffects = True
+    }
+
+lightfooted :: CardDef
+lightfooted =
+  (skill "10076" "Lightfooted" [#agility] Rogue)
+    { cdCardTraits = setFromList [Practiced, Trick]
+    }
+
+accursed :: CardDef
+accursed =
+  (skill "10095" "Accursed" [#wild] Mystic)
+    { cdCardTraits = setFromList [Innate, Cursed]
+    }
+
+mesmericInfluence1 :: CardDef
+mesmericInfluence1 =
+  (skill "10096" "Mesmeric Influence" [#willpower, #wild] Mystic)
+    { cdCardTraits = setFromList [Practiced]
+    }
+
+longShot :: CardDef
+longShot =
+  (skill "10116" "Long Shot" [] Survivor)
+    { cdCardTraits = setFromList [Practiced]
+    , cdCommitRestrictions =
+        [ AnyCommitRestriction
+            [ OnlyFightAgainst (EnemyAt $ oneOf [YourLocation, ConnectedLocation])
+            , OnlyEvasionAgainst (EnemyAt $ oneOf [YourLocation, ConnectedLocation])
+            ]
+        ]
+    }
+
+persistence1 :: CardDef
+persistence1 =
+  (skill "10118" "Persistence" [#wild] Survivor)
+    { cdCardTraits = setFromList [Practiced]
+    , cdLevel = Just 1
+    , cdCardInDiscardEffects = True
+    }
+
+providential2 :: CardDef
+providential2 =
+  (skill "10125" "Providential" [#willpower, #combat, #wild] Survivor)
+    { cdCardTraits = setFromList [Innate, Blessed]
+    , cdLevel = Just 2
+    }
+
+wellDressed :: CardDef
+wellDressed =
+  (skill "10130" "Well-Dressed" [#wild] Neutral)
+    { cdCardTraits = setFromList [Practiced, Fortune]
     }
 
 riseToTheOccasion3 :: CardDef

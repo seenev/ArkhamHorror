@@ -16,17 +16,20 @@ operatingRoom = location OperatingRoom Cards.operatingRoom 2 (PerPlayer 1)
 
 instance HasAbilities OperatingRoom where
   getAbilities (OperatingRoom attrs) =
-    withRevealedAbilities attrs [restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 2]
+    withRevealedAbilities
+      attrs
+      [skillTestAbility $ restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 2]
 
 instance RunMessage OperatingRoom where
   runMessage msg l@(OperatingRoom attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       investigators <- select $ affectsOthers $ investigatorAt attrs.id
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOrRunOne
           player
-          [ targetLabel target [beginSkillTest iid (attrs.ability 1) target #intellect (Fixed 4)]
+          [ targetLabel target [beginSkillTest sid iid (attrs.ability 1) target #intellect (Fixed 4)]
           | target <- investigators
           ]
       pure l

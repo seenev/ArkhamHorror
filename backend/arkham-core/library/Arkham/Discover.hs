@@ -5,24 +5,26 @@ module Arkham.Discover where
 
 import Arkham.Action
 import Arkham.Id
+import {-# SOURCE #-} Arkham.Message
 import Arkham.Prelude
 import Arkham.Source
 import Data.Aeson.TH
 import GHC.Records
 
 data IsInvestigate = IsInvestigate | NotInvestigate
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
 
 data DiscoverLocation = DiscoverYourLocation | DiscoverAtLocation LocationId
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data Discover = Discover
   { discoverCount :: Int
   , discoverLocation :: DiscoverLocation
   , discoverSource :: Source
   , discoverAction :: Maybe Action
+  , discoverThen :: [Message]
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 instance HasField "count" Discover Int where
   getField = (.discoverCount)
@@ -55,6 +57,7 @@ discoverAtYourLocation (toSource -> source) n =
     , discoverLocation = DiscoverYourLocation
     , discoverSource = source
     , discoverAction = Nothing
+    , discoverThen = []
     }
 
 discover
@@ -65,6 +68,7 @@ discover a (toSource -> source) n =
     , discoverLocation = DiscoverAtLocation (asId a)
     , discoverSource = source
     , discoverAction = Nothing
+    , discoverThen = []
     }
 
 $( do

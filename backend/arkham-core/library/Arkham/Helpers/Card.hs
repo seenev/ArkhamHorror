@@ -9,6 +9,7 @@ import Arkham.Ability
 import Arkham.ActiveCost.Base
 import Arkham.Asset.Types
 import Arkham.Card
+import Arkham.ChaosBag.Base (chaosBagChaosTokens)
 import Arkham.Classes.Entity
 import Arkham.Classes.HasAbilities
 import Arkham.Classes.HasGame
@@ -18,12 +19,17 @@ import Arkham.Enemy.Types
 import {-# SOURCE #-} Arkham.Entities
 import {-# SOURCE #-} Arkham.GameEnv
 import Arkham.Helpers.Campaign
+import Arkham.Helpers.Matchers
 import Arkham.Helpers.Modifiers
+import Arkham.Helpers.Scenario (scenarioFieldMap)
 import Arkham.Id
+import Arkham.Keyword (Sealing (..))
+import Arkham.Keyword qualified as Keyword
 import Arkham.Location.Types
 import Arkham.Matcher hiding (AssetCard, LocationCard)
 import Arkham.Message
 import Arkham.Projection
+import Arkham.Scenario.Types (Field (..))
 import Arkham.SkillType
 import Arkham.Source
 import Arkham.Target
@@ -119,29 +125,28 @@ findUniqueCard def = findJustCard (`cardMatch` (cardIs def <> CardIsUnique))
 
 iconsForCard :: HasGame m => Card -> m [SkillIcon]
 iconsForCard c@(PlayerCard MkPlayerCard {..}) = do
-  modifiers' <- getModifiers (CardIdTarget pcId)
+  mods <- getModifiers (CardIdTarget pcId)
+  let wildReplace = if ReplaceAllSkillIconsWithWild `elem` mods then const #wild else id
   pure
-    $ foldr
-      applyAfterSkillModifiers
-      (foldr applySkillModifiers (cdSkills $ toCardDef c) modifiers')
-      modifiers'
+    $ map wildReplace
+    $ foldr applyAfter (foldr apply (cdSkills $ toCardDef c) mods) mods
  where
-  applySkillModifiers (AddSkillIcons xs) ys = xs <> ys
-  applySkillModifiers (RemoveSkillIcons xs) ys = ys \\ xs
-  applySkillModifiers _ ys = ys
-  applyAfterSkillModifiers DoubleSkillIcons ys = ys <> ys
-  applyAfterSkillModifiers _ ys = ys
+  apply (AddSkillIcons xs) ys = xs <> ys
+  apply (RemoveSkillIcons xs) ys = ys \\ xs
+  apply _ ys = ys
+  applyAfter DoubleSkillIcons ys = ys <> ys
+  applyAfter _ ys = ys
 iconsForCard _ = pure []
 
-getCardEntityTarget :: HasGame m => Card -> m Target
+getCardEntityTarget :: HasGame m => Card -> m (Maybe Target)
 getCardEntityTarget card = case toCardType card of
-  EnemyType -> toTarget <$> selectJust (EnemyWithCardId $ toCardId card)
-  PlayerEnemyType -> toTarget <$> selectJust (EnemyWithCardId $ toCardId card)
-  TreacheryType -> toTarget <$> selectJust (TreacheryWithCardId $ toCardId card)
-  PlayerTreacheryType -> toTarget <$> selectJust (TreacheryWithCardId $ toCardId card)
-  LocationType -> toTarget <$> selectJust (LocationWithCardId $ toCardId card)
-  AssetType -> toTarget <$> selectJust (AssetWithCardId $ toCardId card)
-  EncounterAssetType -> toTarget <$> selectJust (AssetWithCardId $ toCardId card)
+  EnemyType -> toTarget <$$> selectOne (EnemyWithCardId $ toCardId card)
+  PlayerEnemyType -> toTarget <$$> selectOne (EnemyWithCardId $ toCardId card)
+  TreacheryType -> toTarget <$$> selectOne (TreacheryWithCardId $ toCardId card)
+  PlayerTreacheryType -> toTarget <$$> selectOne (TreacheryWithCardId $ toCardId card)
+  LocationType -> toTarget <$$> selectOne (LocationWithCardId $ toCardId card)
+  AssetType -> toTarget <$$> selectOne (AssetWithCardId $ toCardId card)
+  EncounterAssetType -> toTarget <$$> selectOne (AssetWithCardId $ toCardId card)
   other -> error $ "Unhandled type: " <> show other
 
 drawThisCard :: IsCard card => InvestigatorId -> card -> [Message]
@@ -163,3 +168,14 @@ drawThisPlayerCard iid card = case toCardType card of
   other | hasRevelation card && other `notElem` [PlayerTreacheryType, PlayerEnemyType] -> do
     [Revelation iid (PlayerCardSource card), ResolvedCard iid (PlayerCard card)]
   _ -> []
+
+playIsValidAfterSeal :: HasGame m => InvestigatorId -> Card -> m Bool
+playIsValidAfterSeal iid c = do
+  tokens <- scenarioFieldMap ScenarioChaosBag chaosBagChaosTokens
+  let sealChaosTokenMatchers = flip mapMaybe (setToList c.keywords) \case
+        Keyword.Seal sealing -> case sealing of
+          Sealing matcher -> Just matcher
+          SealUpTo _ matcher -> Just matcher
+          SealUpToX _ -> Nothing
+        _ -> Nothing
+  allM (\matcher -> anyM (\t -> matchChaosToken iid t matcher) tokens) sealChaosTokenMatchers

@@ -15,6 +15,7 @@ import Arkham.ChaosToken
 import Arkham.ClassSymbol
 import {-# SOURCE #-} Arkham.Cost
 import Arkham.Criteria.Override
+import Arkham.Damage
 import {-# SOURCE #-} Arkham.Enemy.Types
 import Arkham.Field
 import Arkham.Id
@@ -38,6 +39,7 @@ data ModifierType
   = ForEach GameCalculation [ModifierType]
   | AbilityModifier Target Int ModifierType
   | ActionCostModifier Int
+  | IgnoreActionCost
   | AdditionalActionCostOf ActionTarget Int
   | ActionCostOf ActionTarget Int -- TODO: Don't use this for anything than decreasing
   | ActionCostSetToModifier Int
@@ -48,6 +50,7 @@ data ModifierType
   | IsPointOfHorror
   | AddKeyword Keyword
   | AddSkillIcons [SkillIcon]
+  | ReplaceAllSkillIconsWithWild
   | AddSkillToOtherSkill SkillType SkillType
   | AddSkillValue SkillType
   | SetSkillValue SkillType Int
@@ -66,12 +69,14 @@ data ModifierType
   | AlternateEvadeField (SomeField Enemy)
   | AlternateFightField (SomeField Enemy)
   | AlternateResourceCost CardMatcher Cost
-  | AlternateSuccessfullEvasion
+  | AlternateSuccess Target
   | AlternateSuccessfullInvestigation Target
   | AlternateUpkeepDraw Target
   | AlternativeReady Source
   | AnySkillValue Int
   | AsIfAt LocationId
+  | IgnoreOnSameLocation
+  | IgnoreEngagementRequirement
   | AsIfEnemyFight Int
   | AsIfEngagedWith EnemyId
   | AsIfInHand Card
@@ -80,6 +85,7 @@ data ModifierType
   | PlayUnderControlOf InvestigatorId
   | AttacksCannotBeCancelled
   | BaseSkillOf {skillType :: SkillType, value :: Int}
+  | BaseSkill Int
   | BecomesFast WindowMatcher
   | Blank
   | BlankExceptForcedAbilities
@@ -89,6 +95,8 @@ data ModifierType
   | BountiesOnly
   | CanAssignDamageToAsset AssetId
   | CanAssignHorrorToAsset AssetId
+  | CanAssignDamageToInvestigator InvestigatorId
+  | CanAssignHorrorToInvestigator InvestigatorId
   | CanBeAssignedDirectDamage
   | CanBeFoughtAsIfAtYourLocation
   | CanBecomeFast CardMatcher
@@ -101,11 +109,13 @@ data ModifierType
   | CanModify ModifierType
   | CanMoveWith InvestigatorMatcher
   | CanOnlyBeAttackedByAbilityOn (Set CardCode)
+  | CannotBeAttackedByPlayerSourcesExcept SourceMatcher
   | CanOnlyBeDefeatedBy SourceMatcher
   | CanOnlyBeDefeatedByDamage
   | CanOnlyUseCardsInRole ClassSymbol
   | CanPlayTopOfDeck CardMatcher
   | CanPlayTopmostOfDiscard (Maybe CardType, [Trait])
+  | CanPlayFromDiscard (Maybe CardType, [Trait])
   | CanPlayWithOverride CriteriaOverride
   | CanReduceCostOf CardMatcher Int
   | CanResolveToken ChaosTokenFace Target
@@ -113,6 +123,7 @@ data ModifierType
   | CanSpendResourcesOnCardFromInvestigator InvestigatorMatcher CardMatcher
   | CanSpendUsesAsResourceOnCardFromInvestigator AssetId UseType InvestigatorMatcher CardMatcher
   | ProvidesUses UseType Source
+  | ProvidesProxyUses UseType UseType Source
   | CancelAttacksByEnemies Card EnemyMatcher
   | CancelSkills
   | CannotAffectOtherPlayersWithPlayerEffectsExceptDamage
@@ -123,6 +134,7 @@ data ModifierType
   | CannotBeDamaged
   | CannotBeDamagedByPlayerSources SourceMatcher
   | CannotBeDamagedByPlayerSourcesExcept SourceMatcher
+  | CannotBeDamagedBySourcesExcept SourceMatcher
   | CannotBeDefeated
   | CannotBeEngaged
   | CannotBeEngagedBy EnemyMatcher
@@ -133,6 +145,7 @@ data ModifierType
   | CannotBeMoved
   | CannotBeRevealed
   | CannotCancelHorror
+  | MustChooseEnemy EnemyMatcher
   | CannotCancelOrIgnoreChaosToken ChaosTokenFace
   | ReturnBlessedToChaosBag
   | ReturnCursedToChaosBag
@@ -140,6 +153,7 @@ data ModifierType
   | CannotCommitCards CardMatcher
   | CannotCommitToOtherInvestigatorsSkillTests
   | CannotDealDamage
+  | CannotAssignDamage InvestigatorId
   | CannotDiscoverClues
   | CannotDiscoverCluesAt LocationMatcher
   | CannotDiscoverCluesExceptAsResultOfInvestigation LocationMatcher
@@ -154,7 +168,9 @@ data ModifierType
   | CannotGainResources
   | CannotGainResourcesFromPlayerCardEffects
   | CannotRevealCards
+  | CanHealAtFull DamageType
   | CannotHealHorror
+  | CannotHealDamage
   | CannotHealHorrorOnOtherCards Target
   | CannotInvestigate
   | CannotInvestigateLocation LocationId
@@ -183,6 +199,7 @@ data ModifierType
   | SetAttackDamageStrategy DamageStrategy
   | ChaosTokenFaceModifier [ChaosTokenFace]
   | ChaosTokenValueModifier Int
+  | AddChaosTokenValue ChaosTokenValue
   | CommitCost Cost
   | ConnectedToWhen LocationMatcher LocationMatcher
   | ControlledAssetsCannotReady
@@ -192,16 +209,21 @@ data ModifierType
   | HorrorDealt Int
   | DamageDealtToInvestigator Int
   | DamageTaken Int
+  | HealingTaken Int
   | Difficulty Int
+  | CalculatedDifficulty GameCalculation
   | DiscoveredClues Int
+  | DiscoveredCluesAt LocationId Int
   | DoNotDisengageEvaded
   | DoNotDrawChaosTokensForSkillChecks
   | DoNotExhaustEvaded
   | DoNotRemoveDoom
   | DoNotTakeUpSlot SlotType
+  | TakeUpFewerSlots SlotType Int
   | DoesNotDamageOtherInvestigator
   | DoesNotReadyDuringUpkeep
   | DoomSubtracts
+  | IgnoreDoomOnThis Int
   | DoomThresholdModifier Int
   | DoubleBaseSkillValue
   | DoubleDifficulty
@@ -218,8 +240,10 @@ data ModifierType
   | EnemyFightActionCriteria CriteriaOverride
   | EnemyFightWithMin Int (Min Int)
   | EnemyEngageActionCriteria CriteriaOverride
+  | InvestigateActionCriteria CriteriaOverride
   | EntersPlayWithDoom Int
   | ExtraResources Int
+  | AdditionalResources Int
   | FailTies
   | FewerActions Int
   | FewerSlots SlotType Int
@@ -242,7 +266,9 @@ data ModifierType
   | HunterConnectedTo LocationId
   | IgnoreAllCosts
   | IgnoreAloof
+  | IgnoreAlert
   | IgnoreChaosToken
+  | IgnoreChaosTokenModifier
   | IgnoreChaosTokenEffects
   | IgnoreHandSizeReduction
   | IgnoreLimit
@@ -283,6 +309,7 @@ data ModifierType
   | RemoveFromGameInsteadOfDiscard
   | RemoveKeyword Keyword
   | RemoveSkillIcons [SkillIcon]
+  | FewerMatchingIconsPerCard Int
   | RemoveTrait Trait
   | ResolvesFailedEffects
   | ReturnToHandAfterTest
@@ -314,6 +341,7 @@ data ModifierType
   | UpkeepResources Int
   | TopCardOfDeckIsRevealed
   | TraitRestrictedModifier Trait ModifierType
+  | NonTraitRestrictedModifier Trait ModifierType
   | TreatAllDamageAsDirect
   | TreatRevealedChaosTokenAs ChaosTokenFace
   | UseEncounterDeck ScenarioEncounterDeckKey -- The Wages of Sin

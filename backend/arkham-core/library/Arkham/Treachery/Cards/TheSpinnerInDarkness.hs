@@ -15,7 +15,7 @@ import Arkham.Treachery.Helpers qualified as Msg
 import Arkham.Treachery.Import.Lifted
 
 newtype TheSpinnerInDarkness = TheSpinnerInDarkness TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 theSpinnerInDarkness :: TreacheryCard TheSpinnerInDarkness
@@ -28,7 +28,7 @@ instance HasModifiersFor TheSpinnerInDarkness where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities TheSpinnerInDarkness where
-  getAbilities (TheSpinnerInDarkness attrs) = [restrictedAbility attrs 1 OnSameLocation actionAbility]
+  getAbilities (TheSpinnerInDarkness attrs) = [skillTestAbility $ restrictedAbility attrs 1 OnSameLocation actionAbility]
 
 instance RunMessage TheSpinnerInDarkness where
   runMessage msg t@(TheSpinnerInDarkness attrs) = runQueueT $ case msg of
@@ -38,9 +38,10 @@ instance RunMessage TheSpinnerInDarkness where
         chooseOrRunOne iid [targetLabel enemy [Msg.attachTreachery attrs enemy] | enemy <- enemies]
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
+      sid <- getRandom
       chooseOne
         iid
-        [SkillLabel s [Msg.beginSkillTest iid (attrs.ability 1) iid s (Fixed 5)] | s <- allSkills]
+        [SkillLabel s [Msg.beginSkillTest sid iid (attrs.ability 1) iid s (Fixed 5)] | s <- allSkills]
 
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do

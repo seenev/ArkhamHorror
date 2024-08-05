@@ -7,6 +7,7 @@ import type { Game } from '@/arkham/types/Game';
 import * as ArkhamGame from '@/arkham/types/Game';
 import type { AbilityLabel, AbilityMessage, Message } from '@/arkham/types/Message';
 import { MessageType } from '@/arkham/types/Message';
+import EditAsset from '@/arkham/components/EditAsset.vue';
 import Key from '@/arkham/components/Key.vue';
 import Event from '@/arkham/components/Event.vue';
 import Treachery from '@/arkham/components/Treachery.vue';
@@ -24,6 +25,8 @@ const props = defineProps<{
   playerId: string
 }>()
 
+const edit = ref(false)
+
 const emits = defineEmits<{
   choose: [value: number]
   showCards: [e: Event, cards: ComputedRef<Card[]>, title: string, isDiscards: boolean]
@@ -35,6 +38,9 @@ const id = computed(() => props.asset.id)
 const exhausted = computed(() => props.asset.exhausted)
 const cardCode = computed(() => props.asset.cardCode)
 const image = computed(() => {
+  if (props.asset.flipped) {
+    return imgsrc(`player_back.jpg`)
+  }
   return imgsrc(`cards/${cardCode.value.replace('c', '')}.jpg`)
 })
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
@@ -166,13 +172,22 @@ const assetStory = computed(() => {
     <Story v-if="assetStory" :story="assetStory" :game="game" :playerId="playerId" @choose="choose"/>
     <div v-else class="asset" :data-index="asset.cardId">
       <div class="card-frame">
+        <div v-if="asset.marketDeck" class="market-deck">
+          <img
+            class="deck card"
+            :src="imgsrc('player_back.jpg')"
+            width="150px"
+          />
+          <span class="deck-size">{{asset.marketDeck.length}}</span>
+        </div>
         <div class="card-wrapper" :class="{ 'asset--can-interact': canInteract, exhausted}">
           <img
             :data-id="id"
+            :data-image-id="cardCode.replace('c', '')"
             :src="image"
             class="card"
             @click="clicked"
-            :data-customizations="asset.customizations"
+            :data-customizations="JSON.stringify(asset.customizations)"
           />
         </div>
         <div v-if="hasPool" class="pool">
@@ -234,9 +249,7 @@ const assetStory = computed(() => {
       />
       <button v-if="cardsUnderneath.length > 0" class="view-discard-button" @click="showCardsUnderneath">{{cardsUnderneathLabel}}</button>
       <template v-if="debug.active">
-        <button v-if="!asset.owner" @click="debug.send(game.id, {tag: 'TakeControlOfAsset', contents: [investigatorId, id]})">Take control</button>
-        <button v-if="asset.owner" @click="debug.send(game.id, {tag: 'Discard', contents: [null, { tag: 'GameSource' }, { tag: 'AssetTarget', contents: id}]})">Discard</button>
-        <button v-if="asset.owner && asset.exhausted" @click="debug.send(game.id, {tag: 'Ready', contents: { tag: 'AssetTarget', contents: id}})">Ready</button>
+        <button @click="edit = true">Debug</button>
       </template>
       <Asset
         v-for="assetId in asset.assets"
@@ -247,6 +260,7 @@ const assetStory = computed(() => {
         @choose="$emit('choose', $event)"
       />
     </div>
+    <EditAsset v-if="edit" :game="game" :asset="asset" :playerId="playerId" @close="edit = false" @choose="$emit('choose', $event)"/>
   </div>
 </template>
 
@@ -332,5 +346,26 @@ const assetStory = computed(() => {
   gap: 5px;
   bottom:100%;
   left: 0;
+  z-index: 1000;
 }
+
+.deck-size {
+  pointer-events: none;
+  position: absolute;
+  font-weight: bold;
+  font-size: 1.2em;
+  color: rgba(255, 255, 255, 0.6);
+  left: 50%;
+  top: 40%;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 10px;
+  border-radius: 20px;
+  transform: translateX(-50%) translateY(-50%);
+}
+
+.market-deck {
+  position: relative;
+  margin-right: 5px;
+}
+
 </style>

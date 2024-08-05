@@ -29,14 +29,16 @@ instance HasAbilities CatacombsDocent where
   getAbilities (CatacombsDocent a) =
     withBaseAbilities
       a
-      [ restrictedAbility a 1 (OnSameLocation <> LocationExists UnrevealedLocation)
+      [ skillTestAbility
+          $ restrictedAbility a 1 (OnSameLocation <> LocationExists UnrevealedLocation)
           $ ActionAbility [Action.Parley] (ActionCost 1)
       ]
 
 instance RunMessage CatacombsDocent where
   runMessage msg e@(CatacombsDocent attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ parley iid attrs attrs #intellect (Fixed 4)
+      sid <- getRandom
+      push $ parley sid iid attrs attrs #intellect (Fixed 4)
       pure e
     PassedSkillTest iid _ (isSource attrs -> True) SkillTestInitiatorTarget {} _ _ -> do
       unrevealedLocations <- select UnrevealedLocation

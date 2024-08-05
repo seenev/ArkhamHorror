@@ -27,11 +27,12 @@ theTrueCulpritV9 = agenda (3, A) TheTrueCulpritV9 Cards.theTrueCulpritV9 (Static
 instance HasAbilities TheTrueCulpritV9 where
   getAbilities (TheTrueCulpritV9 attrs) =
     guard (onSide A attrs)
-      *> [ restrictedAbility
-            (proxied (locationIs Cards.room212) attrs)
-            1
-            (exists (assetIs Cards.tomeOfRituals <> AssetAt (locationIs Cards.room212)))
-            actionAbility
+      *> [ skillTestAbility
+            $ restrictedAbility
+              (proxied (locationIs Cards.room212) attrs)
+              1
+              (exists (assetIs Cards.tomeOfRituals <> AssetAt (locationIs Cards.room212)))
+              actionAbility
          , restrictedAbility
             attrs
             2
@@ -51,13 +52,14 @@ instance RunMessage TheTrueCulpritV9 where
         n <- perPlayer 1
         clues <- fieldMap AssetClues (min n) tomeOfRituals
         player <- getPlayer iid
-        pushWhen (clues > 0)
-          $ chooseAmounts
-            player
-            "Choose amount of clues to move"
-            (MaxAmountTarget n)
-            [("Clues", (0, min n clues))]
-            (toTarget attrs)
+        when (clues > 0) do
+          pushM
+            $ chooseAmounts
+              player
+              "Choose amount of clues to move"
+              (MaxAmountTarget n)
+              [("Clues", (0, min n clues))]
+              (toTarget attrs)
 
         pure a
       ResolveAmounts _ (getChoiceAmount "Clues" -> n) (isTarget attrs -> True) -> do

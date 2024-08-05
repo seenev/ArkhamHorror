@@ -63,9 +63,11 @@ defer t = DeferSearchedToTarget (toTarget t)
 
 data AfterPlayStrategy
   = DiscardThis
+  | ExileThis
   | RemoveThisFromGame
   | ShuffleThisBackIntoDeck
   | ReturnThisToHand
+  | AbsoluteRemoveThisFromGame
   deriving stock (Show, Eq, Ord, Data)
 
 data ChosenCardStrategy

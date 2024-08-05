@@ -21,7 +21,7 @@ import Arkham.Name
 import Arkham.Projection
 import Arkham.Source
 import Arkham.Target
-import Data.Typeable
+import Data.Data
 import GHC.Records
 
 class
@@ -143,6 +143,9 @@ agendaWith (n, side) f cardDef threshold g =
 instance HasField "id" AgendaAttrs AgendaId where
   getField = agendaId
 
+instance HasField "doom" AgendaAttrs Int where
+  getField = agendaDoom
+
 instance HasField "ability" AgendaAttrs (Int -> Source) where
   getField this = toAbilitySource this
 
@@ -153,6 +156,11 @@ instance HasCardDef AgendaAttrs where
       error $ "missing card def for agenda " <> show (unAgendaId $ agendaId e)
 
 data Agenda = forall a. IsAgenda a => Agenda a
+
+instance Data Agenda where
+  gunfold _ _ _ = error "gunfold(Agenda)"
+  toConstr _ = error "toConstr(Agenda)"
+  dataTypeOf _ = error "dataTypeOf(Agenda)"
 
 instance HasField "id" Agenda AgendaId where
   getField = toId

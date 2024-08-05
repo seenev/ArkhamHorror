@@ -139,9 +139,9 @@ pattern InvestigatorCanHealHorror <-
 
 -- Placeholder
 pattern InvestigatorCanHealDamage :: InvestigatorMatcher
-pattern InvestigatorCanHealDamage <- Anyone
+pattern InvestigatorCanHealDamage <- InvestigatorWithoutModifier CannotHealDamage
   where
-    InvestigatorCanHealDamage = Anyone
+    InvestigatorCanHealDamage = InvestigatorWithoutModifier CannotHealDamage
 
 -- ** Event Patterns **
 
@@ -188,6 +188,9 @@ pattern ControlledAsset <- AssetControlledBy Anyone
     ControlledAsset = AssetControlledBy Anyone
 
 -- ** Enemy Patterns **
+
+pattern IgnoreAloofFightable :: EnemyMatcher
+pattern IgnoreAloofFightable = EnemyMatchAll [EnemyAt YourLocation, CanBeAttackedBy You]
 
 pattern EnemyEngagedWithYou :: EnemyMatcher
 pattern EnemyEngagedWithYou <- EnemyIsEngagedWith You

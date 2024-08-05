@@ -23,7 +23,8 @@ deepBelowYourHouse =
 instance HasAbilities DeepBelowYourHouse where
   getAbilities (DeepBelowYourHouse attrs) =
     withBaseAbilities attrs
-      $ [ mkAbility attrs 1
+      $ [ skillTestAbility
+          $ mkAbility attrs 1
           $ ForcedAbility
           $ RevealLocation Timing.After You
           $ LocationWithId
@@ -34,7 +35,8 @@ instance HasAbilities DeepBelowYourHouse where
 instance RunMessage DeepBelowYourHouse where
   runMessage msg l@(DeepBelowYourHouse attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) iid #agility (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) iid #agility (Fixed 3)
       pure l
     FailedSkillTest iid _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ n -> do
       pushAll $ replicate n $ findAndDrawEncounterCard iid $ cardIs Enemies.swarmOfRats

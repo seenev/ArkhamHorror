@@ -17,7 +17,7 @@ sebastienMoreau = asset SebastienMoreau Cards.sebastienMoreau
 
 instance HasAbilities SebastienMoreau where
   getAbilities (SebastienMoreau a) =
-    [ restrictedAbility a 1 OnSameLocation parleyAction_
+    [ skillTestAbility $ restrictedAbility a 1 OnSameLocation parleyAction_
     , groupLimit PerGame
         $ restrictedAbility a 2 (not_ $ exists Story.sickeningReality_68)
         $ forced
@@ -29,7 +29,8 @@ instance HasAbilities SebastienMoreau where
 instance RunMessage SebastienMoreau where
   runMessage msg a@(SebastienMoreau attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ parley iid (attrs.ability 1) attrs #willpower (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid (attrs.ability 1) attrs #willpower (Fixed 3)
       pure a
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       modifiers <- getModifiers iid

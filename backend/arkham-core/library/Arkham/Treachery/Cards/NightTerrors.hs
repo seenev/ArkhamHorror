@@ -16,7 +16,7 @@ nightTerrors = treachery NightTerrors Cards.nightTerrors
 instance HasAbilities NightTerrors where
   getAbilities (NightTerrors a) =
     [ restrictedAbility a 1 (InThreatAreaOf You) $ forced $ SkillTestResult #after You #any #failure
-    , restrictedAbility a 2 (InThreatAreaOf You) actionAbility
+    , skillTestAbility $ restrictedAbility a 2 (InThreatAreaOf You) actionAbility
     ]
 
 instance RunMessage NightTerrors where
@@ -25,16 +25,12 @@ instance RunMessage NightTerrors where
       placeInThreatArea attrs iid
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      lookAt
-        iid
-        (attrs.ability 1)
-        iid
-        [(FromTopOfDeck 3, RemoveRestFromGame)]
-        WeaknessCard
-        (DrawAllFound iid)
+      lookAt iid (attrs.ability 1) iid [(FromTopOfDeck 3, RemoveRestFromGame)] #weakness
+        $ DrawAllFound iid
       pure t
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      beginSkillTest iid (attrs.ability 2) iid #willpower (Fixed 4)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 2) iid #willpower (Fixed 4)
       toDiscardBy iid (attrs.ability 2) attrs
       pure t
     _ -> NightTerrors <$> liftRunMessage msg attrs

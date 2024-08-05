@@ -65,7 +65,8 @@ theStrangerThePathIsMineEffect = cardEffect TheStrangerThePathIsMineEffect Cards
 
 instance HasAbilities TheStrangerThePathIsMineEffect where
   getAbilities (TheStrangerThePathIsMineEffect attrs) =
-    [ mkAbility (proxied (LocationMatcherSource LocationWithAnyHorror) attrs) 1
+    [ skillTestAbility
+        $ mkAbility (proxied (LocationMatcherSource LocationWithAnyHorror) attrs) 1
         $ forced
         $ Leaves #after You ThisLocation
     ]
@@ -73,7 +74,8 @@ instance HasAbilities TheStrangerThePathIsMineEffect where
 instance RunMessage TheStrangerThePathIsMineEffect where
   runMessage msg e@(TheStrangerThePathIsMineEffect attrs) = case msg of
     UseCardAbility iid p@(ProxySource _ source) 1 _ _ | isSource attrs source -> do
-      push $ beginSkillTest iid (AbilitySource p 1) attrs #agility (Fixed 4)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (AbilitySource p 1) attrs #agility (Fixed 4)
       pure e
     FailedSkillTest _ _ source (Initiator (InvestigatorTarget iid)) _ _ | isProxyAbilitySource attrs 1 source -> do
       push $ assignDamageAndHorror iid source 1 1

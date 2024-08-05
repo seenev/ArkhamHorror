@@ -29,6 +29,7 @@ type AdditionalActionType
   | { tag: "AbilityRestrictedAdditionalAction" }
   | { tag: "EffectAction", contents: [string, string] }
   | { tag: "TraitRestrictedAdditionalAction" }
+  | { tag: "PlayCardRestrictedAdditionalAction" }
   | { tag: "AnyAdditionalAction" }
   | { tag: "BountyAction" }
   | { tag: "BobJenkinsAction" }
@@ -44,6 +45,7 @@ export const additionalActionTypeDecoder = JsonDecoder.oneOf<AdditionalActionTyp
   , JsonDecoder.object({ tag: JsonDecoder.isExactly("ActionRestrictedAdditionalAction") }, "ActionRestrictedAdditionalAction")
   , JsonDecoder.object({ tag: JsonDecoder.isExactly("AbilityRestrictedAdditionalAction") }, "AbilityRestrictedAdditionalAction")
   , JsonDecoder.object({ tag: JsonDecoder.isExactly("TraitRestrictedAdditionalAction") }, "TraitRestrictedAdditionalAction")
+  , JsonDecoder.object({ tag: JsonDecoder.isExactly("PlayCardRestrictedAdditionalAction") }, "PlayCardRestrictedAdditionalAction")
   , JsonDecoder.object({ tag: JsonDecoder.isExactly("AnyAdditionalAction") }, "AnyAdditionalAction")
   , JsonDecoder.object({ tag: JsonDecoder.isExactly("BountyAction") }, "BountyAction")
   , JsonDecoder.object({ tag: JsonDecoder.isExactly("BobJenkinsAction") }, "BobJenkinsAction")
@@ -68,6 +70,7 @@ export type Investigator = {
   id: string;
   playerId: string;
   cardCode: string;
+  art: string;
   class: ClassSymbol;
   health: number;
   sanity: number;
@@ -152,6 +155,7 @@ export const investigatorDecoder = JsonDecoder.object<Investigator>({
   id: JsonDecoder.string,
   playerId: JsonDecoder.string,
   cardCode: JsonDecoder.string,
+  art: JsonDecoder.string,
   class: classSymbolDecoder,
   health: JsonDecoder.number,
   sanity: JsonDecoder.number,

@@ -17,12 +17,13 @@ earthlySerenity4 :: AssetCard EarthlySerenity4
 earthlySerenity4 = asset EarthlySerenity4 Cards.earthlySerenity4
 
 instance HasAbilities EarthlySerenity4 where
-  getAbilities (EarthlySerenity4 a) = [restrictedAbility a 1 ControlsThis actionAbility]
+  getAbilities (EarthlySerenity4 a) = [skillTestAbility $ restrictedAbility a 1 ControlsThis actionAbility]
 
 instance RunMessage EarthlySerenity4 where
   runMessage msg a@(EarthlySerenity4 attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      beginSkillTest iid (attrs.ability 1) iid #willpower (Fixed 0)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 1) iid #willpower (Fixed 0)
       pure a
     PassedThisSkillTestBy iid (isAbilitySource attrs 1 -> True) n -> do
       push $ DoStep n msg

@@ -10,6 +10,7 @@ import Arkham.Card
 import Arkham.Discover
 import Arkham.Event.Cards qualified as Cards
 import Arkham.Helpers.Modifiers
+import Arkham.Helpers.Window (cardDrawn)
 import Arkham.Investigator.Cards qualified as Cards
 import Arkham.Investigator.Runner
 import Arkham.Matcher
@@ -18,9 +19,9 @@ import Arkham.Projection
 import Arkham.Skill.Cards qualified as Cards
 
 newtype JeromeDavids = JeromeDavids InvestigatorAttrs
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (IsInvestigator, ToJSON, FromJSON)
-  deriving newtype (Entity)
+  deriving newtype Entity
 
 jeromeDavids :: InvestigatorCard JeromeDavids
 jeromeDavids =
@@ -62,8 +63,8 @@ instance HasChaosTokenValue JeromeDavids where
 
 instance RunMessage JeromeDavids where
   runMessage msg i@(JeromeDavids attrs) = case msg of
-    UseCardAbility _ (isSource attrs -> True) 1 _ _ -> do
-      push $ CancelNext (toSource attrs) RevelationMessage
+    UseCardAbility _ (isSource attrs -> True) 1 (cardDrawn -> card) _ -> do
+      push $ cardResolutionModifier card (attrs.ability 1) card IgnoreRevelation
       pure i
     ResolveChaosToken _drawnToken ElderSign iid | iid == toId attrs -> do
       push $ Msg.DiscoverClues iid $ discoverAtYourLocation ElderSign 1

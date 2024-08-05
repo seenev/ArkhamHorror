@@ -25,7 +25,8 @@ instance HasAbilities SalemGaol1692 where
   getAbilities (SalemGaol1692 a) =
     withRevealedAbilities
       a
-      [ limitedAbility (PlayerLimit PerGame 1)
+      [ skillTestAbility
+          $ limitedAbility (PlayerLimit PerGame 1)
           $ restrictedAbility a 1 Here
           $ ActionAbility []
           $ ActionCost 1
@@ -37,7 +38,8 @@ instance RunMessage SalemGaol1692 where
     Msg.RevealLocation _ lid | lid == toId attrs -> do
       SalemGaol1692 <$> runMessage msg (attrs & labelL .~ "salemGaol1692")
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) iid SkillIntellect (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) iid SkillIntellect (Fixed 3)
       pure l
     UseCardAbility iid (isSource attrs -> True) 2 _ _ -> do
       push $ Move $ moveToMatch attrs iid (locationIs Locations.keziahsRoom)

@@ -17,7 +17,6 @@ import Arkham.Classes.Query as X
 import Arkham.Classes.RunMessage as X
 import Arkham.Helpers.Investigator as X (eliminationWindow)
 import Arkham.Helpers.Message as X hiding (
-  AssetDamage,
   DeckHasNoCards,
   EnemyDefeated,
   InvestigatorDamage,
@@ -72,7 +71,7 @@ instance RunMessage TreacheryAttrs where
     PlaceTreachery tid placement | tid == treacheryId -> do
       for_ placement.attachedTo \target ->
         pushM $ checkAfter $ Window.AttachCard Nothing (toCard a) target
-      let entersPlay = isOutOfPlayPlacement a.placement && isInPlayPlacement placement
+      let entersPlay = not (isInPlayPlacement a.placement) && isInPlayPlacement placement
       case placement of
         InThreatArea iid -> do
           pushM $ checkWindows $ Window.mkAfter (Window.EntersThreatArea iid $ toCard a)
@@ -80,7 +79,10 @@ instance RunMessage TreacheryAttrs where
         _ -> when entersPlay do
           pushM $ checkAfter $ Window.TreacheryEntersPlay tid
       pure $ a & placementL .~ placement
-    PlaceTokens _ (isTarget a -> True) token n -> pure $ a & tokensL %~ addTokens token n
+    PlaceTokens source (isTarget a -> True) token n -> do
+      when (token == Doom && a.doom == 0) do
+        pushM $ checkAfter $ Window.PlacedDoomCounterOnTargetWithNoDoom source (toTarget a) n
+      pure $ a & tokensL %~ addTokens token n
     RemoveTokens _ (isTarget a -> True) token n -> pure $ a & tokensL %~ subtractTokens token n
     MoveTokens s source _ tType n | isSource a source -> runMessage (RemoveTokens s (toTarget a) tType n) a
     MoveTokens s _ target tType n | isTarget a target -> runMessage (PlaceTokens s (toTarget a) tType n) a

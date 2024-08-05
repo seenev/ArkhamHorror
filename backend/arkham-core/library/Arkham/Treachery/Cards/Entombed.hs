@@ -12,7 +12,7 @@ newtype Metadata = Metadata {difficultyReduction :: Int}
   deriving anyclass (ToJSON, FromJSON)
 
 newtype Entombed = Entombed (TreacheryAttrs `With` Metadata)
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 entombed :: TreacheryCard Entombed
@@ -24,7 +24,7 @@ instance HasModifiersFor Entombed where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities Entombed where
-  getAbilities (Entombed (a `With` _)) = [restrictedAbility a 1 (InThreatAreaOf You) actionAbility]
+  getAbilities (Entombed (a `With` _)) = [skillTestAbility $ restrictedAbility a 1 (InThreatAreaOf You) actionAbility]
 
 instance RunMessage Entombed where
   runMessage msg t@(Entombed (attrs `With` metadata)) = runQueueT $ case msg of
@@ -32,12 +32,13 @@ instance RunMessage Entombed where
       placeInThreatArea attrs iid
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
+      sid <- getRandom
       let
         difficulty = max 0 (4 - difficultyReduction metadata)
         testChoice sType =
           SkillLabel
             sType
-            [Msg.beginSkillTest iid (attrs.ability 1) attrs sType (Fixed difficulty)]
+            [Msg.beginSkillTest sid iid (attrs.ability 1) attrs sType (Fixed difficulty)]
       chooseOne iid [testChoice #agility, testChoice #combat]
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do

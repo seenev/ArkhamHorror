@@ -12,12 +12,13 @@ import Arkham.Prelude
 import Arkham.Projection
 
 newtype Metadata = Metadata {playedFromTopOfDeck :: Bool}
-  deriving stock (Show, Generic, Eq)
+  deriving stock (Show, Generic, Eq, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 newtype NormanWithers = NormanWithers (InvestigatorAttrs `With` Metadata)
-  deriving anyclass (IsInvestigator)
+  deriving anyclass IsInvestigator
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 normanWithers :: InvestigatorCard NormanWithers
 normanWithers =
@@ -46,7 +47,7 @@ instance HasAbilities NormanWithers where
     [ restrictedAbility
         a
         1
-        (Self <> exists (TopCardOfDeckIs WeaknessCard) <> CanManipulateDeck)
+        (Self <> youExist (TopCardOfDeckIs WeaknessCard) <> CanManipulateDeck)
         (forced AnyWindow)
     ]
 

@@ -18,6 +18,7 @@ import Arkham.Skill.Cards qualified as Skills
 newtype AmandaSharpe = AmandaSharpe InvestigatorAttrs
   deriving anyclass (IsInvestigator, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 amandaSharpe :: InvestigatorCard AmandaSharpe
 amandaSharpe =
@@ -87,6 +88,7 @@ instance RunMessage AmandaSharpe where
                       (ForcedAbility AnyWindow)
                   )
                   []
+                  []
                   [HandleTargetChoice iid (attrs.ability 1) (CardIdTarget $ toCardId whispersFromTheDeep)]
               ]
       pure i
@@ -96,24 +98,26 @@ instance RunMessage AmandaSharpe where
       pure $ AmandaSharpe $ attrs & setMeta @(Maybe CardId) (Just cid)
     UseThisAbility iid (isSource attrs -> True) 2 -> do
       let meta = toResult @(Maybe CardId) attrs.meta
-      for_ meta $ \cardId -> do
-        card <- getCard cardId
-        committable <- getIsCommittable iid card
-        when committable do
-          pushAll
-            [ skillTestModifiers (toSource attrs) cardId [MustBeCommitted, LeaveCardWhereItIs]
-            , SkillTestCommitCard iid card
-            ]
+      withSkillTest \sid -> do
+        for_ meta $ \cardId -> do
+          card <- getCard cardId
+          committable <- getIsCommittable iid card
+          when committable do
+            pushAll
+              [ skillTestModifiers sid (toSource attrs) cardId [MustBeCommitted, LeaveCardWhereItIs]
+              , SkillTestCommitCard iid card
+              ]
       pure i
     ResolveChaosToken _ ElderSign iid | attrs `is` iid -> do
       let meta = toResult @(Maybe CardId) attrs.meta
       player <- getPlayer iid
-      for_ meta $ \cardId -> do
-        push
-          $ chooseOne
-            player
-            [ Label "Double skill icons" [skillTestModifier (toSource attrs) cardId DoubleSkillIcons]
-            , Label "Do not double skill icons" []
-            ]
+      withSkillTest \sid -> do
+        for_ meta $ \cardId -> do
+          push
+            $ chooseOne
+              player
+              [ Label "Double skill icons" [skillTestModifier sid (toSource attrs) cardId DoubleSkillIcons]
+              , Label "Do not double skill icons" []
+              ]
       pure i
     _ -> AmandaSharpe <$> liftRunMessage msg attrs

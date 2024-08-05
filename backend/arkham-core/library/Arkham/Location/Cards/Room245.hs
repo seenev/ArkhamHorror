@@ -26,18 +26,20 @@ room245 = locationWith Room245 Cards.room245 2 (PerPlayer 1) (labelL .~ "room245
 
 instance HasAbilities Room245 where
   getAbilities (Room245 attrs) =
-    withRevealedAbilities attrs [restrictedAbility attrs 1 Here actionAbility]
+    withRevealedAbilities attrs [skillTestAbility $ restrictedAbility attrs 1 Here actionAbility]
 
 instance RunMessage Room245 where
   runMessage msg l@(Room245 attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       mTopOfDiscard <- fieldMap InvestigatorDiscard headMay iid
       investigators <- getInvestigators
-      push $ beginSkillTest iid (toAbilitySource attrs 1) iid #intellect (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource attrs 1) iid #intellect (Fixed 3)
       case mTopOfDiscard of
         Just topOfDiscard -> do
           push
             $ skillTestModifier
+              sid
               (toAbilitySource attrs 1)
               (toCardId topOfDiscard)
               PlaceOnBottomOfDeckInsteadOfDiscard
@@ -46,26 +48,17 @@ instance RunMessage Room245 where
               then
                 push
                   $ skillTestModifiers
+                    sid
                     (toAbilitySource attrs 1)
                     investigator
                     [ CanCommitToSkillTestsAsIfInHand $ toCard topOfDiscard
                     , CannotCommitCards (NotCard $ CardWithId $ toCardId topOfDiscard)
                     ]
               else
-                push
-                  $ skillTestModifiers
-                    (toAbilitySource attrs 1)
-                    investigator
-                    [ CannotCommitCards AnyCard
-                    ]
+                push $ skillTestModifiers sid (toAbilitySource attrs 1) investigator [CannotCommitCards AnyCard]
         Nothing -> do
           for_ investigators $ \investigator -> do
-            push
-              $ skillTestModifiers
-                (toAbilitySource attrs 1)
-                investigator
-                [ CannotCommitCards AnyCard
-                ]
+            push $ skillTestModifiers sid (toAbilitySource attrs 1) investigator [CannotCommitCards AnyCard]
 
       pure l
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
@@ -75,7 +68,7 @@ instance RunMessage Room245 where
 
       unless (null iids || isNothing timeWornLocket) $ do
         named <- traverse (\(iid', n) -> (,n) <$> field InvestigatorName iid') iids
-        push
+        pushM
           $ chooseAmounts
             player
             "number of clues to move to Time-worn Locket"

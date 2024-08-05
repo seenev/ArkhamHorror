@@ -28,11 +28,13 @@ instance HasAbilities HotelRoof where
   getAbilities (HotelRoof attrs) =
     withRevealedAbilities
       attrs
-      [ withTooltip
-          "{action}: Test {agility} (4) or {combat} (4). If you succeed, move to either Room 212, Room 225, or Room 245."
+      [ skillTestAbility
+          $ withTooltip
+            "{action}: Test {agility} (4) or {combat} (4). If you succeed, move to either Room 212, Room 225, or Room 245."
           $ restrictedAbility attrs 1 Here actionAbility
-      , withTooltip
-          "{action}: Test {willpower} (3). If you succeed, move any number of clues controlled by investigators at this location to Alien Device (if it is in play)."
+      , skillTestAbility
+          $ withTooltip
+            "{action}: Test {willpower} (3). If you succeed, move any number of clues controlled by investigators at this location to Alien Device (if it is in play)."
           $ restrictedAbility attrs 2 Here actionAbility
       ]
 
@@ -40,15 +42,17 @@ instance RunMessage HotelRoof where
   runMessage msg l@(HotelRoof attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel skill [beginSkillTest iid (toAbilitySource attrs 1) iid skill (Fixed 4)]
+          [ SkillLabel skill [beginSkillTest sid iid (toAbilitySource attrs 1) iid skill (Fixed 4)]
           | skill <- [#agility, #combat]
           ]
       pure l
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      push $ beginSkillTest iid (toAbilitySource attrs 2) iid #willpower (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource attrs 2) iid #willpower (Fixed 3)
       pure l
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       rooms <-
@@ -64,7 +68,7 @@ instance RunMessage HotelRoof where
 
       unless (null iids || isNothing alienDevice) $ do
         named <- traverse (\(iid', n) -> (,n) <$> field InvestigatorName iid') iids
-        push
+        pushM
           $ chooseAmounts
             player
             "number of clues to move to Alien Device"

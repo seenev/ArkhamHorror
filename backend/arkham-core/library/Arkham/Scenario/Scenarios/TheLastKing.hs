@@ -62,7 +62,7 @@ instance HasChaosTokenValue TheLastKing where
     Tablet -> pure $ ChaosTokenValue Tablet (NegativeModifier 4)
     ElderThing -> do
       lid <- getJustLocation iid
-      shroud <- field LocationShroud lid
+      shroud <- fieldJust LocationShroud lid
       pure $ ChaosTokenValue ElderThing (NegativeModifier shroud)
     otherFace -> getChaosTokenValue iid otherFace attrs
 
@@ -96,14 +96,13 @@ interviewedToCardCode = \case
 
 instance RunMessage TheLastKing where
   runMessage msg s@(TheLastKing attrs) = case msg of
-    SetChaosTokensForScenario -> do
-      randomToken <- sample (Cultist :| [Tablet, ElderThing])
-      whenStandalone
-        $ push (SetChaosTokens $ standaloneChaosTokens <> [randomToken, randomToken])
-      pure s
     StandaloneSetup -> do
       lead <- getLead
-      push $ AddCampaignCardToDeck lead Enemies.theManInThePallidMask
+      randomToken <- sample (Cultist :| [Tablet, ElderThing])
+      pushAll
+        [ SetChaosTokens $ standaloneChaosTokens <> [randomToken, randomToken]
+        , AddCampaignCardToDeck lead Enemies.theManInThePallidMask
+        ]
       pure s
     Setup -> do
       encounterDeck <-

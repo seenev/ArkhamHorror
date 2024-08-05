@@ -16,6 +16,7 @@ import Arkham.EncounterSet qualified as EncounterSet
 import Arkham.Enemy.Cards qualified as Enemies
 import Arkham.Game.Helpers
 import Arkham.Helpers
+import Arkham.Helpers.SkillTest (withSkillTest)
 import Arkham.Location.Cards qualified as Locations
 import Arkham.Matcher
 import Arkham.Message
@@ -106,17 +107,14 @@ cultistEffect = do
 
 instance RunMessage APhantomOfTruth where
   runMessage msg s@(APhantomOfTruth attrs) = case msg of
-    SetChaosTokensForScenario -> do
-      whenM getIsStandalone $ do
-        randomToken <- sample (Cultist :| [Tablet, ElderThing])
-        push (SetChaosTokens $ standaloneChaosTokens <> [randomToken, randomToken])
-      pure s
     StandaloneSetup -> do
       lead <- getLeadPlayer
       leadId <- getLeadInvestigatorId
       theManInThePallidMask <- genCard Enemies.theManInThePallidMask
+      randomToken <- sample (Cultist :| [Tablet, ElderThing])
       pushAll
-        [ chooseOne
+        [ SetChaosTokens $ standaloneChaosTokens <> [randomToken, randomToken]
+        , chooseOne
             lead
             [ Label "Conviction" [RecordCount Conviction 1]
             , Label "Doubt" [RecordCount Doubt 1]
@@ -301,14 +299,15 @@ instance RunMessage APhantomOfTruth where
       when (isHardExpert attrs) cultistEffect
       pure s
     ResolveChaosToken _ Tablet _ -> do
-      pushAll
-        [ CreateWindowModifierEffect
-            EffectSkillTestWindow
-            (EffectModifiers $ toModifiers attrs [CancelSkills])
-            (ChaosTokenEffectSource Tablet)
-            SkillTestTarget
-        , CancelSkillEffects
-        ]
+      withSkillTest \sid ->
+        pushAll
+          [ CreateWindowModifierEffect
+              (EffectSkillTestWindow sid)
+              (EffectModifiers $ toModifiers attrs [CancelSkills])
+              (ChaosTokenEffectSource Tablet)
+              (SkillTestTarget sid)
+          , CancelSkillEffects
+          ]
       pure s
     FailedSkillTest iid _ _ (ChaosTokenTarget token) _ n -> case chaosTokenFace token of
       Cultist | isEasyStandard attrs -> s <$ cultistEffect

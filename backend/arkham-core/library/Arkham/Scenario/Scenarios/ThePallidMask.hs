@@ -42,7 +42,7 @@ import Arkham.Token
 import Arkham.Trait (Trait (Geist, Ghoul, Madness, Pact))
 
 newtype ThePallidMask = ThePallidMask ScenarioAttrs
-  deriving anyclass (IsScenario)
+  deriving anyclass IsScenario
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 -- Locations are placed directional, printed on the cards the following
@@ -134,17 +134,13 @@ standaloneChaosTokens =
 
 instance RunMessage ThePallidMask where
   runMessage msg s@(ThePallidMask attrs) = case msg of
-    SetChaosTokensForScenario -> do
-      whenM getIsStandalone $ do
-        randomToken <- sample (Cultist :| [Tablet, ElderThing])
-        push (SetChaosTokens $ standaloneChaosTokens <> [randomToken, randomToken])
-      pure s
     StandaloneSetup -> do
       leadInvestigatorId <- getLeadInvestigatorId
-      push
-        $ AddCampaignCardToDeck
-          leadInvestigatorId
-          Enemies.theManInThePallidMask
+      randomToken <- sample (Cultist :| [Tablet, ElderThing])
+      pushAll
+        [ SetChaosTokens $ standaloneChaosTokens <> [randomToken, randomToken]
+        , AddCampaignCardToDeck leadInvestigatorId Enemies.theManInThePallidMask
+        ]
       pure
         . ThePallidMask
         $ attrs
@@ -263,19 +259,20 @@ instance RunMessage ThePallidMask where
       mAction <- getSkillTestAction
       case mAction of
         Just Action.Fight ->
-          push
-            $ CreateWindowModifierEffect
-              EffectSkillTestWindow
-              ( EffectModifiers
-                  $ toModifiers
-                    attrs
-                    [ if isEasyStandard attrs
-                        then DamageDealt (-1)
-                        else NoDamageDealt
-                    ]
-              )
-              (ChaosTokenSource t)
-              (InvestigatorTarget iid)
+          withSkillTest \sid ->
+            push
+              $ CreateWindowModifierEffect
+                (EffectSkillTestWindow sid)
+                ( EffectModifiers
+                    $ toModifiers
+                      attrs
+                      [ if isEasyStandard attrs
+                          then DamageDealt (-1)
+                          else NoDamageDealt
+                      ]
+                )
+                (ChaosTokenSource t)
+                (InvestigatorTarget iid)
         _ -> pure ()
       pure s
     ResolveChaosToken _ Tablet iid -> do

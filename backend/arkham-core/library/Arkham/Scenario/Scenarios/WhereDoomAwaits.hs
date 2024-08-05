@@ -21,6 +21,7 @@ import Arkham.EffectMetadata
 import Arkham.EncounterSet qualified as EncounterSet
 import Arkham.Enemy.Cards qualified as Enemies
 import Arkham.Game.Helpers
+import Arkham.Helpers.SkillTest (withSkillTest)
 import Arkham.Location.Cards qualified as Locations
 import Arkham.Matcher hiding (RevealLocation)
 import Arkham.Message
@@ -107,10 +108,8 @@ instance HasChaosTokenValue WhereDoomAwaits where
 
 instance RunMessage WhereDoomAwaits where
   runMessage msg s@(WhereDoomAwaits attrs) = case msg of
-    SetChaosTokensForScenario -> do
-      standalone <- getIsStandalone
-      s <$ if standalone then push (SetChaosTokens standaloneChaosTokens) else pure ()
     StandaloneSetup -> do
+      push (SetChaosTokens standaloneChaosTokens)
       pure
         . WhereDoomAwaits
         $ attrs
@@ -246,15 +245,16 @@ instance RunMessage WhereDoomAwaits where
                 )
           )
     ResolveChaosToken drawnToken Cultist iid -> do
-      pushAll
-        [ CreateWindowModifierEffect
-            EffectSkillTestWindow
-            (EffectModifiers $ toModifiers attrs [CancelSkills])
-            (ChaosTokenSource drawnToken)
-            SkillTestTarget
-        , CancelSkillEffects
-        , DrawAnotherChaosToken iid
-        ]
+      withSkillTest \sid ->
+        pushAll
+          [ CreateWindowModifierEffect
+              (EffectSkillTestWindow sid)
+              (EffectModifiers $ toModifiers attrs [CancelSkills])
+              (ChaosTokenSource drawnToken)
+              (SkillTestTarget sid)
+          , CancelSkillEffects
+          , DrawAnotherChaosToken iid
+          ]
       pure s
     ResolveChaosToken drawnToken ElderThing iid -> do
       push
@@ -266,7 +266,8 @@ instance RunMessage WhereDoomAwaits where
       pure s
     DiscardedTopOfDeck _iid cards _ target@(ChaosTokenTarget (chaosTokenFace -> ElderThing)) -> do
       let n = sum $ map (toPrintedCost . fromMaybe (StaticCost 0) . cdCost . toCardDef) cards
-      push $ CreateChaosTokenValueEffect (-n) (toSource attrs) target
+      withSkillTest \sid ->
+        push $ CreateChaosTokenValueEffect sid (-n) (toSource attrs) target
       pure s
     ScenarioResolution NoResolution ->
       s <$ push (ScenarioResolution $ Resolution 2)

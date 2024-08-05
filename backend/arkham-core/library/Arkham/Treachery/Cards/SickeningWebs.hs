@@ -13,7 +13,7 @@ import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Runner
 
 newtype SickeningWebs = SickeningWebs TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 sickeningWebs :: TreacheryCard SickeningWebs
@@ -29,7 +29,7 @@ instance HasModifiersFor SickeningWebs where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities SickeningWebs where
-  getAbilities (SickeningWebs x) = [restrictedAbility x 1 OnSameLocation actionAbility]
+  getAbilities (SickeningWebs x) = [skillTestAbility $ restrictedAbility x 1 OnSameLocation actionAbility]
 
 instance RunMessage SickeningWebs where
   runMessage msg t@(SickeningWebs attrs) = case msg of
@@ -39,10 +39,11 @@ instance RunMessage SickeningWebs where
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel sType [beginSkillTest iid (attrs.ability 1) iid sType (Fixed 3)]
+          [ SkillLabel sType [beginSkillTest sid iid (attrs.ability 1) iid sType (Fixed 3)]
           | sType <- [#combat, #agility]
           ]
       pure t

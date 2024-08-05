@@ -17,15 +17,19 @@ fireExtinguisher3 = asset FireExtinguisher3 Cards.fireExtinguisher3
 instance HasAbilities FireExtinguisher3 where
   getAbilities (FireExtinguisher3 a) =
     [ restrictedAbility a 1 ControlsThis fightAction_
-    , restrictedAbility a 2 ControlsThis $ evadeAction $ OrCost [discardCost a, exileCost a]
+    , notSkillTestAbility
+        $ restrictedAbility a 2 ControlsThis
+        $ evadeAction
+        $ OrCost [discardCost a, exileCost a]
     ]
 
 instance RunMessage FireExtinguisher3 where
   runMessage msg a@(FireExtinguisher3 attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       let source = attrs.ability 1
-      skillTestModifiers source iid [SkillModifier #combat 1, DamageDealt 1]
-      pushM $ mkChooseFight iid source
+      sid <- getRandom
+      skillTestModifiers sid source iid [SkillModifier #combat 1, DamageDealt 1]
+      pushM $ mkChooseFight sid iid source
       pure a
     UseThisAbility iid (isSource attrs -> True) 2 -> do
       enemies <- select $ enemyAtLocationWith iid <> NonEliteEnemy <> EnemyWithoutModifier CannotBeEvaded

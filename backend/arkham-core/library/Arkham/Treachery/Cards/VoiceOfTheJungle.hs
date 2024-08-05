@@ -20,7 +20,7 @@ instance HasAbilities VoiceOfTheJungle where
         (InThreatAreaOf You <> youExist NoSuccessfulExploreThisTurn)
         $ forced
         $ TurnEnds #at You
-    , restrictedAbility x 2 (InThreatAreaOf You) actionAbility
+    , skillTestAbility $ restrictedAbility x 2 (InThreatAreaOf You) actionAbility
     ]
 
 instance RunMessage VoiceOfTheJungle where
@@ -32,7 +32,8 @@ instance RunMessage VoiceOfTheJungle where
       assignHorror iid (attrs.ability 1) 1
       pure t
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      beginSkillTest iid (attrs.ability 2) iid #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 2) iid #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
       toDiscardBy iid (attrs.ability 2) attrs

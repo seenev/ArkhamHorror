@@ -21,17 +21,19 @@ instance HasAbilities JosefMeiger where
   getAbilities (JosefMeiger a) =
     withBaseAbilities
       a
-      [ restrictedAbility
-          a
-          1
-          (OnSameLocation <> notExists (withTrait SilverTwilight <> EnemyWithAnyDoom <> not_ (be a)))
-          parleyAction_
+      [ skillTestAbility
+          $ restrictedAbility
+            a
+            1
+            (OnSameLocation <> notExists (withTrait SilverTwilight <> EnemyWithAnyDoom <> not_ (be a)))
+            parleyAction_
       ]
 
 instance RunMessage JosefMeiger where
   runMessage msg e@(JosefMeiger attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      parley iid (attrs.ability 1) attrs #intellect (Fixed 4)
+      sid <- getRandom
+      parley sid iid (attrs.ability 1) attrs #intellect (Fixed 4)
       pure e
     FailedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       push $ InitiateEnemyAttack $ enemyAttack (toId attrs) attrs iid

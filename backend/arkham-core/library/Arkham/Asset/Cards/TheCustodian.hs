@@ -1,14 +1,10 @@
-module Arkham.Asset.Cards.TheCustodian (
-  theCustodian,
-  TheCustodian (..),
-) where
-
-import Arkham.Prelude
+module Arkham.Asset.Cards.TheCustodian (theCustodian, TheCustodian (..)) where
 
 import Arkham.Ability
 import Arkham.Asset.Cards qualified as Cards
 import Arkham.Asset.Runner
 import Arkham.Matcher
+import Arkham.Prelude
 import Arkham.Projection
 
 newtype TheCustodian = TheCustodian AssetAttrs
@@ -21,7 +17,8 @@ theCustodian = asset TheCustodian Cards.theCustodian
 instance HasAbilities TheCustodian where
   getAbilities (TheCustodian a) =
     [ restrictedAbility a 1 ControlsThis $ freeReaction (PhaseBegins #when #investigation)
-    , withCriteria (mkAbility a 2 #parley)
+    , skillTestAbility
+        $ withCriteria (mkAbility a 2 #parley)
         $ Uncontrolled
         <> OnSameLocation
         <> InvestigatorExists (You <> InvestigatorWithAnyClues)
@@ -34,7 +31,8 @@ instance RunMessage TheCustodian where
       for_ iids $ \iid -> push $ drawCards iid (toAbilitySource attrs 1) 1
       pure a
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      push $ parley iid (toAbilitySource attrs 2) attrs #intellect (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid (toAbilitySource attrs 2) attrs #intellect (Fixed 3)
       pure a
     PassedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
       clueCount <- field AssetClues (toId a)

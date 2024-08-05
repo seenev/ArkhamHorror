@@ -15,12 +15,13 @@ import Arkham.Classes.Entity
 import Arkham.Classes.HasAbilities
 import Arkham.Classes.HasModifiersFor
 import Arkham.Classes.RunMessage.Internal
+import Arkham.Customization
 import Arkham.Field
 import Arkham.Id
 import Arkham.Json
 import Arkham.Key
 import Arkham.Matcher.Types (AssetMatcher (AssetWithId), Be (..))
-import Arkham.Message hiding (AssetDamage)
+import Arkham.Message
 import Arkham.Name
 import Arkham.Placement
 import Arkham.Slot
@@ -28,6 +29,8 @@ import Arkham.Source
 import Arkham.Target
 import Arkham.Token qualified as Token
 import Arkham.Trait (Trait)
+import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.TH
 import Data.Data
 import Data.Map.Strict qualified as Map
 import GHC.Records
@@ -76,6 +79,8 @@ instance IsCard Asset where
   {-# INLINE toCardId #-}
   toCardOwner (Asset a) = toCardOwner (toAttrs a)
   {-# INLINE toCardOwner #-}
+  toCustomizations (Asset a) = toCustomizations (toAttrs a)
+  {-# INLINE toCustomizations #-}
 
 instance Eq Asset where
   Asset (a :: a) == Asset (b :: b) = case eqT @a @b of
@@ -167,7 +172,7 @@ data instance Field Asset :: Type -> Type where
   AssetSealedChaosTokens :: Field Asset [ChaosToken]
   AssetPlacement :: Field Asset Placement
   AssetCardsUnderneath :: Field Asset [Card]
-  AssetCustomizations :: Field Asset (IntMap Int)
+  AssetCustomizations :: Field Asset Customizations
   AssetAssignedHealthHeal :: Field Asset (Map Source Int)
   AssetAssignedSanityHeal :: Field Asset (Map Source Int)
   AssetAssignedHealthDamage :: Field Asset Int
@@ -258,11 +263,11 @@ data AssetAttrs = AssetAttrs
   , assetAssignedSanityDamage :: Int
   , assetAssignedHealthHeal :: Map Source Int
   , assetAssignedSanityHeal :: Map Source Int
-  , assetCustomizations :: IntMap Int
+  , assetCustomizations :: Customizations
   , assetMeta :: Value
   , assetFlipped :: Bool
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq)
 
 assetUses :: AssetAttrs -> Map UseType Int
 assetUses = Map.filterWithKey (\k _ -> tokenIsUse k) . coerce . assetTokens
@@ -274,7 +279,7 @@ instance Is AssetAttrs AssetId where
 instance Be AssetAttrs AssetMatcher where
   be = AssetWithId . assetId
 
-instance HasField "customizations" AssetAttrs (IntMap Int) where
+instance HasField "customizations" AssetAttrs Customizations where
   getField = assetCustomizations
 
 instance HasField "cardId" AssetAttrs CardId where
@@ -303,6 +308,9 @@ instance HasField "ready" AssetAttrs Bool where
 
 instance HasField "horror" AssetAttrs Int where
   getField = assetHorror
+
+instance HasField "doom" AssetAttrs Int where
+  getField = assetDoom
 
 instance HasField "controller" AssetAttrs (Maybe InvestigatorId) where
   getField = assetController
@@ -334,6 +342,11 @@ instance HasField "ability" AssetAttrs (Int -> Source) where
 instance HasField "damage" AssetAttrs Int where
   getField = assetDamage
 
+instance HasField "inThreatAreaOf" AssetAttrs (Maybe InvestigatorId) where
+  getField attrs = case attrs.placement of
+    InThreatArea iid -> Just iid
+    _ -> Nothing
+
 assetDoom :: AssetAttrs -> Int
 assetDoom = countTokens Doom . assetTokens
 
@@ -364,47 +377,13 @@ instance HasCardDef AssetAttrs where
     Just def -> def
     Nothing -> error $ "missing card def for asset " <> show (assetCardCode a)
 
-instance ToJSON AssetAttrs where
-  toJSON = genericToJSON $ aesonOptions $ Just "asset"
-
-instance FromJSON AssetAttrs where
-  parseJSON = withObject "AssetAttrs" $ \o -> do
-    assetId <- o .: "id"
-    assetCardId <- o .: "cardId"
-    assetCardCode <- o .: "cardCode"
-    assetOriginalCardCode <- o .: "originalCardCode"
-    assetPlacement <- o .: "placement"
-    assetOwner <- o .: "owner"
-    assetController <- o .: "controller"
-    assetSlots <- o .: "slots"
-    assetHealth <- o .: "health"
-    assetSanity <- o .: "sanity"
-    deprecatedAssetUses <- o .:? "uses" .!= mempty
-    assetPrintedUses <- o .: "printedUses" <|> (fmap GameValueCalculation <$> o .: "printedUses")
-    assetExhausted <- o .: "exhausted"
-    assetExiled <- o .:? "exiled" .!= False
-    assetTokens <- Map.unionWith (+) deprecatedAssetUses <$> o .: "tokens"
-    assetCanLeavePlayByNormalMeans <- o .: "canLeavePlayByNormalMeans"
-    assetWhenNoUses <- o .: "whenNoUses"
-    assetIsStory <- o .: "isStory"
-    assetCardsUnderneath <- o .: "cardsUnderneath"
-    assetSealedChaosTokens <- o .: "sealedChaosTokens"
-    assetKeys <- o .: "keys"
-    assetAssignedHealthDamage <- o .: "assignedHealthDamage"
-    assetAssignedHealthHeal <- (o .:? "assignedHealthHeal" .!= mempty) <|> pure mempty
-    assetAssignedSanityDamage <- o .: "assignedSanityDamage"
-    assetAssignedSanityHeal <- (o .:? "assignedSanityHeal" .!= mempty) <|> pure mempty
-    assetCustomizations <- o .:? "customizations" .!= mempty
-    assetMeta <- o .:? "meta" .!= Null
-    assetFlipped <- o .:? "flipped" .!= False
-    pure AssetAttrs {..}
-
 instance IsCard AssetAttrs where
   toCardId = assetCardId
   toCard a = case lookupCard (assetOriginalCardCode a) (toCardId a) of
-    PlayerCard pc -> PlayerCard $ pc {pcOwner = assetOwner a}
+    PlayerCard pc -> PlayerCard $ pc {pcOwner = assetOwner a, pcCustomizations = toCustomizations a}
     ec -> ec
   toCardOwner = assetOwner
+  toCustomizations = assetCustomizations
 
 asset
   :: (AssetAttrs -> a)
@@ -483,10 +462,15 @@ controls :: (Entity attrs, EntityAttrs attrs ~ AssetAttrs) => InvestigatorId -> 
 controls iid attrs = toAttrs attrs `controlledBy` iid
 
 controlledBy :: AssetAttrs -> InvestigatorId -> Bool
-controlledBy AssetAttrs {..} iid = case assetPlacement of
-  InPlayArea iid' -> iid == iid'
-  AttachedToAsset _ (Just (InPlayArea iid')) -> iid == iid'
-  _ -> False
+controlledBy AssetAttrs {..} iid =
+  if isInPlayPlacement assetPlacement
+    then case assetController of
+      Nothing -> False
+      Just iid' -> iid == iid'
+    else False
+
+ownedBy :: AssetAttrs -> InvestigatorId -> Bool
+ownedBy a iid = a.owner == Just iid
 
 attachedToEnemy :: AssetAttrs -> EnemyId -> Bool
 attachedToEnemy AssetAttrs {..} eid = case assetPlacement of
@@ -532,3 +516,50 @@ discardWhenNoUses = whenNoUsesL ?~ DiscardWhenNoUses
 
 setMeta :: ToJSON a => a -> AssetAttrs -> AssetAttrs
 setMeta a = metaL .~ toJSON a
+
+getAssetMeta :: FromJSON a => AssetAttrs -> Maybe a
+getAssetMeta attrs = case fromJSON attrs.meta of
+  Error _ -> Nothing
+  Success v' -> Just v'
+
+unsetMeta :: AssetAttrs -> AssetAttrs
+unsetMeta = metaL .~ Null
+
+getAssetMetaDefault :: FromJSON a => a -> AssetAttrs -> a
+getAssetMetaDefault def = fromMaybe def . getAssetMeta
+
+overMeta :: (ToJSON a, FromJSON a) => (a -> a -> a) -> a -> AssetAttrs -> AssetAttrs
+overMeta f a attrs = case fromJSON attrs.meta of
+  Error _ -> attrs & metaL .~ toJSON a
+  Success a' -> attrs & metaL .~ toJSON (f a' a)
+
+setMetaKey :: (ToJSON a, HasCallStack) => Key -> a -> AssetAttrs -> AssetAttrs
+setMetaKey k v attrs = case attrs.meta of
+  Object o -> attrs {assetMeta = Object $ KeyMap.insert k (toJSON v) o}
+  Null -> attrs {assetMeta = object [k .= v]}
+  _ -> error $ "Could not insert meta key, meta is not Null or Object: " <> show attrs.meta
+
+unsetMetaKey :: Key -> AssetAttrs -> AssetAttrs
+unsetMetaKey k attrs = case attrs.meta of
+  Object o -> attrs {assetMeta = Object $ KeyMap.delete k o}
+  _ -> attrs
+
+getMetaKey :: Key -> AssetAttrs -> Bool
+getMetaKey k attrs = case attrs.meta of
+  Object o -> case KeyMap.lookup k o of
+    Nothing -> False
+    Just v -> case fromJSON v of
+      Error _ -> False
+      Success v' -> v'
+  _ -> False
+
+getMetaKeyDefault :: FromJSON a => Key -> a -> AssetAttrs -> a
+getMetaKeyDefault k def attrs = case attrs.meta of
+  Object o -> case KeyMap.lookup k o of
+    Nothing -> def
+    Just v -> case fromJSON v of
+      Error _ -> def
+      Success v' -> v'
+  _ -> def
+
+$(deriveJSON (aesonOptions $ Just "asset") ''AssetAttrs)

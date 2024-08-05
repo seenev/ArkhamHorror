@@ -32,14 +32,14 @@ import Data.Aeson.TH
 import GHC.Records
 
 data Result b a = Success a | Failure b
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
 
 data Window = Window
   { windowTiming :: Timing
   , windowType :: WindowType
   , windowBatchId :: Maybe BatchId
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 replaceWindowType :: WindowType -> Window -> Window
 replaceWindowType wType window = window {windowType = wType}
@@ -117,10 +117,11 @@ pattern PlacedDamage source target n <- PlacedToken source target Damage n
     PlacedDamage source target n = PlacedToken source target Damage n
 
 data IsDirect = IsDirect | IsNonDirect
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data WindowType
   = AttemptToEvadeEnemy InvestigatorId EnemyId
+  | FirstTimeParleyingThisRound InvestigatorId
   | AttachCard (Maybe InvestigatorId) Card Target
   | ActAdvance ActId
   | ActivateAbility InvestigatorId [Window] Ability
@@ -148,6 +149,7 @@ data WindowType
   | EncounterDeckRunsOutOfCards
   | Discarded (Maybe InvestigatorId) Source Card
   | DiscoverClues InvestigatorId LocationId Source Int
+  | SpentClues InvestigatorId Int
   | DiscoveringLastClue InvestigatorId LocationId
   | SuccessfullyInvestigateWithNoClues InvestigatorId LocationId
   | WouldDrawCard InvestigatorId DeckSignifier
@@ -157,6 +159,7 @@ data WindowType
   | DrawingStartingHand InvestigatorId
   | DuringTurn InvestigatorId
   | EndOfGame
+  | WouldEndTurn InvestigatorId
   | EndTurn InvestigatorId
   | TreacheryEntersPlay TreacheryId
   | EnemyAttacked InvestigatorId Source EnemyId
@@ -182,6 +185,7 @@ data WindowType
   | FailSkillTestAtOrLess InvestigatorId Int
   | FastPlayerWindow
   | GainsClues InvestigatorId Source Int
+  | GainsResources InvestigatorId Source Int
   | Healed DamageType Target Source Int
   | InDiscardWindow InvestigatorId Window
   | InHandWindow InvestigatorId Window
@@ -189,6 +193,7 @@ data WindowType
   | InvestigatorDefeated DefeatedBy InvestigatorId
   | InvestigatorWouldBeDefeated DefeatedBy InvestigatorId
   | InvestigatorEliminated InvestigatorId
+  | InvestigatorResigned InvestigatorId
   | LastClueRemovedFromAsset AssetId
   | LeavePlay Target
   | Leaving InvestigatorId LocationId
@@ -208,7 +213,10 @@ data WindowType
   | PhaseEnds Phase
   | PlaceUnderneath Target Card
   | PlacedToken Source Target Token Int
+  | PlacedDoomCounterOnTargetWithNoDoom Source Target Int
+  | InvestigatorPlacedFromTheirPool InvestigatorId Source Target Token Int
   | SpentToken Source Target Token Int
+  | AttackOrEffectSpentLastUse Source Target Token
   | LostResources InvestigatorId Source Int
   | LostActions InvestigatorId Source Int
   | WouldPlaceDoom Source Target Int
@@ -230,9 +238,11 @@ data WindowType
   | PlayCard InvestigatorId Card
   | PlayEventDiscarding InvestigatorId EventId
   | PutLocationIntoPlay InvestigatorId LocationId
+  | LocationEntersPlay LocationId
   | RevealLocation InvestigatorId LocationId
   | FlipLocation InvestigatorId LocationId
   | RevealChaosToken InvestigatorId ChaosToken
+  | RevealChaosTokensDuringSkillTest InvestigatorId SkillTest [ChaosToken]
   | TokensWouldBeRemovedFromChaosBag [ChaosToken]
   | ResolvesChaosToken InvestigatorId ChaosToken
   | IgnoreChaosToken InvestigatorId ChaosToken
@@ -241,11 +251,11 @@ data WindowType
   | RevealChaosTokenEventEffect InvestigatorId [ChaosToken] EventId
   | RevealChaosTokenAssetAbilityEffect InvestigatorId [ChaosToken] AssetId
   | RevealChaosTokenWithNegativeModifier InvestigatorId ChaosToken
-  | WouldPerformRevelationSkillTest InvestigatorId
+  | WouldPerformRevelationSkillTest InvestigatorId SkillTestId
   | SpentUses InvestigatorId Source AssetId UseType Int
   | SkillTest SkillTestType
   | SkillTestEnded SkillTest
-  | SuccessfulAttackEnemy InvestigatorId EnemyId Int
+  | SuccessfulAttackEnemy InvestigatorId Source EnemyId Int
   | SuccessfulEvadeEnemy InvestigatorId EnemyId Int
   | SuccessfulInvestigation InvestigatorId LocationId
   | TakeDamage Source DamageEffect Target Int
@@ -274,7 +284,7 @@ data WindowType
   | ScenarioCountIncremented ScenarioCountKey
   | -- used to avoid checking a window
     DoNotCheckWindow
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 $( do
     isDirect <- deriveJSON defaultOptions ''IsDirect

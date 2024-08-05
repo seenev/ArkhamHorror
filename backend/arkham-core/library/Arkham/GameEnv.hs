@@ -10,9 +10,10 @@ import {-# SOURCE #-} Arkham.Card (
   CardGen (..),
   CardId,
   isEncounterCard,
+  lookupCardDef,
   unsafeMakeCardId,
  )
-import Arkham.Card.CardDef (toCardDef)
+import Arkham.Card.CardDef (CardDef, toCardDef)
 import Arkham.Card.EncounterCard
 import Arkham.Card.PlayerCard
 import Arkham.Classes.GameLogger
@@ -33,6 +34,7 @@ import Arkham.SkillTest.Base
 import Arkham.Target
 import Arkham.Window
 import Control.Monad.Random.Lazy hiding (filterM, foldM, fromList)
+import Data.Map.Strict qualified as Map
 
 instance CanRun GameT
 
@@ -148,6 +150,9 @@ instance MonadRandom GameT where
 getSkillTest :: HasGame m => m (Maybe SkillTest)
 getSkillTest = gameSkillTest <$> getGame
 
+getSkillTestId :: HasGame m => m (Maybe SkillTestId)
+getSkillTestId = fmap skillTestId . gameSkillTest <$> getGame
+
 getIsSkillTest :: HasGame m => m Bool
 getIsSkillTest = isJust <$> getSkillTest
 
@@ -166,6 +171,9 @@ getHistory RoundHistory iid = do
   roundH <- findWithDefault mempty iid . gameRoundHistory <$> getGame
   phaseH <- getHistory PhaseHistory iid
   pure $ roundH <> phaseH
+
+getHistoryField :: HasGame m => HistoryType -> InvestigatorId -> HistoryField k -> m k
+getHistoryField htype iid fld = viewHistoryField fld <$> getHistory htype iid
 
 getDistance :: HasGame m => LocationId -> LocationId -> m (Maybe Distance)
 getDistance l1 l2 = do
@@ -229,3 +237,11 @@ getIgnoreCanModifiers = gameIgnoreCanModifiers <$> getGame
 
 getCardUses :: HasGame m => CardCode -> m Int
 getCardUses cCode = findWithDefault 0 cCode . gameCardUses <$> getGame
+
+getAllCardUses :: HasGame m => m [CardDef]
+getAllCardUses =
+  mapMaybe lookupCardDef
+    . concatMap (\(k, v) -> replicate v k)
+    . Map.toList
+    . gameCardUses
+    <$> getGame

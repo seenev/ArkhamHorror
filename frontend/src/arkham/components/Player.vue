@@ -176,13 +176,13 @@ const cardRowTitle = ref("")
 
 const topOfDeckTreachery = computed(() => {
   const mTreacheryId = Object.values(props.game.treacheries).
-    filter((t) => t.placement.tag === "TreacheryTopOfDeck" && t.placement.contents === id.value).
+    filter((t) => t.placement.tag === "OnTopOfDeck" && t.placement.contents === id.value).
     map((t) => t.id)[0]
   return mTreacheryId ? props.game.treacheries[mTreacheryId] : null
 })
 
 const inHandTreacheries = computed(() => Object.values(props.game.treacheries).
-  filter((t) => t.placement.tag === "TreacheryInHandOf" && t.placement.contents === id.value).
+  filter((t) => t.placement.tag === "HiddenInHand" && t.placement.contents === id.value).
   map((t) => t.id))
 
 const doShowCards = (event: Event, cards: ComputedRef<ArkhamCard.Card[]>, title: string, isDiscards: boolean) => {
@@ -467,6 +467,7 @@ function onLeave(el: Element, done: () => void) {
       <div class="discard">
         <Card v-if="topOfDiscard" :game="game" :card="topOfDiscard" :playerId="playerId" @choose="$emit('choose', $event)" />
         <button v-if="discards.length > 0" class="view-discard-button" @click="showDiscards">{{viewDiscardLabel}}</button>
+        <button v-if="debug.active && discards.length > 0" class="view-discard-button" @click="debug.send(game.id, {tag: 'ShuffleDiscardBackIn', contents: investigatorId})">Shuffle Back In</button>
       </div>
 
       <div class="deck-container">
@@ -492,7 +493,7 @@ function onLeave(el: Element, done: () => void) {
           <button v-if="playTopOfDeckAction !== -1" @click="$emit('choose', playTopOfDeckAction)">Play</button>
         </div>
         <template v-if="debug.active">
-          <button @click="debug.send(game.id, {tag: 'Search', contents: ['Looking', investigatorId, {tag: 'GameSource', contents: []}, { tag: 'InvestigatorTarget', contents: investigatorId }, [[{tag: 'FromDeck', contents: []}, 'ShuffleBackIn']], {tag: 'AnyCard', contents: []}, { tag: 'DrawFound', contents: [investigatorId, 1]}]})">Select Draw</button>
+          <button @click="debug.send(game.id, {tag: 'Search', contents: ['Looking', investigatorId, {tag: 'GameSource', contents: []}, { tag: 'InvestigatorTarget', contents: investigatorId }, [[{tag: 'FromDeck', contents: []}, 'ShuffleBackIn']], {tag: 'BasicCardMatch', contents: {tag: 'AnyCard', contents: []}}, { tag: 'DrawFound', contents: [investigatorId, 1]}]})">Select Draw</button>
         </template>
       </div>
       <transition-group tag="section" class="hand" @enter="onEnter" @leave="onLeave" @before-enter="onBeforeEnter">
@@ -576,6 +577,7 @@ function onLeave(el: Element, done: () => void) {
   margin-top: 10px;
   button {
     white-space: nowrap;
+    text-wrap: pretty;
   }
   &:deep(.card) {
     margin: 0;

@@ -74,7 +74,7 @@ instance HasChaosTokenValue LostInTimeAndSpace where
     Tablet -> pure $ toChaosTokenValue attrs Tablet 3 5
     ElderThing -> do
       mlid <- field InvestigatorLocation iid
-      shroud <- maybe (pure 0) (field LocationShroud) mlid
+      shroud <- maybe (pure 0) (fieldJust LocationShroud) mlid
       pure $ toChaosTokenValue attrs ElderThing shroud (shroud * 2)
     otherFace -> getChaosTokenValue iid otherFace attrs
 
@@ -116,8 +116,8 @@ readInvestigatorDefeat a = do
 
 instance RunMessage LostInTimeAndSpace where
   runMessage msg s@(LostInTimeAndSpace attrs) = case msg of
-    SetChaosTokensForScenario -> do
-      whenStandalone $ push (SetChaosTokens standaloneChaosTokens)
+    StandaloneSetup -> do
+      push (SetChaosTokens standaloneChaosTokens)
       pure s
     Setup -> do
       players <- allPlayers

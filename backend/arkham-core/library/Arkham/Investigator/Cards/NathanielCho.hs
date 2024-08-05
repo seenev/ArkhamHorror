@@ -1,12 +1,12 @@
 module Arkham.Investigator.Cards.NathanielCho (NathanielCho, nathanielChoEffect, nathanielCho) where
 
-import Arkham.Ability
+import Arkham.Ability hiding (discardedCards)
 import Arkham.Card
 import Arkham.Effect.Runner
 import Arkham.Helpers.Modifiers
 import Arkham.Id
 import Arkham.Investigator.Cards qualified as Cards
-import Arkham.Investigator.Runner
+import Arkham.Investigator.Runner hiding (discardedCards)
 import Arkham.Matcher hiding (NonAttackDamageEffect)
 import Arkham.Prelude
 import Arkham.Projection
@@ -16,6 +16,7 @@ import Arkham.Window qualified as Window
 newtype NathanielCho = NathanielCho InvestigatorAttrs
   deriving anyclass (IsInvestigator, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 nathanielCho :: InvestigatorCard NathanielCho
 nathanielCho =
@@ -55,6 +56,7 @@ instance RunMessage NathanielCho where
 newtype NathanielChoEffect = NathanielChoEffect EffectAttrs
   deriving anyclass (HasAbilities, IsEffect)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 nathanielChoEffect :: EffectArgs -> NathanielChoEffect
 nathanielChoEffect = cardEffect NathanielChoEffect Cards.nathanielCho
@@ -96,7 +98,7 @@ instance RunMessage NathanielChoEffect where
     CheckWindow _ windows' | any (isTakeDamage attrs) windows' -> do
       push $ disable attrs
       pure e
-    SkillTestEnds _ _ -> do
+    SkillTestEnds _ _ _ -> do
       push $ disable attrs
       pure e
     _ -> NathanielChoEffect <$> runMessage msg attrs

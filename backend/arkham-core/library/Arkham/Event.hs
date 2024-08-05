@@ -510,11 +510,116 @@ allEvents =
     , SomeEventCard wordOfWeal
     , --- guardian [tsk]
       SomeEventCard customModifications
+    , SomeEventCard bolas
+    , SomeEventCard breachTheDoor
+    , SomeEventCard grievousWound
+    , SomeEventCard motivationalSpeech
+    , SomeEventCard oneInTheChamber
+    , SomeEventCard preparedForTheWorst2
+    , SomeEventCard everVigilant4
+    , --- seeker [tsk]
+      SomeEventCard theRavenQuill
+    , SomeEventCard bizarreDiagnosis
+    , SomeEventCard captivatingDiscovery
+    , SomeEventCard mapTheArea
+    , SomeEventCard existentialRiddle1
+    , SomeEventCard guidance1
     , --- rogue [tsk]
-      SomeEventCard breakingAndEntering2
+      SomeEventCard friendsInLowPlaces
+    , SomeEventCard honedInstinct
+    , SomeEventCard hiddenPocket
+    , SomeEventCard hitAndRun
+    , SomeEventCard illTakeThat
+    , SomeEventCard kickingTheHornetsNest
+    , SomeEventCard quickGetaway
+    , SomeEventCard breakingAndEntering2
+    , SomeEventCard cleanSneak4
+    , --- mystic [tsk]
+      SomeEventCard powerWord
+    , SomeEventCard eldritchInitiation
+    , SomeEventCard explosiveWard
+    , SomeEventCard stringOfCurses
+    , SomeEventCard moonlightRitual2
+    , SomeEventCard uncageTheSoul3
+    , --- survivor [tsk]
+      SomeEventCard makeshiftTrap
+    , SomeEventCard endOfTheRoad
+    , SomeEventCard exploitWeakness
+    , SomeEventCard makingPreparations
+    , SomeEventCard predatorOrPrey
+    , SomeEventCard shedALight
+    , SomeEventCard atACrossroads1
+    , SomeEventCard lifeline1
+    , SomeEventCard natureOfTheBeast1
+    , SomeEventCard heedTheDream2
+    , SomeEventCard salvage2
+    , SomeEventCard fickleFortune3
+    , --- neutral [tsk]
+      SomeEventCard refine
+    , --- basic weakness [tsk]
+      SomeEventCard quantumParadox
+    , SomeEventCard payYourDue
+    , SomeEventCard underprepared
     , -- The Feast of Hemloch Vale
-      --- survivor [fhv]
-      SomeEventCard keepFaith2
+      --- signature [fhv]
+      SomeEventCard adHoc
+    , SomeEventCard aethericCurrentYuggoth
+    , SomeEventCard aethericCurrentYoth
+    , SomeEventCard beguile
+    , SomeEventCard stouthearted
+    , --- guardian [fhv]
+      SomeEventCard absolution
+    , SomeEventCard guidedByFaith
+    , SomeEventCard holdUp
+    , SomeEventCard taskForce
+    , SomeEventCard tinker
+    , SomeEventCard handEyeCoordination1
+    , SomeEventCard secondWind2
+    , SomeEventCard flurryOfBlows5
+    , SomeEventCard miracleWish5
+    , --- seeker [fhv]
+      SomeEventCard uncannyGrowth
+    , SomeEventCard controlVariable
+    , SomeEventCard testingSprint
+    , SomeEventCard thoroughInquiry
+    , SomeEventCard throwTheBookAtThem
+    , SomeEventCard transmogrify
+    , SomeEventCard fineTuning1
+    , SomeEventCard confound3
+    , --- rogue [fhv]
+      SomeEventCard bankJob
+    , SomeEventCard falseSurrender
+    , SomeEventCard grift
+    , SomeEventCard illPayYouBack
+    , SomeEventCard stirThePot
+    , SomeEventCard vamp
+    , SomeEventCard snitch2
+    , SomeEventCard dirtyDeeds3
+    , SomeEventCard vamp3
+    , SomeEventCard stirThePot5
+    , --- mystic [fhv]
+      SomeEventCard abyssalRot
+    , SomeEventCard aemberRot
+    , SomeEventCard putrescentRot
+    , SomeEventCard scarletRot
+    , SomeEventCard virescentRot
+    , SomeEventCard antediluvianHymn
+    , SomeEventCard drainEssence
+    , SomeEventCard callTheBeyond2
+    , SomeEventCard etherealForm2
+    , SomeEventCard readTheSigns2
+    , SomeEventCard spectralRazor2
+    , SomeEventCard etherealWeaving3
+    , SomeEventCard sealOfTheElders5
+    , --- survivor [fhv]
+      SomeEventCard elaborateDistraction
+    , SomeEventCard pushedToTheLimit
+    , SomeEventCard stallForTime
+    , SomeEventCard wrongPlaceRightTime
+    , SomeEventCard keepFaith2
+    , --- netural [fhv]
+      SomeEventCard bideYourTime
+    , SomeEventCard dawnStar1
     , -- Return to Night of the Zealot
       --- guardian [rtnotz]
       SomeEventCard dynamiteBlast2
@@ -599,6 +704,11 @@ allEvents =
     , SomeEventCard lookWhatIFound2
     , SomeEventCard dumbLuck2
     , SomeEventCard lucky3
+    , -- Parallel
+      -- All or Nothing
+      SomeEventCard onTheLamAdvanced
+    , -- Bad Blood
+      SomeEventCard darkMemoryAdvanced
     , -- Promo
       -- The Dirge of Reason
       SomeEventCard mysteriesRemain

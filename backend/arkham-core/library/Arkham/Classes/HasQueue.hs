@@ -17,7 +17,7 @@ runQueueT body = do
   pushAll $ reverse msgs
   pure a
 
-evalQueueT :: HasQueue msg m => QueueT msg m a -> m [msg]
+evalQueueT :: MonadIO m => QueueT msg m a -> m [msg]
 evalQueueT body = do
   inbox <- newIORef []
   _ <- runReaderT (unQueueT body) (Queue inbox)
@@ -138,6 +138,12 @@ popMessageMatching matcher = withQueue \queue ->
         [] -> (before, Nothing)
         (msg' : rest) -> (before <> rest, Just msg')
 
+popMessagesMatching :: HasQueue msg m => (msg -> Bool) -> m [msg]
+popMessagesMatching f = withQueue \queue ->
+  let go acc [] = acc
+      go (a, b) (msg : rest) = if f msg then go (a, b <> [msg]) rest else go (a <> [msg], b) rest
+   in go ([], []) queue
+
 popMessageMatching_ :: HasQueue msg m => (msg -> Bool) -> m ()
 popMessageMatching_ = void . popMessageMatching
 
@@ -153,7 +159,7 @@ removeAllMessagesMatchingM matcher = do
   withQueue_ $ const queue'
 
 insertAfterMatching
-  :: HasQueue msg m => [msg] -> (msg -> Bool) -> m ()
+  :: (HasCallStack, HasQueue msg m) => [msg] -> (msg -> Bool) -> m ()
 insertAfterMatching msgs p = withQueue_ \queue ->
   let (before, rest) = break p queue
    in case rest of

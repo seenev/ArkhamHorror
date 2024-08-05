@@ -114,11 +114,8 @@ readInvestigatorDefeat = do
 
 instance RunMessage TheSearchForKadath where
   runMessage msg s@(TheSearchForKadath attrs) = case msg of
-    SetChaosTokensForScenario -> do
-      whenM getIsStandalone $ do
-        push $ SetChaosTokens standaloneChaosTokens
-      pure s
     StandaloneSetup -> do
+      push $ SetChaosTokens standaloneChaosTokens
       pure
         . TheSearchForKadath
         $ attrs
@@ -257,11 +254,12 @@ instance RunMessage TheSearchForKadath where
         _ -> pure ()
       pure s
     PassedSkillTest iid _ _ (ChaosTokenTarget token) _ _ -> do
-      case chaosTokenFace token of
-        ElderThing -> void $ runMaybeT $ do
-          Action.Investigate <- MaybeT getSkillTestAction
-          lift $ push $ skillTestModifier ElderThing iid (DiscoveredClues 1)
-        _ -> pure ()
+      withSkillTest \sid ->
+        case chaosTokenFace token of
+          ElderThing -> void $ runMaybeT $ do
+            Action.Investigate <- MaybeT getSkillTestAction
+            lift $ push $ skillTestModifier sid ElderThing iid (DiscoveredClues 1)
+          _ -> pure ()
       pure s
     DoStep 1 (SetScenarioMeta _) -> do
       tenebrousNightgaunts <- select $ enemyIs Enemies.tenebrousNightgaunt <> EnemyWithPlacement Unplaced
@@ -296,7 +294,7 @@ instance RunMessage TheSearchForKadath where
           guard (notNull tenebrousNightgaunts)
             *> [ chooseOneAtATime
                   player
-                  [ AbilityLabel leadId (mkAbility (SourceableWithCardCode cc t) 1 $ forced NotAnyWindow) [] []
+                  [ AbilityLabel leadId (mkAbility (SourceableWithCardCode cc t) 1 $ forced NotAnyWindow) [] [] []
                   | (t, cc) <- tenebrousNightgaunts
                   ]
                ]
@@ -313,13 +311,8 @@ instance RunMessage TheSearchForKadath where
             <> placeOriabRest
             <> map (AddToVictory . toTarget) victoryLocations
             <> map RemoveLocation locations
-            <> [ search
-                  leadId
-                  (toSource attrs)
-                  EncounterDeckTarget
-                  [fromDeck]
-                  (cardIs Enemies.nightriders)
-                  (defer attrs IsNotDraw)
+            <> [ search leadId attrs EncounterDeckTarget [fromDeck] (basicCardIs Enemies.nightriders)
+                  $ defer attrs IsNotDraw
                , AdvanceToAct 1 Acts.theIsleOfOriab A (toSource attrs)
                , DoStep 1 msg
                ]
@@ -368,13 +361,8 @@ instance RunMessage TheSearchForKadath where
             <> map (AddToVictory . toTarget) victoryLocations
             <> map RemoveLocation locations
             <> [ ShuffleCardsIntoDeck Deck.EncounterDeck [theCrawlingMist]
-               , search
-                  leadId
-                  attrs
-                  EncounterDeckTarget
-                  [fromDeck]
-                  (cardIs Enemies.priestOfAThousandMasks)
-                  (defer attrs IsNotDraw)
+               , search leadId attrs EncounterDeckTarget [fromDeck] (basicCardIs Enemies.priestOfAThousandMasks)
+                  $ defer attrs IsNotDraw
                , AdvanceToAct 1 Acts.theKingsDecree A (toSource attrs)
                , DoStep 1 msg
                ]

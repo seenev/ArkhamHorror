@@ -60,6 +60,7 @@ allPlayerTreacheryCards =
     $ concatMap
       toCardCodePairs
       [ abandonedAndAlone
+      , abandonedAndAloneAdvanced
       , accursedFate
       , acrossSpaceAndTime
       , amnesia
@@ -76,6 +77,7 @@ allPlayerTreacheryCards =
       , caughtRedHanded
       , chronophobia
       , coverUp
+      , coverUpAdvanced
       , crisisOfFaith
       , crisisOfIdentity
       , curseOfTheRougarou
@@ -87,13 +89,17 @@ allPlayerTreacheryCards =
       , doomed
       , drawingTheSign
       , dreadCurse
+      , failedExperiment
       , falseAwakening
       , falseAwakeningPointOfNoReturn
       , finalRhapsody
       , finePrint
       , greed
+      , hardTimes
+      , hastyRepairs
       , haunted
       , hospitalDebts
+      , hospitalDebtsAdvanced
       , hypochondria
       , indebted
       , internalInjury
@@ -138,6 +144,7 @@ allPlayerTreacheryCards =
       , unspeakableOathCuriosity
       , voiceOfTheMessenger
       , whatHaveYouDone
+      , wheresPa
       , wrackedByNightmares
       , yaztaroth
       , liberOmniumFinium
@@ -2129,6 +2136,24 @@ burdenOfLeadership =
     { cdCardTraits = setFromList [Flaw]
     }
 
+hastyRepairs :: CardDef
+hastyRepairs =
+  (weakness "10003" "Hasty Repairs")
+    { cdCardTraits = setFromList [Blunder]
+    }
+
+failedExperiment :: CardDef
+failedExperiment =
+  (weakness "10008" "Failed Experiment")
+    { cdCardTraits = setFromList [Blunder]
+    }
+
+wheresPa :: CardDef
+wheresPa =
+  (weakness "10018" "\"Where's Pa?\"")
+    { cdCardTraits = setFromList [Flaw]
+    }
+
 theZealotsSeal :: CardDef
 theZealotsSeal =
   (treachery "50024" "The Zealot's Seal" ReturnToTheGathering 2)
@@ -2405,6 +2430,34 @@ chillingPresence :: CardDef
 chillingPresence =
   (treachery "84042" "Chilling Presence" SinsOfThePast 3)
     { cdCardTraits = singleton Terror
+    }
+
+hospitalDebtsAdvanced :: CardDef
+hospitalDebtsAdvanced =
+  (weakness "90010" "Hospital Debts")
+    { cdCardTraits = setFromList [Task]
+    , cdKeywords = singleton Keyword.Advanced
+    }
+
+coverUpAdvanced :: CardDef
+coverUpAdvanced =
+  (weakness "90031" "Cover Up")
+    { cdCardTraits = setFromList [Task]
+    , cdKeywords = singleton Keyword.Advanced
+    }
+
+abandonedAndAloneAdvanced :: CardDef
+abandonedAndAloneAdvanced =
+  (weakness "90040" "Abandoned and Alone")
+    { cdCardTraits = setFromList [Madness]
+    , cdKeywords = singleton Keyword.Advanced
+    }
+
+hardTimes :: CardDef
+hardTimes =
+  (weakness "90048" "Hard Times")
+    { cdCardTraits = setFromList [Hardship]
+    , cdKeywords = singleton Keyword.Replacement
     }
 
 theDirgeOfReason :: CardDef

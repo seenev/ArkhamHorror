@@ -13,8 +13,10 @@ export type Token
   | 'Doom'
   | 'Durability'
   | 'Evidence'
+  | 'Growth'
   | 'Horror'
   | 'Key'
+  | 'Lead'
   | 'Leyline'
   | 'Lock'
   | 'LostSoul'
@@ -22,8 +24,11 @@ export type Token
   | 'Resource'
   | 'Secret'
   | 'Supply'
+  | 'Suspicion'
+  | 'Time'
   | 'Try'
   | 'Whistle'
+  | 'Wish'
 
 export const TokenType = {
   Aether: 'Aether',
@@ -38,8 +43,10 @@ export const TokenType = {
   Doom: 'Doom',
   Durability: 'Durability',
   Evidence: 'Evidence',
+  Growth: 'Growth',
   Horror: 'Horror',
   Key: 'Key',
+  Lead: 'Lead',
   Leyline: 'Leyline',
   Lock: 'Lock',
   LostSoul: 'LostSoul',
@@ -47,8 +54,10 @@ export const TokenType = {
   Resource: 'Resource',
   Secret: 'Secret',
   Supply: 'Supply',
+  Suspicion: 'Suspicion',
   Try: 'Try',
   Whistle: 'Whistle',
+  Wish: 'Wish',
 } as const;
 
 export const tokenDecoder: JsonDecoder.Decoder<Token> = JsonDecoder.oneOf<Token>([
@@ -64,8 +73,10 @@ export const tokenDecoder: JsonDecoder.Decoder<Token> = JsonDecoder.oneOf<Token>
   JsonDecoder.isExactly('Doom'),
   JsonDecoder.isExactly('Durability'),
   JsonDecoder.isExactly('Evidence'),
+  JsonDecoder.isExactly('Growth'),
   JsonDecoder.isExactly('Horror'),
   JsonDecoder.isExactly('Key'),
+  JsonDecoder.isExactly('Lead'),
   JsonDecoder.isExactly('Leyline'),
   JsonDecoder.isExactly('Lock'),
   JsonDecoder.isExactly('LostSoul'),
@@ -73,8 +84,11 @@ export const tokenDecoder: JsonDecoder.Decoder<Token> = JsonDecoder.oneOf<Token>
   JsonDecoder.isExactly('Resource'),
   JsonDecoder.isExactly('Secret'),
   JsonDecoder.isExactly('Supply'),
+  JsonDecoder.isExactly('Suspicion'),
+  JsonDecoder.isExactly('Time'),
   JsonDecoder.isExactly('Try'),
   JsonDecoder.isExactly('Whistle'),
+  JsonDecoder.isExactly('Wish'),
 ], 'Token');
 
 export type Tokens = { [key in Token]?: number };

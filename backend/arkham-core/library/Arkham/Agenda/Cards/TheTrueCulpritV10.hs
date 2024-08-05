@@ -15,7 +15,7 @@ import Arkham.Matcher
 import Arkham.Trait (Trait (Cultist, Guest, Innocent, Lead))
 
 newtype TheTrueCulpritV10 = TheTrueCulpritV10 AgendaAttrs
-  deriving anyclass (IsAgenda)
+  deriving anyclass IsAgenda
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 theTrueCulpritV10 :: AgendaCard TheTrueCulpritV10
@@ -30,7 +30,8 @@ instance HasModifiersFor TheTrueCulpritV10 where
 instance HasAbilities TheTrueCulpritV10 where
   getAbilities (TheTrueCulpritV10 attrs) =
     guard (onSide A attrs)
-      *> [ restrictedAbility (proxied (locationIs Cards.basement) attrs) 1 Here actionAbility
+      *> [ skillTestAbility
+            $ restrictedAbility (proxied (locationIs Cards.basement) attrs) 1 Here actionAbility
          , restrictedAbility
             attrs
             2
@@ -45,17 +46,18 @@ instance RunMessage TheTrueCulpritV10 where
       UseThisAbility iid p@(ProxySource _ (isSource attrs -> True)) 1 -> do
         player <- getPlayer iid
         leadAssets <- select $ AssetWithTrait Lead <> assetControlledBy iid
+        sid <- getRandom
         pushAll
           $ [ chooseOne
                 player
                 [ Label
-                    "remove 1 clue from a Lead asset in the Basement to reduce the dicculty of this test by 2"
+                    "remove 1 clue from a Lead asset in the Basement to reduce the difficulty of this test by 2"
                     [ chooseOrRunOne
                         player
                         [ targetLabel
                           asset
                           [ RemoveClues (AbilitySource p 1) (toTarget asset) 1
-                          , skillTestModifier (AbilitySource p 1) SkillTestTarget (Difficulty (-2))
+                          , skillTestModifier sid (AbilitySource p 1) sid (Difficulty (-2))
                           ]
                         | asset <- leadAssets
                         ]
@@ -65,7 +67,7 @@ instance RunMessage TheTrueCulpritV10 where
             ]
           <> [ chooseOne
                 player
-                [ SkillLabel skill [beginSkillTest iid (AbilitySource p 1) iid skill (Fixed 4)]
+                [ SkillLabel skill [beginSkillTest sid iid (AbilitySource p 1) iid skill (Fixed 4)]
                 | skill <- [#willpower, #agility]
                 ]
              ]

@@ -22,7 +22,8 @@ instance HasAbilities DisquietingDreams where
 instance RunMessage DisquietingDreams where
   runMessage msg t@(DisquietingDreams attrs) = runQueueT $ case msg of
     Revelation iid (isSource attrs -> True) -> do
-      revelationSkillTest iid attrs #willpower (Fixed 5)
+      sid <- getRandom
+      revelationSkillTest sid iid attrs #willpower (Fixed 5)
       pure t
     FailedThisSkillTest iid (isSource attrs -> True) -> do
       placeInThreatArea attrs iid
@@ -32,6 +33,6 @@ instance RunMessage DisquietingDreams where
       pure t
     UseThisAbility iid (isSource attrs -> True) 2 -> do
       toDiscardBy iid (attrs.ability 2) attrs
-      search iid attrs iid [(FromTopOfDeck 10, DiscardRest)] WeaknessCard (DrawFound iid 10)
+      search iid attrs iid [(FromTopOfDeck 10, DiscardRest)] (basic WeaknessCard) (DrawFound iid 10)
       pure t
     _ -> DisquietingDreams <$> liftRunMessage msg attrs

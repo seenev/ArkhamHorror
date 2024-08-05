@@ -4,12 +4,13 @@ import Arkham.Ability
 import Arkham.Game.Helpers
 import Arkham.Helpers.Investigator (canHaveDamageHealed, canHaveHorrorHealed)
 import Arkham.Investigator.Cards qualified as Cards
-import Arkham.Investigator.Import.Lifted
+import Arkham.Investigator.Import.Lifted hiding (healDamage, healHorror)
 import Arkham.Matcher hiding (RevealChaosToken)
 
 newtype StellaClark = StellaClark InvestigatorAttrs
   deriving anyclass (IsInvestigator, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 stellaClark :: InvestigatorCard StellaClark
 stellaClark =

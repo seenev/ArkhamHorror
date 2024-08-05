@@ -11,7 +11,6 @@ import Arkham.GameValue
 import Arkham.Location.Cards qualified as Cards
 import Arkham.Location.Helpers
 import Arkham.Location.Runner
-import Arkham.Matcher
 import Arkham.SkillType
 
 newtype Montparnasse = Montparnasse LocationAttrs
@@ -28,7 +27,7 @@ instance HasAbilities Montparnasse where
       [ limitedAbility (PlayerLimit PerRound 1)
         $ restrictedAbility attrs 1 Here
         $ FastAbility
-        $ HandDiscardCost 1 AnyCard
+        $ HandDiscardCost 1 #any
       | locationRevealed attrs
       ]
 

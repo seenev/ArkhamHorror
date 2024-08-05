@@ -31,7 +31,9 @@ instance HasAbilities KnightOfTheOuterVoid where
   getAbilities (KnightOfTheOuterVoid attrs) =
     withBaseAbilities
       attrs
-      [ restrictedAbility attrs 1 OnSameLocation $ ActionAbility [Action.Parley] (ActionCost 1)
+      [ skillTestAbility
+          $ restrictedAbility attrs 1 OnSameLocation
+          $ ActionAbility [Action.Parley] (ActionCost 1)
       ]
 
 instance RunMessage KnightOfTheOuterVoid where
@@ -49,11 +51,12 @@ instance RunMessage KnightOfTheOuterVoid where
       pure e
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ Label "Use {willpower}" [parley iid (toAbilitySource attrs 1) attrs SkillWillpower (Fixed 4)]
-          , Label "Use {intellect}" [parley iid (toAbilitySource attrs 1) attrs SkillIntellect (Fixed 4)]
+          [ Label "Use {willpower}" [parley sid iid (toAbilitySource attrs 1) attrs SkillWillpower (Fixed 4)]
+          , Label "Use {intellect}" [parley sid iid (toAbilitySource attrs 1) attrs SkillIntellect (Fixed 4)]
           ]
       pure e
     PassedSkillTest iid _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ _ -> do

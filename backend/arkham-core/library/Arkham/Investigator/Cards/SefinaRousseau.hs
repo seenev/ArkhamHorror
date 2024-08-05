@@ -4,7 +4,6 @@ import Arkham.Prelude
 
 import Arkham.Ability
 import Arkham.Card
-import Arkham.Draw.Types
 import Arkham.Event.Cards qualified as Events
 import Arkham.Helpers
 import Arkham.Investigator.Cards qualified as Cards
@@ -13,6 +12,7 @@ import Arkham.Investigator.Runner
 newtype SefinaRousseau = SefinaRousseau InvestigatorAttrs
   deriving anyclass (IsInvestigator, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 sefinaRousseau :: InvestigatorCard SefinaRousseau
 sefinaRousseau =
@@ -45,7 +45,7 @@ instance RunMessage SefinaRousseau where
         $ Done "Do not use elder sign ability"
         : [targetLabel (toCardId card) [addToHand (toId i) card] | card <- attrs.cardsUnderneath]
       pure i
-    DrawCards iid cardDraw | iid == toId attrs && cardDraw.kind == StartingHandCardDraw -> do
+    DrawStartingHand iid | iid == toId attrs -> do
       player <- getPlayer iid
       (discard', hand, deck) <- drawOpeningHand attrs 13
       let

@@ -21,7 +21,7 @@ falseAwakening :: TreacheryCard FalseAwakening
 falseAwakening = treachery FalseAwakening Cards.falseAwakening
 
 instance HasAbilities FalseAwakening where
-  getAbilities (FalseAwakening a) = [mkAbility a 1 actionAbility]
+  getAbilities (FalseAwakening a) = [skillTestAbility $ mkAbility a 1 actionAbility]
 
 instance RunMessage FalseAwakening where
   runMessage msg t@(FalseAwakening attrs) = runQueueT $ case msg of
@@ -29,9 +29,10 @@ instance RunMessage FalseAwakening where
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       n <- perPlayer 1
+      sid <- getRandom
       chooseOne
         iid
-        [SkillLabel s [Msg.beginSkillTest iid (attrs.ability 1) iid s (Fixed $ 2 + n)] | s <- allSkills]
+        [SkillLabel s [Msg.beginSkillTest sid iid (attrs.ability 1) iid s (Fixed $ 2 + n)] | s <- allSkills]
       pure t
     PassedThisSkillTest _ (isAbilitySource attrs 1 -> True) -> do
       push $ RemoveFromGame (toTarget attrs)

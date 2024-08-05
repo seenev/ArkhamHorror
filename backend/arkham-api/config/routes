@@ -22,6 +22,7 @@
         / ApiV1ArkhamGamesR GET POST
         !/import ApiV1ArkhamGamesImportR POST
         !/fix ApiV1ArkhamGamesFixR POST
+        !/reload ApiV1ArkhamGamesReloadR GET
         /#ArkhamGameId ApiV1ArkhamGameP:
           / ApiV1ArkhamGameR GET PUT DELETE
           /raw ApiV1ArkhamGameRawR PUT
@@ -31,3 +32,4 @@
           /undo ApiV1ArkhamGameUndoR PUT
           /spectate ApiV1ArkhamGameSpectateR GET
           /export ApiV1ArkhamGameExportR GET
+          /reload ApiV1ArkhamGameReloadR GET

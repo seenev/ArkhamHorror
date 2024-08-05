@@ -13,6 +13,7 @@ import Arkham.Projection
 newtype KymaniJones = KymaniJones InvestigatorAttrs
   deriving anyclass (IsInvestigator, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 kymaniJones :: InvestigatorCard KymaniJones
 kymaniJones =
@@ -40,7 +41,7 @@ instance RunMessage KymaniJones where
       chooseOne iid [targetLabel enemy [EngageEnemy iid enemy Nothing False] | enemy <- enemies]
       pure i
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      skillTestModifier (attrs.ability 1) iid (AddSkillValue #intellect)
+      nextSkillTestModifier (attrs.ability 1) iid (AddSkillValue #intellect)
       createCardEffect Cards.kymaniJones Nothing (attrs.ability 1) iid
       pure i
     ResolveChaosToken _ ElderSign iid | attrs `is` iid -> do
@@ -51,6 +52,7 @@ instance RunMessage KymaniJones where
 newtype KymaniJonesEffect = KymaniJonesEffect EffectAttrs
   deriving anyclass (HasAbilities, IsEffect, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 kymaniJonesEffect :: EffectArgs -> KymaniJonesEffect
 kymaniJonesEffect = cardEffect KymaniJonesEffect Cards.kymaniJones
@@ -64,6 +66,6 @@ instance RunMessage KymaniJonesEffect where
           when (maybe False (n >=) mx) $ toDiscardBy iid attrs.source enemy
         _ -> pure ()
       pure e
-    SkillTestEnded -> disableReturn e
+    SkillTestEnded {} -> disableReturn e
     SkillTestEnds {} -> disableReturn e
     _ -> KymaniJonesEffect <$> liftRunMessage msg attrs

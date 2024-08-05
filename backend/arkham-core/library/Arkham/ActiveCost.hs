@@ -27,10 +27,15 @@ import Arkham.Cost.FieldCost
 import Arkham.Deck qualified as Deck
 import Arkham.Effect.Window
 import Arkham.EffectMetadata
+import Arkham.Enemy.Types (Field (EnemySealedChaosTokens))
+import {-# SOURCE #-} Arkham.Game (withoutCanModifiers)
 import Arkham.Game.Helpers
 import Arkham.GameValue
 import Arkham.Helpers
+import Arkham.Helpers.Calculation
+import Arkham.Helpers.Card (extendedCardMatch)
 import Arkham.Helpers.ChaosBag
+import Arkham.Helpers.Customization
 import Arkham.Helpers.Message
 import Arkham.Helpers.SkillTest (beginSkillTest, getSkillTestDifficulty, getSkillTestTarget)
 import Arkham.Id
@@ -54,7 +59,7 @@ import Arkham.Target
 import Arkham.Token qualified as Token
 import Arkham.Window (Window (..), mkAfter, mkWhen)
 import Arkham.Window qualified as Window
-import Control.Lens (non)
+import Control.Lens (non, transform)
 import GHC.Records
 
 activeCostActions :: ActiveCost -> [Action]
@@ -137,6 +142,7 @@ startAbilityPayment activeCost@ActiveCost {activeCostId} iid window abilityType 
     ForcedAbility _ -> pure ()
     SilentForcedAbility _ -> pure ()
     Haunted -> pure ()
+    ServitorAbility _ -> pure ()
     Cosmos -> pure ()
     ForcedAbilityWithCost {} -> push (PayCosts activeCostId)
     AbilityEffect {} -> push (PayCosts activeCostId)
@@ -144,6 +150,7 @@ startAbilityPayment activeCost@ActiveCost {activeCostId} iid window abilityType 
       pushAll $ PayCosts activeCostId : [PerformedActions iid [action] | action <- toList mAction]
     ForcedWhen _ aType -> startAbilityPayment activeCost iid window aType source provokeAttacksOfOpportunity
     CustomizationReaction {} -> push (PayCosts activeCostId)
+    ConstantReaction {} -> push (PayCosts activeCostId)
     ReactionAbility {} -> push (PayCosts activeCostId)
     ActionAbilityWithBefore actions' _ _ -> handleActions (Action.Activate : actions')
     ActionAbilityWithSkill actions' _ _ -> handleActions $ Action.Activate : actions'
@@ -162,7 +169,7 @@ nonAttackOfOpportunityActions = [#fight, #evade, #resign, #parley]
 
 payCost
   :: forall m
-   . (HasGame m, HasQueue Message m, HasCallStack)
+   . (HasGame m, HasQueue Message m, HasCallStack, MonadRandom m)
   => Message
   -> ActiveCost
   -> InvestigatorId
@@ -177,6 +184,22 @@ payCost msg c iid skipAdditionalCosts cost = do
   let pay = PayCost acId iid skipAdditionalCosts
   player <- getPlayer iid
   case cost of
+    ChooseExtendedCardCost mtch -> do
+      cards <- select mtch
+      push $ chooseOne player $ targetLabels cards $ only . pay . ChosenCardCost . toCardId
+      pure c
+    ChosenCardCost cid -> withPayment $ ChosenCardPayment cid
+    ChooseEnemyCost mtch -> do
+      enemies <- select mtch
+      push $ chooseOne player $ targetLabels enemies $ only . pay . ChosenEnemyCost
+      pure c
+    ChosenEnemyCost eid -> withPayment $ ChosenEnemyPayment eid
+    CostIfCustomization customization cost1 cost2 -> do
+      case source of
+        (CardSource (PlayerCard pc)) ->
+          payCost msg c iid skipAdditionalCosts
+            $ if pc `hasCustomization` customization then cost1 else cost2
+        _ -> error "Not implemented"
     CostIfEnemy mtchr cost1 cost2 -> do
       hasEnemy <- selectAny mtchr
       payCost msg c iid skipAdditionalCosts $ if hasEnemy then cost1 else cost2
@@ -225,7 +248,8 @@ payCost msg c iid skipAdditionalCosts cost = do
       pushAll $ replicate n $ drawEncounterCard iid source
       pure c
     SkillTestCost stsource sType n -> do
-      push $ beginSkillTest iid stsource ScenarioTarget sType n
+      sid <- getRandom
+      push $ beginSkillTest sid iid stsource ScenarioTarget sType n
       pure c
     AsIfAtLocationCost _ _ -> error "Can not be paid because withModifiers only HasGame, but can't adjust the queue"
     ShuffleAttachedCardIntoDeckCost target cardMatcher -> do
@@ -247,7 +271,7 @@ payCost msg c iid skipAdditionalCosts cost = do
     ResolveEachHauntedAbility lid -> do
       hauntedAbilities <- select $ HauntedAbility <> AbilityOnLocation (LocationWithId lid)
       pushIfAny hauntedAbilities
-        $ chooseOneAtATime player [AbilityLabel iid ab [] [] | ab <- hauntedAbilities]
+        $ chooseOneAtATime player [AbilityLabel iid ab [] [] [] | ab <- hauntedAbilities]
       -- No need to record payment... yet
       pure c
     OrCost xs -> do
@@ -263,23 +287,27 @@ payCost msg c iid skipAdditionalCosts cost = do
     Costs xs -> do
       pushAll $ map pay xs
       pure c
-    UpTo 0 _ -> pure c
-    UpTo n cost' -> do
-      canAfford <- andM $ map (\a -> getCanAffordCost iid source [a] [] cost') actions
-      maxUpTo <- case cost' of
-        ResourceCost resources -> do
-          availableResources <- getSpendableResources iid
-          pure $ min n (availableResources `div` resources)
-        SealCost matcher -> selectCount matcher
-        _ -> pure n
-      name <- fieldMap InvestigatorName toTitle iid
-      pushWhen canAfford
-        $ Ask player
-        $ ChoosePaymentAmounts
-          ("Pay " <> displayCostType cost)
-          Nothing
-          [PaymentAmountChoice iid 0 maxUpTo name $ pay cost']
-      pure c
+    UpTo calc cost' -> do
+      n <- calculate calc
+      if n == 0
+        then pure c
+        else do
+          canAfford <- andM $ map (\a -> getCanAffordCost iid source [a] [] cost') actions
+          maxUpTo <- case cost' of
+            ResourceCost resources -> do
+              availableResources <- getSpendableResources iid
+              pure $ min n (availableResources `div` resources)
+            SealCost matcher -> selectCount matcher
+            _ -> pure n
+          name <- fieldMap InvestigatorName toTitle iid
+          choiceId <- getRandom
+          pushWhen canAfford
+            $ Ask player
+            $ ChoosePaymentAmounts
+              ("Pay " <> displayCostType cost)
+              Nothing
+              [PaymentAmountChoice choiceId iid 0 maxUpTo name $ pay cost']
+          pure c
     DiscardTopOfDeckCost n -> do
       cards <- fieldMap InvestigatorDeck (map PlayerCard . take n . unDeck) iid
       push $ DiscardTopOfDeck iid n source Nothing
@@ -325,18 +353,42 @@ payCost msg c iid skipAdditionalCosts cost = do
       push $ SealChaosToken token
       pure $ c & costPaymentsL <>~ SealChaosTokenPayment token & costSealedChaosTokensL %~ (token :)
     ReleaseChaosTokensCost n matcher -> do
-      let
-        handleSource = \case
-          AbilitySource t _ -> handleSource t
-          AssetSource aid -> do
-            tokens <- filterM (<=~> IncludeSealed matcher) =<< field AssetSealedChaosTokens aid
-            pushAll
-              [ FocusChaosTokens tokens
-              , chooseN player n $ targetLabels tokens $ only . pay . ReleaseChaosTokenCost
-              , UnfocusChaosTokens
-              ]
-          _ -> error "Unhandled source for releasing tokens cost"
-      handleSource source
+      case matcher of
+        SealedOnAsset assetMatcher tokenMatcher' -> do
+          mAsset <- selectOne assetMatcher
+          case mAsset of
+            Nothing -> error "Unhandled asset"
+            Just aid -> do
+              tokens <- filterM (<=~> IncludeSealed tokenMatcher') =<< field AssetSealedChaosTokens aid
+              pushAll
+                [ FocusChaosTokens tokens
+                , chooseN player n $ targetLabels tokens $ only . pay . ReleaseChaosTokenCost
+                , UnfocusChaosTokens
+                ]
+        SealedOnEnemy enemyMatcher tokenMatcher' -> do
+          mEnemy <- selectOne enemyMatcher
+          case mEnemy of
+            Nothing -> error "Unhandled enemy"
+            Just aid -> do
+              tokens <- filterM (<=~> IncludeSealed tokenMatcher') =<< field EnemySealedChaosTokens aid
+              pushAll
+                [ FocusChaosTokens tokens
+                , chooseN player n $ targetLabels tokens $ only . pay . ReleaseChaosTokenCost
+                , UnfocusChaosTokens
+                ]
+        _ -> do
+          let
+            handleSource = \case
+              AbilitySource t _ -> handleSource t
+              AssetSource aid -> do
+                tokens <- filterM (<=~> IncludeSealed matcher) =<< field AssetSealedChaosTokens aid
+                pushAll
+                  [ FocusChaosTokens tokens
+                  , chooseN player n $ targetLabels tokens $ only . pay . ReleaseChaosTokenCost
+                  , UnfocusChaosTokens
+                  ]
+              _ -> error "Unhandled source for releasing tokens cost"
+          handleSource source
       pure c
     ReleaseChaosTokenCost t -> do
       push $ UnsealChaosToken t
@@ -370,6 +422,18 @@ payCost msg c iid skipAdditionalCosts cost = do
     DiscardCardCost card -> do
       push $ toMessage $ discardCard iid c.source card
       withPayment $ DiscardCardPayment [card]
+    DiscardUnderneathCardCost assetId cardMatcher -> do
+      cards <- filterM (<=~> cardMatcher) =<< field AssetCardsUnderneath assetId
+      let
+        discardIt = \case
+          PlayerCard pc -> [AddToDiscard owner pc | owner <- maybeToList (pcOwner pc)]
+          EncounterCard ec -> [AddToEncounterDiscard ec]
+          _ -> error "Unhandled"
+      pushAll
+        [ FocusCards cards
+        , chooseOrRunOne player [targetLabel card (UnfocusCards : discardIt card) | card <- cards]
+        ]
+      pure c
     DiscardDrawnCardCost -> do
       let
         getDrawnCard [] = error "can not find drawn card in windows"
@@ -407,7 +471,7 @@ payCost msg c iid skipAdditionalCosts cost = do
         push $ assignHorror iid source x
         withPayment $ HorrorPayment x
       AssetTarget aid -> do
-        push $ AssetDamage aid source 0 x
+        push $ DealAssetDamage aid source 0 x
         withPayment $ HorrorPayment x
       _ -> error "can't target for horror cost"
     HorrorCostX source' -> do
@@ -423,12 +487,13 @@ payCost msg c iid skipAdditionalCosts cost = do
       let minimumHorror = max 1 (requiredResources - availableResources)
       sanity <- field InvestigatorRemainingSanity iid
       name <- fieldMap InvestigatorName toTitle iid
+      choiceId <- getRandom
       push
         $ Ask player
         $ ChoosePaymentAmounts
           "Pay X Horror"
           Nothing
-          [ PaymentAmountChoice iid minimumHorror sanity name
+          [ PaymentAmountChoice choiceId iid minimumHorror sanity name
               $ pay (HorrorCost source' (InvestigatorTarget iid) 1)
           ]
       pure c
@@ -440,7 +505,7 @@ payCost msg c iid skipAdditionalCosts cost = do
         push $ assignDamage iid source x
         withPayment $ DamagePayment x
       AssetTarget aid -> do
-        push $ AssetDamage aid source x 0
+        push $ DealAssetDamage aid source x 0
         withPayment $ DamagePayment x
       _ -> error "can't target for damage cost"
     DirectDamageCost _ investigatorMatcher x -> do
@@ -467,12 +532,13 @@ payCost msg c iid skipAdditionalCosts cost = do
         _ -> do
           resources <- getSpendableResources iid
           name <- fieldMap InvestigatorName toTitle iid
+          choiceId <- getRandom
           push
             $ Ask player
             $ ChoosePaymentAmounts
               "Pay X resources"
               (Just $ AmountOneOf ns)
-              [PaymentAmountChoice iid 0 resources name (PayCost acId iid True (ResourceCost 1))]
+              [PaymentAmountChoice choiceId iid 0 resources name (PayCost acId iid True (ResourceCost 1))]
       pure c
     MaybeFieldResourceCost (MaybeFieldCost mtchr fld) -> do
       ns <- nub . catMaybes <$> selectFields fld mtchr
@@ -482,12 +548,17 @@ payCost msg c iid skipAdditionalCosts cost = do
         _ -> do
           resources <- getSpendableResources iid
           name <- fieldMap InvestigatorName toTitle iid
+          choiceId <- getRandom
           push
             $ Ask player
             $ ChoosePaymentAmounts
               "Pay X resources"
               (Just $ AmountOneOf ns)
-              [PaymentAmountChoice iid 0 resources name (PayCost acId iid True (ResourceCost 1))]
+              [PaymentAmountChoice choiceId iid 0 resources name (PayCost acId iid True (ResourceCost 1))]
+      pure c
+    CalculatedResourceCost calc -> do
+      n <- calculate calc
+      push $ PayCost acId iid True (ResourceCost n)
       pure c
     ScenarioResourceCost n -> do
       push $ RemoveTokens c.source ScenarioTarget Token.Resource n
@@ -495,10 +566,24 @@ payCost msg c iid skipAdditionalCosts cost = do
     AddCurseTokenCost n -> do
       x <- min n <$> getRemainingCurseTokens
       pushAll $ replicate x $ AddChaosToken CurseToken
+      withPayment $ AddCurseTokenPayment x
+    AddCurseTokensCost n m -> do
+      maxTokens <- min m <$> getRemainingCurseTokens
+      name <- fieldMap InvestigatorName toTitle iid
+      choiceId <- getRandom
+
+      push
+        $ Ask player
+        $ ChoosePaymentAmounts
+          ("Pay " <> displayCostType cost)
+          Nothing
+          [ PaymentAmountChoice choiceId iid n maxTokens name
+              $ pay (AddCurseTokenCost 1)
+          ]
       pure c
     AddCurseTokensEqualToShroudCost -> do
       mloc <- field InvestigatorLocation iid
-      shroud <- maybe (pure 0) (field LocationShroud) mloc
+      shroud <- maybe (pure 0) (fieldJust LocationShroud) mloc
       x <- min shroud <$> getRemainingCurseTokens
       pushAll $ replicate x $ AddChaosToken CurseToken
       pure c
@@ -561,23 +646,27 @@ payCost msg c iid skipAdditionalCosts cost = do
                 _
                   | sum (map (\(_, _, z) -> z) iidsWithResources) == x && null resourcesFromAssets ->
                       pushAll $ map (\(iid', _, z) -> SpendResources iid' z) iidsWithResources
-                _ ->
+                _ -> do
+                  rs1 <- getRandoms
+                  rs2 <- getRandoms
                   push
                     $ Ask player
                     $ ChoosePaymentAmounts ("Pay " <> tshow x <> " resources") (Just $ TotalAmountTarget x)
                     $ map
-                      (\(iid', name, resources) -> PaymentAmountChoice iid' 0 resources name (SpendResources iid' 1))
-                      iidsWithResources
+                      ( \(choiceId, (iid', name, resources)) -> PaymentAmountChoice choiceId iid' 0 resources name (SpendResources iid' 1)
+                      )
+                      (zip rs1 iidsWithResources)
                     <> map
-                      ( \(iid', assetId, uType, name, total) ->
+                      ( \(choiceId, (iid', assetId, uType, name, total)) ->
                           PaymentAmountChoice
+                            choiceId
                             iid'
                             0
                             total
                             (tshow uType <> " from " <> name)
                             (SpendUses source (toTarget assetId) uType 1)
                       )
-                      resourcesFromAssets
+                      (zip rs2 resourcesFromAssets)
       withPayment $ ResourcePayment x
     AdditionalActionsCost -> do
       actionRemainingCount <- field InvestigatorRemainingActions iid
@@ -587,12 +676,45 @@ payCost msg c iid skipAdditionalCosts cost = do
           player
           [ Label
               "Spend 1 additional action"
-              [ pay (ActionCost 1)
+              [ pay AdditionalActionCost
               , PaidAbilityCost iid Nothing AdditionalActionPayment
               , msg
               ]
           , Label ("Done spending additional actions (" <> tshow currentlyPaid <> " spent so far)") []
           ]
+      pure c
+    AdditionalActionsCostThatReducesResourceCostBy n nested -> do
+      actionRemainingCount <- field InvestigatorRemainingActions iid
+      let currentlyPaid = countAdditionalActionPayments c.payments
+      case c.target of
+        ForCard _ _ -> do
+          let
+            go = \case
+              ResourceCost x -> ResourceCost (max 0 (x - n))
+              x -> x
+            reduceResourceCost = transform go
+            lockedActions = totalActionCost nested
+          canAffordNested <-
+            withAlteredGame withoutCanModifiers $ getCanAffordCost iid source actions c.windows nested
+          if actionRemainingCount > lockedActions
+            then
+              push
+                $ chooseOrRunOne player
+                $ Label
+                  "Spend 1 additional action"
+                  [ pay AdditionalActionCost
+                  , PaidAbilityCost iid Nothing AdditionalActionPayment
+                  , PayCost acId iid skipAdditionalCosts
+                      $ AdditionalActionsCostThatReducesResourceCostBy n
+                      $ reduceResourceCost nested
+                  ]
+                : [ Label
+                    ("Done spending additional actions (" <> tshow currentlyPaid <> " spent so far)")
+                    [PayCost acId iid skipAdditionalCosts nested]
+                  | canAffordNested
+                  ]
+            else push $ PayCost acId iid skipAdditionalCosts nested
+        _ -> error "Unhandled active cost target for AdditionalActionsCostThatReducesResourceCostBy"
       pure c
     ActionCost x -> do
       costModifier' <- if skipAdditionalCosts then pure 0 else getActionCostModifier c
@@ -600,14 +722,26 @@ payCost msg c iid skipAdditionalCosts cost = do
         modifiedActionCost = max 0 (x + costModifier')
         actions' = case c.target of
           ForAbility a -> a.actions
+          ForCard IsPlayAction c' -> #play : c'.actions
+          ForCard NotPlayAction c' -> c'.actions
           _ -> []
         source' = case activeCostTarget c of
           ForAbility a -> toSource a
           _ -> source
       push $ SpendActions iid source' actions' modifiedActionCost
       withPayment $ ActionPayment x
+    AdditionalActionCost -> do
+      let
+        actions' = case c.target of
+          ForAbility a -> a.actions
+          _ -> []
+        source' = case activeCostTarget c of
+          ForAbility a -> toSource a
+          _ -> source
+      push $ SpendActions iid source' actions' 1
+      withPayment AdditionalActionPayment
     UseCost assetMatcher uType n -> do
-      assets <- select $ assetMatcher <> AssetWithTokens (atLeast n) uType
+      assets <- select $ assetMatcher <> AssetWithSpendableUses (atLeast n) uType
       push
         $ chooseOrRunOne player [targetLabel aid [SpendUses source (AssetTarget aid) uType n] | aid <- assets]
       withPayment $ UsesPayment n
@@ -634,13 +768,14 @@ payCost msg c iid skipAdditionalCosts cost = do
       let maxUses = min uses m
 
       name <- fieldMap InvestigatorName toTitle iid
+      choiceId <- getRandom
 
       push
         $ Ask player
         $ ChoosePaymentAmounts
           ("Pay " <> displayCostType cost)
           Nothing
-          [ PaymentAmountChoice iid n maxUses name
+          [ PaymentAmountChoice choiceId iid n maxUses name
               $ pay (UseCost assetMatcher uType 1)
           ]
       pure c
@@ -706,13 +841,14 @@ payCost msg c iid skipAdditionalCosts cost = do
             then do
               for_ xs \(iid', _, cCount) -> push (PayCost acId iid' True (ClueCost (Static cCount)))
             else do
+              rs <- getRandoms
               let
                 paymentOptions =
                   map
-                    ( \(iid', name, clues) ->
-                        PaymentAmountChoice iid' 0 clues name $ PayCost acId iid' True (ClueCost (Static 1))
+                    ( \(choiceId, (iid', name, clues)) ->
+                        PaymentAmountChoice choiceId iid' 0 clues name $ PayCost acId iid' True (ClueCost (Static 1))
                     )
-                    iidsWithClues
+                    (zip rs iidsWithClues)
               lead <- getLeadPlayer
               push
                 $ Ask lead
@@ -720,7 +856,7 @@ payCost msg c iid skipAdditionalCosts cost = do
       pure c
     -- push (SpendClues totalClues iids)
     -- withPayment $ CluePayment totalClues
-    HandDiscardCost x cardMatcher -> do
+    HandDiscardCost x extendedCardMatcher -> do
       handCards <- fieldMap InvestigatorHand (mapMaybe (preview _PlayerCard)) iid
       let
         notCostCard = case activeCostTarget c of
@@ -728,7 +864,10 @@ payCost msg c iid skipAdditionalCosts cost = do
           ForAdditionalCost {} -> const True
           ForCard _ card' -> (/= card')
           ForCost card' -> (/= card')
-        cards = filter (and . sequence [(`cardMatch` cardMatcher), notCostCard . PlayerCard]) handCards
+      cards <-
+        filterM
+          (andM . sequence [(`extendedCardMatch` extendedCardMatcher), pure . notCostCard . PlayerCard])
+          handCards
       push
         $ chooseN
           player
@@ -739,7 +878,7 @@ payCost msg c iid skipAdditionalCosts cost = do
           | card <- cards
           ]
       pure c
-    HandDiscardAnyNumberCost cardMatcher -> do
+    HandDiscardAnyNumberCost extendedCardMatcher -> do
       handCards <- fieldMap InvestigatorHand (mapMaybe (preview _PlayerCard)) iid
       let
         notCostCard = case activeCostTarget c of
@@ -747,19 +886,23 @@ payCost msg c iid skipAdditionalCosts cost = do
           ForAdditionalCost {} -> const True
           ForCard _ card' -> (/= card')
           ForCost card' -> (/= card')
-        cards = filter (and . sequence [(`cardMatch` cardMatcher), notCostCard . PlayerCard]) handCards
+      cards <-
+        filterM
+          (andM . sequence [(`extendedCardMatch` extendedCardMatcher), pure . notCostCard . PlayerCard])
+          handCards
       name <- fieldMap InvestigatorName toTitle iid
+      choiceId <- getRandom
       push
         $ Ask player
         $ ChoosePaymentAmounts
           "Number of cards to pay"
           Nothing
-          [ PaymentAmountChoice iid 1 (length cards) name
-              $ pay (HandDiscardCost 1 cardMatcher)
+          [ PaymentAmountChoice choiceId iid 1 (length cards) name
+              $ pay (HandDiscardCost 1 extendedCardMatcher)
           ]
       pure c
     ReturnMatchingAssetToHandCost assetMatcher -> do
-      assets <- select assetMatcher
+      assets <- select $ AssetCanLeavePlayByNormalMeans <> assetMatcher
       push $ chooseOne player $ targetLabels assets $ only . pay . ReturnAssetToHandCost
       pure c
     ReturnAssetToHandCost assetId -> do
@@ -880,7 +1023,13 @@ instance RunMessage ActiveCost where
             actions = [Action.Play | isPlayAction == IsPlayAction] <> cardDef.actions
             mEffect =
               guard cardDef.beforeEffect
-                *> [createCardEffect cardDef (Just $ EffectCost acId) iid (toCardId card), CheckAdditionalCosts acId]
+                *> [ createCardEffect
+                      cardDef
+                      (Just $ EffectCost acId)
+                      (BothSource (InvestigatorSource iid) (CardSource card))
+                      (toCardId card)
+                   , CheckAdditionalCosts acId
+                   ]
           batchId <- getRandom
           beforeWindowMsg <- checkWindows $ map (mkWhen . Window.PerformAction iid) actions
           wouldPayWindowMsg <- checkWindows [mkWhen $ Window.WouldPayCardCost iid acId batchId card]
@@ -905,7 +1054,7 @@ instance RunMessage ActiveCost where
                ]
           pure c
         ForAbility a@Ability {..} -> do
-          modifiers' <- getModifiers iid
+          modifiers' <- getCombinedModifiers [toTarget iid, AbilityTarget iid a]
           let
             modifiersPreventAttackOfOpportunity =
               any ((`elem` modifiers') . ActionDoesNotCauseAttacksOfOpportunity) a.actions
@@ -953,9 +1102,21 @@ instance RunMessage ActiveCost where
         then payCost msg c iid skipAdditionalCosts cost
         else do
           case c.target of
-            ForAdditionalCost batchId -> push $ IgnoreBatch batchId
-            _ -> error $ "Can't afford cost: " <> show cost
-          pure c
+            ForAdditionalCost batchId -> do
+              push $ IgnoreBatch batchId
+              pure c
+            _ -> do
+              isParallelAgnes <- iid <=~> InvestigatorIs "90017"
+              if isParallelAgnes
+                then do
+                  let cost' = decreaseResourceCost cost 2
+                  canStillAfford' <-
+                    withModifiers iid (toModifiers source [ExtraResources extraResources])
+                      $ getCanAffordCost iid source actions c.windows cost'
+                  if canStillAfford'
+                    then payCost msg c iid skipAdditionalCosts cost'
+                    else error $ "Can't afford cost: " <> show cost'
+                else error $ "Can't afford cost: " <> show cost
     SetCost acId cost | acId == c.id -> do
       pure $ c {activeCostCosts = cost}
     PaidCost acId _ _ payment | acId == c.id -> do

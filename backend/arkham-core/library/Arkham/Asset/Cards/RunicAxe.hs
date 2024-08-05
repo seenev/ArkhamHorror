@@ -20,6 +20,7 @@ import Arkham.Modifier
 import Arkham.Movement
 import Arkham.Projection
 import Arkham.Trait (Trait (Relic))
+import Control.Lens (non)
 
 data Inscription = Accuracy | Power | Glory | Elders | Hunt | Fury
   deriving stock (Show, Eq, Generic, Enum, Bounded)
@@ -30,7 +31,7 @@ newtype Metadata = Metadata {inscriptions :: [Inscription]}
   deriving anyclass (ToJSON, FromJSON)
 
 newtype RunicAxe = RunicAxe (AssetAttrs `With` Metadata)
-  deriving anyclass (IsAsset)
+  deriving anyclass IsAsset
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 runicAxe :: AssetCard RunicAxe
@@ -85,14 +86,16 @@ instance RunMessage RunicAxe where
   runMessage msg a@(RunicAxe (With attrs meta)) = runQueueT $ case msg of
     Do BeginRound -> do
       let replenish = if attrs `hasCustomization` Saga then 2 else 1
-      pure . RunicAxe . (`with` meta) $ attrs & tokensL . ix Charge %~ \n -> if n < 4 then n + replenish else n
+      pure . RunicAxe . (`with` meta) $ attrs & tokensL . at Charge . non 0 %~ \n -> if n < 4 then n + replenish else n
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      skillTestModifier (attrs.ability 1) iid (SkillModifier #combat 1)
+      sid <- getRandom
+      skillTestModifier sid (attrs.ability 1) iid (SkillModifier #combat 1)
       if attrs `hasCustomization` InscriptionOfTheHunt && attrs.use Charge > 0
-        then chooseFightEnemyMatch iid (attrs.ability 1) $ CanFightEnemyWithOverride (override attrs iid)
-        else chooseFightEnemy iid (attrs.ability 1)
+        then
+          chooseFightEnemyMatch sid iid (attrs.ability 1) $ CanFightEnemyWithOverride (override attrs iid)
+        else chooseFightEnemy sid iid (attrs.ability 1)
       pure a
-    ChoseEnemy iid (isAbilitySource attrs 1 -> True) eid -> do
+    ChoseEnemy _sid iid (isAbilitySource attrs 1 -> True) eid -> do
       when (attrs.use Charge > 0) do
         needsHunt <-
           not
@@ -110,7 +113,7 @@ instance RunMessage RunicAxe where
                 | i <- choices
                 ]
       pure a
-    Do msg'@(ChoseEnemy iid (isAbilitySource attrs 1 -> True) _) -> do
+    Do msg'@(ChoseEnemy _sid iid (isAbilitySource attrs 1 -> True) _) -> do
       choices <- availableInscriptions iid attrs meta
       chooseOne iid
         $ Label "Do not use additional imbue from Saga " []
@@ -118,12 +121,12 @@ instance RunMessage RunicAxe where
           | i <- choices
           ]
       pure a
-    DoStep n (ChoseEnemy iid (isAbilitySource attrs 1 -> True) eid) -> do
+    DoStep n (ChoseEnemy sid iid (isAbilitySource attrs 1 -> True) eid) -> do
       let inscription = toEnum n
       send $ "Imbued Runic Axe with " <> tshow inscription
       case inscription of
-        Accuracy -> skillTestModifier (attrs.ability 1) iid (SkillModifier #combat 2)
-        Power -> skillTestModifier (attrs.ability 1) iid (DamageDealt 1)
+        Accuracy -> skillTestModifier sid (attrs.ability 1) iid (SkillModifier #combat 2)
+        Power -> skillTestModifier sid (attrs.ability 1) iid (DamageDealt 1)
         Glory -> pure ()
         Elders -> pure ()
         Hunt -> do
@@ -139,10 +142,10 @@ instance RunMessage RunicAxe where
     PassedThisSkillTestBy iid (isAbilitySource attrs 1 -> True) n -> do
       withLocationOf iid \loc -> do
         let elderCount = count (== Elders) (inscriptions meta)
-        shroud <- field LocationShroud loc
-        pushWhen (elderCount > 0 && n >= shroud)
-          $ DiscoverClues iid
-          $ discover loc (attrs.ability 1) elderCount
+        field LocationShroud loc >>= traverse_ \shroud -> do
+          pushWhen (elderCount > 0 && n >= shroud)
+            $ DiscoverClues iid
+            $ discover loc (attrs.ability 1) elderCount
 
       let furyCount = count (== Fury) (inscriptions meta)
       when (furyCount > 0) do

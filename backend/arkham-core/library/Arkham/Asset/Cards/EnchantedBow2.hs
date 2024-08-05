@@ -10,7 +10,7 @@ import Arkham.Matcher
 import Arkham.Modifier
 
 newtype EnchantedBow2 = EnchantedBow2 AssetAttrs
-  deriving anyclass (IsAsset)
+  deriving anyclass IsAsset
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 enchantedBow2 :: AssetCard EnchantedBow2
@@ -43,7 +43,7 @@ instance HasAbilities EnchantedBow2 where
                     <> EnemyWithoutModifier CannotBeAttacked
                     <> EnemyAt (ConnectedFrom (LocationWithInvestigator $ HasMatchingAsset (be a)))
                 )
-                (UpTo 1 (assetUseCost a Charge 1))
+                (UpTo (Fixed 1) (assetUseCost a Charge 1))
             )
             (assetUseCost a Charge 1)
         )
@@ -63,8 +63,9 @@ instance RunMessage EnchantedBow2 where
               $ ThisEnemy
               $ NonEliteEnemy
               <> EnemyAt (ConnectedFrom (locationWithInvestigator iid))
-      let fight = if n > 0 then mkChooseFightMatch iid source override else mkChooseFight iid source
-      skillTestModifiers source iid
+      sid <- getRandom
+      let fight = if n > 0 then mkChooseFightMatch sid iid source override else mkChooseFight sid iid source
+      skillTestModifiers sid source iid
         $ [AnySkillValue 1, DamageDealt 1]
         <> (guard (n > 0) *> [IgnoreAloof, IgnoreRetaliate])
 

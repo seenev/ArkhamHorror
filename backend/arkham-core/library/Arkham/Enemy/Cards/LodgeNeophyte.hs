@@ -36,7 +36,8 @@ instance HasAbilities LodgeNeophyte where
           $ EnemySpawns Timing.After Anywhere
           $ EnemyWithId
           $ toId a
-      , restrictedAbility a 2 OnSameLocation
+      , skillTestAbility
+          $ restrictedAbility a 2 OnSameLocation
           $ ActionAbility [Action.Parley]
           $ ActionCost 1
       ]
@@ -46,7 +47,8 @@ instance RunMessage LodgeNeophyte where
     UseCardAbility _ source 1 _ _ | isSource attrs source -> do
       e <$ push (PlaceDoom (toAbilitySource attrs 1) (toTarget attrs) 1)
     UseCardAbility iid source 2 _ _ | isSource attrs source -> do
-      push $ parley iid attrs attrs SkillWillpower (Fixed 2)
+      sid <- getRandom
+      push $ parley sid iid attrs attrs SkillWillpower (Fixed 2)
       pure e
     PassedSkillTest _ _ (isSource attrs -> True) SkillTestInitiatorTarget {} _ _ ->
       do

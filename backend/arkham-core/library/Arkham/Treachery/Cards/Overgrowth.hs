@@ -10,7 +10,7 @@ import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Runner
 
 newtype Overgrowth = Overgrowth TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 overgrowth :: TreacheryCard Overgrowth
@@ -23,7 +23,7 @@ instance HasModifiersFor Overgrowth where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities Overgrowth where
-  getAbilities (Overgrowth a) = [restrictedAbility a 1 OnSameLocation actionAbility]
+  getAbilities (Overgrowth a) = [skillTestAbility $ restrictedAbility a 1 OnSameLocation actionAbility]
 
 instance RunMessage Overgrowth where
   runMessage msg t@(Overgrowth attrs) = case msg of
@@ -34,7 +34,8 @@ instance RunMessage Overgrowth where
         pushWhen withoutOvergrowth $ attachTreachery attrs lid
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      let chooseSkillTest sType = SkillLabel sType [beginSkillTest iid (attrs.ability 1) attrs sType (Fixed 4)]
+      sid <- getRandom
+      let chooseSkillTest sType = SkillLabel sType [beginSkillTest sid iid (attrs.ability 1) attrs sType (Fixed 4)]
       player <- getPlayer iid
       push $ chooseOne player $ map chooseSkillTest [#combat, #intellect]
       pure t

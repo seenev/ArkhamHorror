@@ -24,7 +24,8 @@ instance HasAbilities NathanWickMasterOfInitiation where
   getAbilities (NathanWickMasterOfInitiation attrs) =
     withBaseAbilities
       attrs
-      [ restrictedAbility attrs 1 OnSameLocation
+      [ skillTestAbility
+          $ restrictedAbility attrs 1 OnSameLocation
           $ ActionAbility [Action.Parley]
           $ ActionCost 1
       ]
@@ -32,13 +33,8 @@ instance HasAbilities NathanWickMasterOfInitiation where
 instance RunMessage NathanWickMasterOfInitiation where
   runMessage msg e@(NathanWickMasterOfInitiation attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push
-        $ parley
-          iid
-          (toAbilitySource attrs 1)
-          iid
-          SkillWillpower
-          (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid (toAbilitySource attrs 1) iid SkillWillpower (Fixed 3)
       pure e
     PassedSkillTest _ _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ _ -> do
       n <- perPlayer 1

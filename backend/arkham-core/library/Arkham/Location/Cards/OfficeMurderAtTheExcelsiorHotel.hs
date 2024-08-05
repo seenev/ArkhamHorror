@@ -20,7 +20,7 @@ import Arkham.Name
 import Arkham.Projection
 
 newtype OfficeMurderAtTheExcelsiorHotel = OfficeMurderAtTheExcelsiorHotel LocationAttrs
-  deriving anyclass (IsLocation)
+  deriving anyclass IsLocation
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 officeMurderAtTheExcelsiorHotel :: LocationCard OfficeMurderAtTheExcelsiorHotel
@@ -38,8 +38,9 @@ instance HasAbilities OfficeMurderAtTheExcelsiorHotel where
       then
         withBaseAbilities
           attrs
-          [ withTooltip
-              "{action}: Test {agility} (3) to attempt to pick the lock. If you succeed, reveal Office and immediately move to it."
+          [ skillTestAbility
+              $ withTooltip
+                "{action}: Test {agility} (3) to attempt to pick the lock. If you succeed, reveal Office and immediately move to it."
               $ restrictedAbility
                 (proxied (LocationMatcherSource "Basement") attrs)
                 1
@@ -49,15 +50,17 @@ instance HasAbilities OfficeMurderAtTheExcelsiorHotel where
       else
         withRevealedAbilities
           attrs
-          [ withTooltip
-              "{action}: Test {intellect} (0). For each point you succeed by, you may move 1 clue controlled by an investigator in the Office to Manager's key (if it is in play)."
+          [ skillTestAbility
+              $ withTooltip
+                "{action}: Test {intellect} (0). For each point you succeed by, you may move 1 clue controlled by an investigator in the Office to Manager's key (if it is in play)."
               $ restrictedAbility attrs 1 Here actionAbility
           ]
 
 instance RunMessage OfficeMurderAtTheExcelsiorHotel where
   runMessage msg l@(OfficeMurderAtTheExcelsiorHotel attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ beginSkillTest iid (toAbilitySource attrs 1) iid #intellect (Fixed 0)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource attrs 1) iid #intellect (Fixed 0)
       pure l
     PassedThisSkillTestBy iid (isAbilitySource attrs 1 -> True) n -> do
       player <- getPlayer iid
@@ -66,7 +69,7 @@ instance RunMessage OfficeMurderAtTheExcelsiorHotel where
 
       unless (null iids || isNothing managersKey) $ do
         named <- traverse (\(iid', x) -> (,x) <$> field InvestigatorName iid') iids
-        push
+        pushM
           $ chooseAmounts
             player
             "number of clues to move to Alien Device"
@@ -88,7 +91,8 @@ instance RunMessage OfficeMurderAtTheExcelsiorHotel where
           ]
       pure l
     UseThisAbility iid p@(ProxySource _ (isSource attrs -> True)) 1 -> do
-      push $ beginSkillTest iid (toAbilitySource p 1) iid #agility (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource p 1) iid #agility (Fixed 3)
       pure l
     PassedThisSkillTest iid source@(AbilitySource (ProxySource _ (isSource attrs -> True)) 1) -> do
       pushAll [Msg.RevealLocation Nothing (toId attrs), Move $ move source iid (toId attrs)]

@@ -19,16 +19,17 @@ medicalTexts2 :: AssetCard MedicalTexts2
 medicalTexts2 = asset MedicalTexts2 Cards.medicalTexts2
 
 instance HasAbilities MedicalTexts2 where
-  getAbilities (MedicalTexts2 a) = [restrictedAbility a 1 ControlsThis #action]
+  getAbilities (MedicalTexts2 a) = [skillTestAbility $ restrictedAbility a 1 ControlsThis #action]
 
 instance RunMessage MedicalTexts2 where
   runMessage msg a@(MedicalTexts2 attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       let controllerId = getController attrs
       investigators <- select $ affectsOthers $ colocatedWith controllerId
+      sid <- getRandom
       chooseOne iid
         $ targetLabels investigators
-        $ \iid' -> only $ Msg.beginSkillTest iid (attrs.ability 1) iid' #intellect (Fixed 2)
+        $ \iid' -> only $ Msg.beginSkillTest sid iid (attrs.ability 1) iid' #intellect (Fixed 2)
       pure a
     PassedThisSkillTestBy who (isAbilitySource attrs 1 -> True) n -> do
       getSkillTestTarget >>= \case

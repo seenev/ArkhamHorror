@@ -20,7 +20,7 @@ getPaidUse _ = False
 
 instance HasAbilities EnchantedBlade where
   getAbilities (EnchantedBlade attrs) =
-    [ withAdditionalCost (UpTo 1 $ assetUseCost attrs Charge 1)
+    [ withAdditionalCost (UpTo (Fixed 1) $ assetUseCost attrs Charge 1)
         $ restrictedAbility attrs 1 ControlsThis
         $ fightAction_
     ]
@@ -30,9 +30,10 @@ instance RunMessage EnchantedBlade where
     UseCardAbility iid (isSource attrs -> True) 1 _ (getPaidUse -> paidUse) -> do
       let amount = if paidUse then 2 else 1
       let source = attrs.ability 1
-      chooseFight <- toMessage <$> mkChooseFight iid source
+      sid <- getRandom
+      chooseFight <- toMessage <$> mkChooseFight sid iid source
       pushAll
-        [ skillTestModifiers attrs iid $ [SkillModifier #combat amount] <> [DamageDealt 1 | paidUse]
+        [ skillTestModifiers sid source iid $ [SkillModifier #combat amount] <> [DamageDealt 1 | paidUse]
         , chooseFight
         ]
       pure a

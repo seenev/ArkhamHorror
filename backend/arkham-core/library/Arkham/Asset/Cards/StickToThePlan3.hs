@@ -11,9 +11,11 @@ import Arkham.Asset.Runner
 import Arkham.Card
 import Arkham.Matcher hiding (PlaceUnderneath)
 import Arkham.Trait qualified as Trait
+import Data.Function (on)
+import Data.List (nubBy)
 
 newtype StickToThePlan3 = StickToThePlan3 AssetAttrs
-  deriving anyclass (IsAsset)
+  deriving anyclass IsAsset
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 stickToThePlan3 :: AssetCard StickToThePlan3
@@ -37,14 +39,15 @@ instance HasAbilities StickToThePlan3 where
 instance RunMessage StickToThePlan3 where
   runMessage msg a@(StickToThePlan3 attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ search iid attrs iid [fromDeck] AnyCard (defer attrs IsNotDraw)
+      push $ search iid attrs iid [fromDeck] #any (defer attrs IsNotDraw)
       pure a
     SearchFound iid (isTarget attrs -> True) _ cards -> do
       let
         tacticsAndSupplies =
-          filter
-            (`cardMatch` (#event <> oneOf (map CardWithTrait [Trait.Tactic, Trait.Supply])))
-            cards
+          nubBy ((==) `on` toCardCode)
+            $ filter
+              (`cardMatch` (#event <> oneOf (map CardWithTrait [Trait.Tactic, Trait.Supply])))
+              cards
       additionalTargets <- getAdditionalSearchTargets iid
       player <- getPlayer iid
       if null tacticsAndSupplies

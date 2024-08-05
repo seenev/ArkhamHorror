@@ -21,12 +21,15 @@ frenchHill_291 = location FrenchHill_291 Cards.frenchHill_291 4 (Static 0)
 
 instance HasAbilities FrenchHill_291 where
   getAbilities (FrenchHill_291 attrs) =
-    withRevealedAbilities attrs [restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 1]
+    withRevealedAbilities
+      attrs
+      [skillTestAbility $ restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 1]
 
 instance RunMessage FrenchHill_291 where
   runMessage msg l@(FrenchHill_291 attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) attrs #willpower (Fixed 2)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) attrs #willpower (Fixed 2)
       pure l
     PassedSkillTest _iid _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ n -> do
       let n' = min (maybe 0 countBreaches $ locationBreaches attrs) n

@@ -10,7 +10,6 @@ import Arkham.Classes
 import Arkham.GameValue
 import Arkham.Location.Cards qualified as Cards
 import Arkham.Location.Runner
-import Arkham.Matcher
 
 newtype CongregationalChurch_209 = CongregationalChurch_209 LocationAttrs
   deriving anyclass (IsLocation, HasModifiersFor)
@@ -31,7 +30,7 @@ instance HasAbilities CongregationalChurch_209 where
           <> [ restrictedAbility attrs 1 Here
               $ ActionAbility []
               $ Costs
-                [ActionCost 1, HandDiscardCost 1 AnyCard]
+                [ActionCost 1, HandDiscardCost 1 #any]
              | locationRevealed attrs
              ]
 

@@ -14,7 +14,7 @@ evilPast = treachery EvilPast Cards.evilPast
 
 instance HasAbilities EvilPast where
   getAbilities (EvilPast a) =
-    [restrictedAbility a 1 (InThreatAreaOf You) $ forced EncounterDeckRunsOutOfCards]
+    [skillTestAbility $ restrictedAbility a 1 (InThreatAreaOf You) $ forced EncounterDeckRunsOutOfCards]
 
 instance RunMessage EvilPast where
   runMessage msg t@(EvilPast attrs) = runQueueT $ case msg of
@@ -26,7 +26,8 @@ instance RunMessage EvilPast where
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       assignHorror iid attrs 2
-      beginSkillTest iid (attrs.ability 1) iid #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 1) iid #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       toDiscardBy iid (attrs.ability 1) attrs

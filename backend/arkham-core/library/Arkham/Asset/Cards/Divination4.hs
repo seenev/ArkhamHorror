@@ -6,7 +6,6 @@ import Arkham.Asset.Cards qualified as Cards
 import Arkham.Asset.Import.Lifted
 import Arkham.Asset.Uses
 import Arkham.Discard
-import Arkham.Discover
 import Arkham.Helpers.Message.Discard (discardFromHand)
 import Arkham.Investigate
 import Arkham.Message (getChoiceAmount)
@@ -25,8 +24,9 @@ instance HasAbilities Divination4 where
 instance RunMessage Divination4 where
   runMessage msg a@(Divination4 attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      investigate <- setTarget attrs <$> mkInvestigate iid (attrs.ability 1)
-      skillTestModifier (attrs.ability 1) iid (AnySkillValue 2)
+      sid <- getRandom
+      investigate <- setTarget attrs <$> mkInvestigate sid iid (attrs.ability 1)
+      skillTestModifier sid (attrs.ability 1) iid (AnySkillValue 2)
       chooseOne
         iid
         [ Label "Use {willpower} instead of {intellect}" [toMessage $ withSkillType #willpower investigate]
@@ -36,11 +36,13 @@ instance RunMessage Divination4 where
     Successful (Action.Investigate, _) iid _ (isTarget attrs -> True) n -> do
       case attrs.use Charge of
         0 -> pure ()
-        1 -> push $ ResolveAmounts iid [("Charges", 1)] (toTarget attrs)
+        1 -> do
+          charges <- namedUUID "Charges"
+          push $ ResolveAmounts iid [(charges, 1)] (toTarget attrs)
         x -> chooseAmounts iid "Amount of Charges to Spend" (MaxAmountTarget x) [("Charges", (1, x))] attrs
       pushWhen (n == 0) $ discardFromHand iid (attrs.ability 1) DiscardChoose 2
       pure a
     ResolveAmounts iid (getChoiceAmount "Charges" -> n) (isTarget attrs -> True) -> do
-      push $ DiscoverClues iid $ discoverAtYourLocation (attrs.ability 1) n
+      discoverAtYourLocation NotInvestigate iid (attrs.ability 1) n
       pure a
     _ -> Divination4 <$> liftRunMessage msg attrs

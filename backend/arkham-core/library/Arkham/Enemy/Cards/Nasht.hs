@@ -24,7 +24,7 @@ instance HasAbilities Nasht where
   getAbilities (Nasht x) =
     withBaseAbilities
       x
-      [ mkAbility x 1 parleyAction_
+      [ skillTestAbility $ mkAbility x 1 parleyAction_
       , mkAbility x 2 $ forced $ EnemyDefeated #after You ByAny $ be x
       ]
 
@@ -33,10 +33,11 @@ instance RunMessage Nasht where
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       n <- perPlayer 1
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel sType [parley iid (attrs.ability 1) iid sType (Fixed $ 2 + n)]
+          [ SkillLabel sType [parley sid iid (attrs.ability 1) iid sType (Fixed $ 2 + n)]
           | sType <- [#combat, #agility]
           ]
       pure e

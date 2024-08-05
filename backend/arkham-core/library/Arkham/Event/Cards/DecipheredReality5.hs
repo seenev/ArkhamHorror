@@ -28,11 +28,12 @@ instance RunMessage DecipheredReality5 where
   runMessage msg e@(DecipheredReality5 attrs) = case msg of
     PlayThisEvent iid eid | eid == toId attrs -> do
       locationIds <- select RevealedLocation
-      maxShroud <- maximum . ncons 0 <$> traverse (field LocationShroud) locationIds
-      investigation <- mkInvestigate iid attrs <&> setTarget attrs
+      maxShroud <- maximum . ncons 0 <$> traverse (fieldMap LocationShroud (fromMaybe 0)) locationIds
+      sid <- getRandom
+      investigation <- mkInvestigate sid iid attrs <&> setTarget attrs
 
       pushAll
-        [ skillTestModifier attrs SkillTestTarget (SetDifficulty maxShroud)
+        [ skillTestModifier sid attrs sid (SetDifficulty maxShroud)
         , toMessage investigation
         ]
       pure e

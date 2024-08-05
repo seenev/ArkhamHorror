@@ -10,12 +10,13 @@ import Arkham.Trait (Trait (Broken))
 import Data.Aeson.KeyMap qualified as KM
 
 newtype Metadata = Metadata {flipDiscipline :: Bool}
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 newtype LilyChen = LilyChen (InvestigatorAttrs `With` Metadata)
   deriving anyclass (IsInvestigator, HasAbilities, HasModifiersFor)
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 lilyChen :: InvestigatorCard LilyChen
 lilyChen =
@@ -47,7 +48,7 @@ instance RunMessage LilyChen where
           (object ["aligned" .= True, "balanced" .= balanced, "prescient" .= True, "quiescent" .= quiescent])
     ElderSignEffect iid | iid == toId attrs -> do
       pure $ LilyChen $ attrs `with` Metadata True
-    SkillTestEnds iid _ | attrs.id == iid && flipDiscipline meta -> do
+    SkillTestEnds _ iid _ | attrs.id == iid && flipDiscipline meta -> do
       brokenDisciplines <- select $ AssetWithTrait Broken <> AssetWithTitle "Discipline"
       unless (null brokenDisciplines) do
         chooseOne attrs.id

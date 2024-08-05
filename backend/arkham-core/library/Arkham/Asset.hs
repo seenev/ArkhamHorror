@@ -861,21 +861,135 @@ allAssets =
     , --- guardian [tsk]
       SomeAssetCard huntersArmor
     , SomeAssetCard runicAxe
+    , SomeAssetCard obsidianBracelet
+    , SomeAssetCard bestowResolve2
+    , SomeAssetCard fieldAgent2
     , SomeAssetCard guardDog2
     , SomeAssetCard handcuffs2
+    , SomeAssetCard martyrsVambraceRemnantOfTheUnknown3
+    , SomeAssetCard girishKadakiaIcpcPunjabDetective4
     , --- seeker [tsk]
       SomeAssetCard alchemicalDistillation
     , SomeAssetCard empiricalHypothesis
+    , SomeAssetCard dissectionTools
+    , SomeAssetCard grimMemoir
+    , SomeAssetCard researchNotes
+    , SomeAssetCard labCoat1
+    , SomeAssetCard orphicTheory1
+    , SomeAssetCard drWilliamTMaleson2
+    , SomeAssetCard pressPass2
+    , SomeAssetCard surgicalKit3
     , SomeAssetCard fingerprintKit4
+    , SomeAssetCard graysAnatomyTheDoctorsBible5
     , --- rogue [tsk]
-      SomeAssetCard chuckFergus2
+      SomeAssetCard damningTestimony
+    , SomeAssetCard disguise
+    , SomeAssetCard embezzeledTreasure
+    , SomeAssetCard thievesKit
+    , SomeAssetCard stylishCoat1
+    , SomeAssetCard chuckFergus2
+    , SomeAssetCard dirtyFighting2
+    , SomeAssetCard thievesKit3
+    , SomeAssetCard triggerMan3
+    , SomeAssetCard underworldMarket2
+    , --- mystic [tsk]
+      SomeAssetCard livingInk
+    , SomeAssetCard summonedServitor
+    , SomeAssetCard ceremonialSickle
+    , SomeAssetCard dowsingRod
+    , SomeAssetCard hallowedChalice
+    , SomeAssetCard onyxPentacle
+    , SomeAssetCard bindersJarInterdimensionalPrison1
+    , SomeAssetCard astralMirror2
+    , SomeAssetCard elleRubashPurifyingPurpose2
+    , SomeAssetCard sinEater3
+    , SomeAssetCard ceremonialSickle4
+    , SomeAssetCard dowsingRod4
+    , SomeAssetCard onyxPentacle4
+    , --- survivor [tsk]
+      SomeAssetCard pocketMultiTool
+    , SomeAssetCard idolOfXanatosWatcherBeyondTime
+    , SomeAssetCard improvisedShield
+    , SomeAssetCard baseballBat2
+    , SomeAssetCard katjaEastbankKeeperOfEsotericLore2
+    , SomeAssetCard oldKeyring3
     , --- neutral [tsk]
       SomeAssetCard hyperphysicalShotcasterTheoreticalDevice
+    , SomeAssetCard toolBelt
+    , SomeAssetCard flashlight3
+    , SomeAssetCard soulSanctification3
     , -- The Feast of Hemloch Vale
-      --- guardian [tsk]
-      SomeAssetCard blessedBlade4
-    , --- survivor [tsk]
-      SomeAssetCard marinersCompass2
+      --- signature [fhv]
+      SomeAssetCard fluxStabilizerInactive
+    , SomeAssetCard fluxStabilizerActive
+    , SomeAssetCard bookOfLivingMythsChronicleOfWonders
+    , --- guardian [fhv]
+      SomeAssetCard ancestralToken
+    , SomeAssetCard cleaningKit
+    , SomeAssetCard katana
+    , SomeAssetCard ofuda
+    , SomeAssetCard wolfMaskTheMoonsSire
+    , SomeAssetCard cleaningKit3
+    , SomeAssetCard blessedBlade4
+    , SomeAssetCard eyesOfValusiaTheMothersCunning4
+    , SomeAssetCard bladeOfYothTheFathersIre
+    , SomeAssetCard evanescentAscensionTheMorningStar
+    , --- seeker [fhv]
+      SomeAssetCard chemistrySet
+    , SomeAssetCard drCharlesWestIiiKnowsHisPurpose
+    , SomeAssetCard microscope
+    , SomeAssetCard mouseMaskTheMeekWatcher
+    , SomeAssetCard ravenousMyconidUnidentified
+    , SomeAssetCard gabrielCarilloTrustedConfidante1
+    , SomeAssetCard steadyHanded1
+    , SomeAssetCard prismaticSpectaclesLensToTheOtherworld2
+    , SomeAssetCard microscope4
+    , SomeAssetCard ravenousMyconidSentientStrain4
+    , SomeAssetCard ravenousMyconidCarnivorousStrain4
+    , SomeAssetCard ravenousMyconidNurturingStrain4
+    , --- rogue [fhv]
+      SomeAssetCard biancaDieKatzSingingYourSong
+    , SomeAssetCard blackmailFile
+    , SomeAssetCard britishBullDog
+    , SomeAssetCard fakeCredentials
+    , SomeAssetCard foxMaskTheWiseTrickster
+    , SomeAssetCard scrimshawCharmFromDistantShores
+    , SomeAssetCard britishBullDog2
+    , SomeAssetCard bewitching3
+    , SomeAssetCard fakeCredentials4
+    , --- mystic [fhv]
+      SomeAssetCard catMaskTheCapriciousMeddler
+    , SomeAssetCard rodOfCarnamagosScepterOfTheMadSeer
+    , SomeAssetCard speakToTheDead
+    , SomeAssetCard wickedAthame
+    , SomeAssetCard oliveMcBride2
+    , SomeAssetCard rodOfCarnamagosScepterOfTheMadSeer2
+    , SomeAssetCard theKeyOfSolomonSecretsOfTheUnknown4
+    , SomeAssetCard keeperOfTheKeyCelestialWard
+    , SomeAssetCard servantOfBrassDaemonaicVassal
+    , --- survivor [fhv]
+      SomeAssetCard matchbox
+    , SomeAssetCard peltShipment
+    , SomeAssetCard pitchfork
+    , SomeAssetCard sparrowMaskTheWanderersCompanion
+    , SomeAssetCard hatchet1
+    , SomeAssetCard devilFriendOrFoe2
+    , SomeAssetCard fireAxe2
+    , SomeAssetCard huntingJacket2
+    , SomeAssetCard marinersCompass2
+    , SomeAssetCard survivalTechnique2
+    , SomeAssetCard tokenOfFaith3
+    , SomeAssetCard darkHorse5
+    , --- neutral [fhv]
+      SomeAssetCard eldritchTongue
+    , SomeAssetCard occultReliquary3
+    , SomeAssetCard brokenDiademCrownOfDyingLight5
+    , SomeAssetCard twilightDiademCrownOfDyingLight
+    , --- basic weaknesses [fhv]
+      SomeAssetCard maimedHand
+    , SomeAssetCard backInjury
+    , SomeAssetCard theSilverMoth
+    , SomeAssetCard vowOfDrzytelech
     , -- Return to Night of the Zealot
       --- guardian [rtnotz]
       SomeAssetCard physicalTraining2
@@ -1058,6 +1172,20 @@ allAssets =
       --- Read or Die
       SomeAssetCard daisysToteBagAdvanced
     , SomeAssetCard theNecronomiconAdvanced
+    , --- Bad Blood
+      SomeAssetCard heirloomOfHyperboreaAdvanced
+    , --- By the Book
+      SomeAssetCard directiveConsultExperts
+    , SomeAssetCard directiveDueDiligence
+    , SomeAssetCard directiveLeaveNoDoubt
+    , SomeAssetCard directiveRedTape
+    , SomeAssetCard directiveSeekTheTruth
+    , SomeAssetCard rolands38SpecialAdvanced
+    , --- Red Tide Rising
+      SomeAssetCard tidalMemento
+    , SomeAssetCard wendysAmuletAdvanced
+    , --- On the Road Again
+      SomeAssetCard petesGuitar
     , -- Promo
       --- Hour of the Huntress
       SomeAssetCard greenManMedallionHourOfTheHuntress

@@ -12,7 +12,7 @@ import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Import.Lifted
 
 newtype Wracked = Wracked TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 wracked :: TreacheryCard Wracked
@@ -36,7 +36,7 @@ instance HasModifiersFor Wracked where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities Wracked where
-  getAbilities (Wracked a) = [restrictedAbility a 1 OnSameLocation actionAbility]
+  getAbilities (Wracked a) = [skillTestAbility $ restrictedAbility a 1 OnSameLocation actionAbility]
 
 instance RunMessage Wracked where
   runMessage msg t@(Wracked attrs) = runQueueT $ case msg of
@@ -44,7 +44,8 @@ instance RunMessage Wracked where
       placeInThreatArea attrs iid
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      revelationSkillTest iid attrs #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid attrs iid #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isSource attrs -> True) -> do
       toDiscardBy iid (attrs.ability 1) attrs

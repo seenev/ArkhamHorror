@@ -21,7 +21,10 @@ instance HasAbilities Stairwell where
   getAbilities (Stairwell attrs) =
     withRevealedAbilities
       attrs
-      [ mkAbility attrs 1 $ freeReaction $ moves #after You (not_ $ LocationWithTrait Basement) attrs
+      [ skillTestAbility
+          $ mkAbility attrs 1
+          $ freeReaction
+          $ moves #after You (not_ $ LocationWithTrait Basement) attrs
       , mkAbility attrs 2 $ ForcedAbility $ BecomesInfested #after $ LocationWithId $ toId attrs
       ]
 
@@ -31,13 +34,14 @@ instance RunMessage Stairwell where
       UseThisAbility iid (isSource attrs -> True) 1 -> do
         basementLocations <- select $ LocationWithTrait Basement
         player <- getPlayer iid
+        sid <- getRandom
         push
           $ chooseOne
             player
             [ targetLabel
               basementLocation
               [ toMessage $ move (attrs.ability 1) iid basementLocation
-              , beginSkillTest iid (attrs.ability 1) iid #agility (Fixed 4)
+              , beginSkillTest sid iid (attrs.ability 1) iid #agility (Fixed 4)
               ]
             | basementLocation <- basementLocations
             ]

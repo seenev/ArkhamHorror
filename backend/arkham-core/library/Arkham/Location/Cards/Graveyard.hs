@@ -19,12 +19,13 @@ graveyard :: LocationCard Graveyard
 graveyard = location Graveyard Cards.graveyard 1 (PerPlayer 2)
 
 instance HasAbilities Graveyard where
-  getAbilities (Graveyard x) = withRevealedAbilities x [mkAbility x 1 $ forced $ Enters #after You (be x)]
+  getAbilities (Graveyard x) = withRevealedAbilities x [skillTestAbility $ mkAbility x 1 $ forced $ Enters #after You (be x)]
 
 instance RunMessage Graveyard where
   runMessage msg l@(Graveyard attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) iid #willpower (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) iid #willpower (Fixed 3)
       pure l
     FailedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       rivertown <- getJustLocationByName "Rivertown"

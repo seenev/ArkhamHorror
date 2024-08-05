@@ -133,6 +133,11 @@ allInvestigators =
       , SomeInvestigatorCard aminaZidane
       , SomeInvestigatorCard darrellSimmons
       , SomeInvestigatorCard charlieKane
+      , SomeInvestigatorCard wilsonRichards
+      , SomeInvestigatorCard kateWinthrop
+      , SomeInvestigatorCard alessandraZorzi
+      , SomeInvestigatorCard kohakuNarukami
+      , SomeInvestigatorCard hankSamson
       , SomeInvestigatorCard nathanielCho
       , SomeInvestigatorCard harveyWalters
       , SomeInvestigatorCard winifredHabbamock
@@ -140,6 +145,11 @@ allInvestigators =
       , SomeInvestigatorCard jacquelineFine
       , SomeInvestigatorCard gloriaGoldberg
       , SomeInvestigatorCard daisyWalkerParallel
+      , SomeInvestigatorCard skidsOTooleParallel
+      , SomeInvestigatorCard agnesBakerParallel
+      , SomeInvestigatorCard rolandBanksParallel
+      , SomeInvestigatorCard wendyAdamsParallel
+      , SomeInvestigatorCard ashcanPeteParallel
       ]
 
 becomeYithian :: Investigator -> Investigator

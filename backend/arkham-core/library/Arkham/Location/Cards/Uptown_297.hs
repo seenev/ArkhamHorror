@@ -21,12 +21,15 @@ uptown_297 = location Uptown_297 Cards.uptown_297 4 (Static 0)
 
 instance HasAbilities Uptown_297 where
   getAbilities (Uptown_297 attrs) =
-    withRevealedAbilities attrs [restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 1]
+    withRevealedAbilities
+      attrs
+      [skillTestAbility $ restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 1]
 
 instance RunMessage Uptown_297 where
   runMessage msg l@(Uptown_297 attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) attrs #agility (Fixed 2)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) attrs #agility (Fixed 2)
       pure l
     PassedSkillTest _iid _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ n -> do
       let n' = min (maybe 0 countBreaches $ locationBreaches attrs) n

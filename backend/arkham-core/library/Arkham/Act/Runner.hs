@@ -32,9 +32,9 @@ import Arkham.Target as X
 import Arkham.ChaosToken
 import Arkham.Classes
 import Arkham.Classes.HasGame
-import Arkham.Matcher hiding (FastPlayerWindow)
+import Arkham.Matcher hiding (FastPlayerWindow, InvestigatorResigned)
 import Arkham.Tarot
-import Arkham.Window
+import Arkham.Window hiding (InvestigatorResigned)
 import Arkham.Window qualified as Window
 
 advanceActDeck :: ActAttrs -> Message
@@ -43,12 +43,13 @@ advanceActDeck attrs = AdvanceActDeck (actDeckId attrs) (toSource attrs)
 advanceActSideA
   :: HasGame m => ActAttrs -> AdvancementMethod -> m [Message]
 advanceActSideA attrs advanceMode = do
-  (iid, lead) <- getLeadInvestigatorPlayer
+  whenWindow <- checkWhen $ ActAdvance attrs.id
+  afterWindow <- checkAfter $ ActAdvance attrs.id
+  lead <- getLeadPlayer
   pure
-    [ CheckWindow [iid] [mkWhen (ActAdvance $ toId attrs)]
-    , chooseOne
-        lead
-        [TargetLabel (ActTarget $ toId attrs) [AdvanceAct (toId attrs) (toSource attrs) advanceMode]]
+    [ whenWindow
+    , chooseOne lead [targetLabel attrs [AdvanceAct attrs.id (toSource attrs) advanceMode]]
+    , afterWindow
     ]
 
 instance RunMessage Act where

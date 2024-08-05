@@ -38,7 +38,7 @@ instance RunMessage EatLead2 where
         AssetSource aid -> do
           uses <- fieldMap AssetUses (findWithDefault 0 Ammo) aid
           player <- getPlayer iid
-          push
+          pushM
             $ chooseAmounts
               player
               "Additional ammo to spend"
@@ -53,10 +53,11 @@ instance RunMessage EatLead2 where
       when (ammo > 0) $ do
         ignoreWindow <-
           checkWindows [mkWindow Timing.After (Window.CancelledOrIgnoredCardOrGameEffect $ toSource attrs)]
-        pushAll
-          [ SpendUses (toSource attrs) (AssetTarget aid) Ammo ammo
-          , skillTestModifier attrs iid (ChangeRevealStrategy $ RevealAndChoose ammo 1)
-          , ignoreWindow
-          ]
+        withSkillTest \sid ->
+          pushAll
+            [ SpendUses (toSource attrs) (AssetTarget aid) Ammo ammo
+            , skillTestModifier sid attrs iid (ChangeRevealStrategy $ RevealAndChoose ammo 1)
+            , ignoreWindow
+            ]
       pure e
     _ -> EatLead2 . (`with` metadata) <$> runMessage msg attrs

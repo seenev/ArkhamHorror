@@ -17,7 +17,8 @@ ishimaruHaruko = asset IshimaruHaruko Cards.ishimaruHaruko
 
 instance HasAbilities IshimaruHaruko where
   getAbilities (IshimaruHaruko a) =
-    [ restrictedAbility a 1 (OnSameLocation <> youExist (HandWith (LengthIs $ atLeast 6))) parleyAction_
+    [ skillTestAbility
+        $ restrictedAbility a 1 (OnSameLocation <> youExist (HandWith (LengthIs $ atLeast 6))) parleyAction_
     , groupLimit PerGame
         $ restrictedAbility a 2 (not_ $ exists Story.sickeningReality_67)
         $ forced
@@ -27,7 +28,8 @@ instance HasAbilities IshimaruHaruko where
 instance RunMessage IshimaruHaruko where
   runMessage msg a@(IshimaruHaruko attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ parley iid (attrs.ability 1) attrs #willpower (Fixed 2)
+      sid <- getRandom
+      push $ parley sid iid (attrs.ability 1) attrs #willpower (Fixed 2)
       pure a
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       modifiers <- getModifiers iid

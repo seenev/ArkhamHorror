@@ -1,12 +1,9 @@
 module Arkham.Event.Cards.EtherealForm (etherealForm, EtherealForm (..)) where
 
-import Arkham.Classes
-import Arkham.Evade
 import Arkham.Event.Cards qualified as Cards
-import Arkham.Event.Runner
-import Arkham.Helpers.Modifiers
+import Arkham.Event.Import.Lifted
 import Arkham.Matcher
-import Arkham.Prelude
+import Arkham.Modifier
 
 newtype EtherealForm = EtherealForm EventAttrs
   deriving anyclass (IsEvent, HasModifiersFor, HasAbilities)
@@ -16,18 +13,15 @@ etherealForm :: EventCard EtherealForm
 etherealForm = event EtherealForm Cards.etherealForm
 
 instance RunMessage EtherealForm where
-  runMessage msg e@(EtherealForm attrs) = case msg of
+  runMessage msg e@(EtherealForm attrs) = runQueueT $ case msg of
     PlayThisEvent iid eid | eid == toId attrs -> do
-      chooseEvade <- toMessage <$> mkChooseEvade iid attrs
-      pushAll
-        [ skillTestModifier attrs iid (AddSkillValue #willpower)
-        , chooseEvade
-        ]
+      sid <- getRandom
+      skillTestModifier sid attrs iid (AddSkillValue #willpower)
+      chooseEvadeEnemy sid iid attrs
       pure e
     PassedThisSkillTest iid (isSource attrs -> True) -> do
       enemies <- select $ enemyEngagedWith iid
-      pushAll
-        $ roundModifiers attrs iid [Ethereal, CannotBeEngaged, CannotAttack, CannotDealDamage]
-        : map (DisengageEnemy iid) enemies
+      roundModifiers attrs iid [Ethereal, CannotBeEngaged, CannotAttack, CannotDealDamage]
+      pushAll $ map (DisengageEnemy iid) enemies
       pure e
-    _ -> EtherealForm <$> runMessage msg attrs
+    _ -> EtherealForm <$> liftRunMessage msg attrs

@@ -23,11 +23,12 @@ instance HasAbilities UnfinishedBusiness_B where
   getAbilities (UnfinishedBusiness_B x) = case storyPlacement x of
     InThreatArea _ ->
       [ restrictedAbility x 1 (InThreatAreaOf You) $ forced $ RoundEnds #when
-      , restrictedAbility
-          x
-          2
-          (OnSameLocation <> exists (YourLocation <> "Chapel Crypt" <> LocationWithoutClues))
-          actionAbility
+      , skillTestAbility
+          $ restrictedAbility
+            x
+            2
+            (OnSameLocation <> exists (YourLocation <> "Chapel Crypt" <> LocationWithoutClues))
+            actionAbility
       ]
     _ -> []
 
@@ -46,10 +47,11 @@ instance RunMessage UnfinishedBusiness_B where
       pure s
     UseCardAbility iid (isSource attrs -> True) 2 _ _ -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel sType [beginSkillTest iid (attrs.ability 2) attrs sType (Fixed 4)]
+          [ SkillLabel sType [beginSkillTest sid iid (attrs.ability 2) attrs sType (Fixed 4)]
           | sType <- [SkillIntellect, SkillCombat]
           ]
       pure s

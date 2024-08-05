@@ -13,6 +13,7 @@ import Arkham.Campaigns.TheForgottenAge.Supply (Supply)
 import Arkham.Capability (Capabilities, Capable (..), FromSource)
 import Arkham.Cost.Status (CostStatus)
 import Arkham.Criteria.Override
+import Arkham.Customization
 import Arkham.Direction (GridDirection)
 import Arkham.GameValue (GameValue (Static))
 import Arkham.History.Types (HistoryType)
@@ -115,8 +116,20 @@ pattern DuringAnySkillTest <- DuringSkillTest AnySkillTest
   where
     DuringAnySkillTest = DuringSkillTest AnySkillTest
 
+data CostReduction = Reduce Int | ReduceBySuccessAmount
+  deriving stock (Show, Eq, Ord, Data)
+
+overCriteria :: (Criterion -> Criterion) -> Criterion -> Criterion
+overCriteria f = \case
+  AtLeastNCriteriaMet n cs -> f (AtLeastNCriteriaMet n (map f cs))
+  Criteria cs -> f (Criteria (map f cs))
+  AnyCriterion cs -> f (AnyCriterion (map f cs))
+  Negate c -> f (Negate (f c))
+  c -> f c
+
 data Criterion
   = AssetExists AssetMatcher
+  | TargetExists TargetMatcher
   | DifferentAssetsExist AssetMatcher AssetMatcher
   | DifferentEnemiesExist EnemyMatcher EnemyMatcher
   | EventExists EventMatcher
@@ -165,8 +178,9 @@ data Criterion
   | OwnCardWithDoom
   | CardWithDoomExists
   | ControlsThis -- really controls this
+  | OwnsThis -- just the owner
   | PlayableCardExists CostStatus ExtendedCardMatcher
-  | PlayableCardExistsWithCostReduction Int ExtendedCardMatcher
+  | PlayableCardExistsWithCostReduction CostReduction ExtendedCardMatcher
   | ResourcesOnThis ValueMatcher
   | ResourcesOnLocation Where ValueMatcher
   | ReturnableCardInDiscard DiscardSignifier [Trait]
@@ -196,7 +210,10 @@ data Criterion
   | HasCampaignCount CampaignLogKey ValueMatcher
   | HasCalculation GameCalculation ValueMatcher
   | HasRemainingBlessTokens
+  | HasMoreBlessThanCurseTokens
   | HasRemainingCurseTokens
+  | HasMoreCurseThanBlessTokens
+  | OnlySources SourceMatcher
   | -- Special Criterion
     AtLeastNCriteriaMet Int [Criterion]
   | Criteria [Criterion]
@@ -207,6 +224,9 @@ data Criterion
   | DuringAction
   | AffectedByTarot
   | HasTrueMagick
+  | ChosenCustomizationCardIsInPlay
+  | HasCustomization Customization
+  | IfYouOweBiancaDieKatz
   deriving stock (Show, Eq, Ord, Data)
 
 instance Not Criterion where
@@ -241,6 +261,9 @@ overrideExists = CriteriaOverride . exists
 
 notExists :: Exists a => a -> Criterion
 notExists = not_ . exists
+
+instance Exists TargetMatcher where
+  exists = TargetExists
 
 instance Exists EventMatcher where
   exists = EventExists
@@ -310,6 +333,15 @@ data EnemyCriterion
   | EnemyMatchesCriteria [EnemyCriterion]
   deriving stock (Show, Eq, Ord, Data)
 
+fightOverride :: EnemyMatcher -> EnemyMatcher
+fightOverride = CanFightEnemyWithOverride . CriteriaOverride . EnemyCriteria . ThisEnemy
+
+ignoreAloofFightOverride :: EnemyMatcher -> EnemyMatcher
+ignoreAloofFightOverride matcher = fightOverride $ IgnoreAloofFightable <> matcher
+
+evadeOverride :: EnemyMatcher -> EnemyMatcher
+evadeOverride = CanEvadeEnemyWithOverride . CriteriaOverride . EnemyCriteria . ThisEnemy
+
 instance Semigroup EnemyCriterion where
   EnemyMatchesCriteria xs <> EnemyMatchesCriteria ys =
     EnemyMatchesCriteria $ xs <> ys
@@ -348,6 +380,7 @@ instance Capable (FromSource -> InvestigatorMatcher -> Criterion) where
           (\(m :: FromSource -> InvestigatorMatcher) fSource matcher -> exists (m fSource <> matcher))
           can'
 
+$(deriveJSON defaultOptions ''CostReduction)
 $(deriveJSON defaultOptions ''DiscardSignifier)
 $(deriveJSON defaultOptions ''UnderZone)
 $(deriveJSON defaultOptions ''EnemyCriterion)

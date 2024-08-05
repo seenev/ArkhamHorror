@@ -71,6 +71,12 @@ allInvestigatorCards =
       , aminaZidane
       , darrellSimmons
       , charlieKane
+      , wilsonRichards
+      , kateWinthrop
+      , alessandraZorzi
+      , kohakuNarukami
+      , hankSamson
+      , hankSamsonB
       , nathanielCho
       , harveyWalters
       , winifredHabbamock
@@ -78,6 +84,11 @@ allInvestigatorCards =
       , stellaClark
       , gloriaGoldberg
       , daisyWalkerParallel
+      , skidsOTooleParallel
+      , agnesBakerParallel
+      , rolandBanksParallel
+      , wendyAdamsParallel
+      , ashcanPeteParallel
       ]
 
 allEncounterInvestigatorCards :: Map CardCode CardDef
@@ -395,7 +406,7 @@ danielaReyes =
     "08001"
     ("Daniela Reyes" <:> "The Mechanic")
     Guardian
-    [Miskatonic]
+    [Entrepreneur]
 
 normanWithers :: CardDef
 normanWithers =
@@ -478,6 +489,54 @@ charlieKane =
     Neutral
     [Civic, Socialite]
 
+wilsonRichards :: CardDef
+wilsonRichards =
+  investigator
+    "10001"
+    ("Wilson Richards" <:> "The Handyman")
+    Guardian
+    [Drifter]
+
+kateWinthrop :: CardDef
+kateWinthrop =
+  investigator
+    "10004"
+    ("Kate Winthrop" <:> "The Scientist")
+    Seeker
+    [Miskatonic, Scholar]
+
+alessandraZorzi :: CardDef
+alessandraZorzi =
+  investigator
+    "10009"
+    ("Alessandra Zorzi" <:> "The Countess")
+    Rogue
+    [Drifter, Socialite]
+
+kohakuNarukami :: CardDef
+kohakuNarukami =
+  investigator
+    "10012"
+    ("Kōhaku Narukami" <:> "The Folklorist")
+    Mystic
+    [Scholar, Blessed, Cursed]
+
+hankSamson :: CardDef
+hankSamson =
+  investigator
+    "10015"
+    ("Hank Samson" <:> "The Farmhand")
+    Survivor
+    [Assistant, Warden]
+
+hankSamsonB :: CardDef
+hankSamsonB =
+  investigator
+    "10016a"
+    ("Hank Samson" <:> "The Farmhand")
+    Survivor
+    [Assistant, Resolute]
+
 nathanielCho :: CardDef
 nathanielCho =
   investigator
@@ -529,3 +588,23 @@ gloriaGoldberg =
 daisyWalkerParallel :: CardDef
 daisyWalkerParallel =
   investigator "90001" ("Daisy Walker" <:> "The Librarian") Seeker [Miskatonic]
+
+skidsOTooleParallel :: CardDef
+skidsOTooleParallel =
+  investigator "90008" ("\"Skids\" O'Toole" <:> "The Ex-Con") Rogue [Criminal]
+
+agnesBakerParallel :: CardDef
+agnesBakerParallel =
+  investigator "90017" ("Agnes Baker" <:> "The Waitress") Mystic [Sorcerer]
+
+rolandBanksParallel :: CardDef
+rolandBanksParallel =
+  investigator "90024" ("Roland Banks" <:> "The Fed") Guardian [Agency, Detective]
+
+wendyAdamsParallel :: CardDef
+wendyAdamsParallel =
+  investigator "90037" ("Wendy Adams" <:> "The Urchin") Survivor [Drifter, Blessed, Cursed]
+
+ashcanPeteParallel :: CardDef
+ashcanPeteParallel =
+  investigator "90046" ("\"Ashcan\" Pete" <:> "The Drifter") Survivor [Drifter]

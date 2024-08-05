@@ -17,7 +17,7 @@ constanceDumaine = asset ConstanceDumaine Cards.constanceDumaine
 
 instance HasAbilities ConstanceDumaine where
   getAbilities (ConstanceDumaine a) =
-    [ restrictedAbility a 1 OnSameLocation parleyAction_
+    [ skillTestAbility $ restrictedAbility a 1 OnSameLocation parleyAction_
     , groupLimit PerGame
         $ restrictedAbility a 2 (not_ $ exists Story.sickeningReality_65)
         $ forced
@@ -27,7 +27,8 @@ instance HasAbilities ConstanceDumaine where
 instance RunMessage ConstanceDumaine where
   runMessage msg a@(ConstanceDumaine attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ parley iid (attrs.ability 1) attrs #intellect (Fixed 3)
+      sid <- getRandom
+      push $ parley sid iid (attrs.ability 1) attrs #intellect (Fixed 3)
       pure a
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       modifiers <- getModifiers (InvestigatorTarget iid)

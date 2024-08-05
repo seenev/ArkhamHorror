@@ -21,18 +21,26 @@ bindMonster2 = event BindMonster2 Cards.bindMonster2
 
 instance HasAbilities BindMonster2 where
   getAbilities (BindMonster2 x) = case x.attachedTo of
-    Just (EnemyTarget eid) -> [restricted x 1 ControlsThis $ freeReaction (EnemyWouldReady #when $ EnemyWithId eid)]
+    Just (EnemyTarget eid) ->
+      [ skillTestAbility
+          $ restricted x 1 ControlsThis
+          $ freeReaction (EnemyWouldReady #when $ EnemyWithId eid)
+      ]
     _ -> []
 
 instance RunMessage BindMonster2 where
   runMessage msg e@(BindMonster2 attrs) = runQueueT $ case msg of
     PlayThisEvent iid eid | eid == attrs.id -> do
-      createCardEffect Cards.bindMonster2 Nothing attrs SkillTestTarget
-      pushAllM $ leftOr <$> aspect iid attrs (#willpower `InsteadOf` #agility) (mkChooseEvade iid attrs)
+      sid <- getRandom
+      createCardEffect Cards.bindMonster2 Nothing attrs sid
+      pushAllM
+        $ leftOr
+        <$> aspect iid attrs (#willpower `InsteadOf` #agility) (mkChooseEvade sid iid attrs)
       pure e
     UseThisAbility iid (isSource attrs -> True) 1 -> do
+      sid <- getRandom
       case attrs.attachedTo of
-        Just target -> beginSkillTest iid (attrs.ability 1) target #willpower (Fixed 3)
+        Just target -> beginSkillTest sid iid (attrs.ability 1) target #willpower (Fixed 3)
         Nothing -> throwIO $ InvalidState "must be attached"
       pure e
     PassedThisSkillTest _ (isAbilitySource attrs 1 -> True) -> do
@@ -61,5 +69,5 @@ instance RunMessage BindMonster2Effect where
           disable attrs
         _ -> pure ()
       pure e
-    SkillTestEnds _ _ -> disableReturn e
+    SkillTestEnds _ _ _ -> disableReturn e
     _ -> BindMonster2Effect <$> liftRunMessage msg attrs

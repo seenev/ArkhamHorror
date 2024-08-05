@@ -15,7 +15,7 @@ import Arkham.Matcher hiding (RevealLocation)
 import Arkham.Message.Lifted hiding (setActDeck, setAgendaDeck)
 import Arkham.Prelude
 import Arkham.Resolution
-import Arkham.Scenario.Helpers hiding (addCampaignCardToDeckChoice)
+import Arkham.Scenario.Helpers hiding (addCampaignCardToDeckChoice, roundModifier)
 import Arkham.Scenario.Runner hiding (chooseOne, story)
 import Arkham.Scenario.Setup
 import Arkham.Scenarios.CurseOfTheRougarou.FlavorText
@@ -25,7 +25,7 @@ import Arkham.Treachery.Cards qualified as Treacheries
 import Data.Maybe (fromJust)
 
 newtype CurseOfTheRougarou = CurseOfTheRougarou ScenarioAttrs
-  deriving stock (Generic)
+  deriving stock Generic
   deriving anyclass (IsScenario, HasModifiersFor)
   deriving newtype (Show, ToJSON, FromJSON, Entity, Eq)
 
@@ -93,7 +93,7 @@ instance RunMessage CurseOfTheRougarou where
         , Agendas.theCurseSpreads
         ]
       setActDeck [Acts.findingLadyEsprit, Acts.huntingTheRougarou]
-    SetChaosTokensForScenario -> do
+    StandaloneSetup -> do
       let
         tokens =
           if isEasyStandard attrs
@@ -171,7 +171,7 @@ instance RunMessage CurseOfTheRougarou where
           for_ mrougarou \eid -> push $ EnemyWillAttack $ enemyAttack eid attrs iid
       pure s
     FailedSkillTest iid _ _ (ChaosTokenTarget token) _ _ -> do
-      pushWhen (token.face == Tablet) (roundModifier TabletEffect iid CannotMove)
+      when (token.face == Tablet) (roundModifier TabletEffect iid CannotMove)
       pure s
     ScenarioResolution NoResolution ->
       runMessage (ScenarioResolution $ Resolution 1) s

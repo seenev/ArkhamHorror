@@ -17,7 +17,7 @@ import Arkham.SkillType
 import Arkham.Timing qualified as Timing
 
 newtype ColdSpringGlen_245 = ColdSpringGlen_245 LocationAttrs
-  deriving anyclass (IsLocation)
+  deriving anyclass IsLocation
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 coldSpringGlen_245 :: LocationCard ColdSpringGlen_245
@@ -33,7 +33,8 @@ instance HasModifiersFor ColdSpringGlen_245 where
 instance HasAbilities ColdSpringGlen_245 where
   getAbilities (ColdSpringGlen_245 attrs) =
     withBaseAbilities attrs
-      $ [ mkAbility attrs 1
+      $ [ skillTestAbility
+          $ mkAbility attrs 1
           $ ReactionAbility
             (ChosenRandomLocation Timing.After $ LocationWithId $ toId attrs)
             Free
@@ -43,7 +44,8 @@ instance HasAbilities ColdSpringGlen_245 where
 instance RunMessage ColdSpringGlen_245 where
   runMessage msg l@(ColdSpringGlen_245 attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) attrs SkillAgility (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) attrs SkillAgility (Fixed 3)
       pure l
     PassedSkillTest _ _ (isAbilitySource attrs 1 -> True) SkillTestInitiatorTarget {} _ _ -> do
       replaceMessageMatching

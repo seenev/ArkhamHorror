@@ -11,7 +11,13 @@ import Arkham.Skill.Runner
 import Arkham.Skill.Skills
 
 createSkill :: IsCard a => a -> InvestigatorId -> SkillId -> Skill
-createSkill a iid sId = lookupSkill (toCardCode a) iid sId (toCardId a)
+createSkill a iid sId =
+  let this = lookupSkill (toCardCode a) iid sId (toCardId a)
+   in overAttrs (\attrs -> attrs {skillCustomizations = customizations}) this
+ where
+  customizations = case toCard a of
+    PlayerCard pc -> pcCustomizations pc
+    _ -> mempty
 
 instance RunMessage Skill where
   runMessage msg (Skill a) = Skill <$> runMessage msg a
@@ -217,6 +223,35 @@ allSkills =
     , SomeSkillCard onTheMend
     , --- guardian [tsk]
       SomeSkillCard fightingLessons
+    , SomeSkillCard helpingHand
+    , --- seeker [tsk]
+      SomeSkillCard analysis
+    , --- rogue [tsk]
+      SomeSkillCard calculatedRisk
+    , --- mystic [tsk]
+      SomeSkillCard ghastlyPossession1
+    , --- survivor [tsk]
+      SomeSkillCard grizzled
+    , SomeSkillCard gumption1
+    , -- The Feast of Hemloch Vale
+      --- guardian [fhv]
+      SomeSkillCard purified
+    , SomeSkillCard strongArmed1
+    , --- seeker [fhv]
+      SomeSkillCard wellFunded
+    , SomeSkillCard esotericMethod1
+    , --- rogue [fhv]
+      SomeSkillCard diabolicalLuck
+    , SomeSkillCard lightfooted
+    , --- mystic [fhv]
+      SomeSkillCard accursed
+    , SomeSkillCard mesmericInfluence1
+    , --- survivor [fhv]
+      SomeSkillCard longShot
+    , SomeSkillCard persistence1
+    , SomeSkillCard providential2
+    , --- neutral [fhv]
+      SomeSkillCard wellDressed
     , -- Return to the Dunwich Legacy
       --- survivor [rtdwl]
       SomeSkillCard riseToTheOccasion3

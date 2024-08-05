@@ -62,7 +62,7 @@ instance RunMessage SignMagick3 where
     UseCardAbility iid (isSource attrs -> True) 1 (toOriginalAsset -> aid) _ -> do
       let nullifyActionCost ab = applyAbilityModifiers ab [ActionCostSetToModifier 0]
       abilities <-
-        selectMap nullifyActionCost
+        selectMap (doesNotProvokeAttacksOfOpportunity . nullifyActionCost)
           $ AbilityIsActionAbility
           <> AssetAbility
             ( NotAsset (AssetWithId aid)
@@ -71,6 +71,6 @@ instance RunMessage SignMagick3 where
             )
       abilities' <- filterM (getCanPerformAbility iid (defaultWindows iid)) abilities
       player <- getPlayer iid
-      push $ chooseOne player [AbilityLabel iid ab [] [] | ab <- abilities']
+      push $ chooseOne player [AbilityLabel iid ab [] [] [] | ab <- abilities']
       pure a
     _ -> SignMagick3 <$> runMessage msg attrs

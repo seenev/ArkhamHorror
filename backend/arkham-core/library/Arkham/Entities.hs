@@ -49,7 +49,7 @@ data Entities = Entities
   , entitiesSkills :: EntityMap Skill
   , entitiesStories :: EntityMap Story
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
 
 instance ToJSON Entities where
   toJSON = genericToJSON $ aesonOptions $ Just "entities"
@@ -147,7 +147,7 @@ addCardEntityWith i f e card = case card of
     EventType ->
       let
         eventId = EventId uuid
-        event' = createEvent card i eventId
+        event' = f $ createEvent card i eventId
        in
         e & eventsL %~ insertEntity event'
     AssetType -> do
@@ -165,7 +165,7 @@ addCardEntityWith i f e card = case card of
     PlayerTreacheryType -> do
       let
         treacheryId = TreacheryId uuid
-        treachery = createTreachery card i treacheryId
+        treachery = f $ createTreachery card i treacheryId
        in
         e & treacheriesL %~ insertMap (toId treachery) treachery
     _ -> error $ "Unable to handle " <> show pc
@@ -173,7 +173,7 @@ addCardEntityWith i f e card = case card of
     TreacheryType -> do
       let
         treacheryId = TreacheryId uuid
-        treachery = createTreachery card i treacheryId
+        treachery = f $ createTreachery card i treacheryId
        in
         e & treacheriesL %~ insertMap (toId treachery) treachery
     _ -> error "Unhandled"

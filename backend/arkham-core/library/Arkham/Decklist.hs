@@ -1,19 +1,38 @@
 module Arkham.Decklist (module Arkham.Decklist, module Arkham.Decklist.Type) where
 
-import Arkham.Prelude
+import Arkham.Prelude hiding (try)
 
 import Arkham.Card
 import Arkham.Card.PlayerCard
+import Arkham.Customization
 import Arkham.Decklist.Type
 import Arkham.Id
 import Arkham.Investigator
+import Arkham.Name
 import Arkham.PlayerCard
+import Arkham.SkillType
+import Arkham.Trait
 import Data.Aeson
 import Data.Aeson.Key (fromText)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.IntMap qualified as IntMap
 import Data.Map.Strict qualified as Map
-import Text.Parsec (ParsecT, char, digit, many1, parse, sepBy)
+import Data.Text qualified as T
+import Text.Parsec (
+  ParsecT,
+  alphaNum,
+  char,
+  digit,
+  many1,
+  optionMaybe,
+  parse,
+  sepBy,
+  sepBy1,
+  space,
+  string,
+  try,
+  unexpected,
+ )
 import Text.Read (read)
 
 type Parser = ParsecT Text () Identity
@@ -48,6 +67,7 @@ newtype ArkhamDBDecklistMeta = ArkhamDBDecklistMeta
   deriving stock (Generic, Show)
   deriving anyclass (FromJSON)
 
+-- things we can choose: cards, traits, skills
 applyCustomizations :: ArkhamDBDecklist -> PlayerCard -> PlayerCard
 applyCustomizations deckList pCard = case meta deckList of
   Just meta' -> case decode (encodeUtf8 $ fromStrict meta') of
@@ -59,8 +79,40 @@ applyCustomizations deckList pCard = case meta deckList of
         _ -> pCard
     _ -> pCard
   _ -> pCard
+
+parseCustomizations :: Parser Customizations
+parseCustomizations = IntMap.fromList <$> sepBy parseEntry (char ',')
  where
-  parseCustomizations :: Parser (IntMap Int)
-  parseCustomizations = do
-    let parseInt = read <$> many1 digit
-    IntMap.fromList <$> sepBy ((,) <$> parseInt <*> (char '|' *> parseInt)) (char ',')
+  parseEntry = (,) <$> parseInt <*> (char '|' *> parseCustomization)
+  parseInt = read <$> many1 digit
+  parseCardCodes =
+    sepBy1
+      ( maybe (unexpected "invalid card code") (pure . ChosenCard . toTitle)
+          . lookupCardDef
+          . CardCode
+          . pack
+          =<< many1 alphaNum
+      )
+      (char '^')
+  parseCustomization = do
+    n <- parseInt
+    choices <-
+      optionMaybe
+        $ char '|'
+        *> (try parseSkillTypes <|> try parseTraits <|> try parseIndex <|> try parseCardCodes <|> pure [])
+    pure (n, fromMaybe [] choices)
+  parseIndex = pure . ChosenIndex <$> parseInt
+  parseSkillTypes = sepBy1 parseSkillType (char '^')
+  parseSkillType =
+    ChosenSkill
+      <$> ( (string "willpower" $> SkillWillpower)
+              <|> (string "intellect" $> SkillIntellect)
+              <|> (string "combat" $> SkillCombat)
+              <|> (string "agility" $> SkillAgility)
+          )
+  parseTraits = sepBy1 parseTrait (char '^')
+  parseTrait = do
+    t <- many1 (alphaNum <|> space)
+    case fromJSON @Trait (String . T.concat . T.words . T.toTitle $ pack t) of
+      Success x -> pure $ ChosenTrait x
+      _ -> unexpected ("invalid trait: " ++ t)

@@ -12,6 +12,7 @@ import AbilityButton from '@/arkham/components/AbilityButton.vue'
 import Treachery from '@/arkham/components/Treachery.vue';
 import Asset from '@/arkham/components/Asset.vue';
 import Event from '@/arkham/components/Event.vue';
+import Skill from '@/arkham/components/Skill.vue';
 import Token from '@/arkham/components/Token.vue';
 import Story from '@/arkham/components/Story.vue';
 import * as Arkham from '@/arkham/types/Enemy'
@@ -218,7 +219,7 @@ watch(abilities, (abilities) => {
             <PoolItem v-if="leylines && leylines > 0" type="resource" tooltip="Leyline" :amount="leylines" />
             <PoolItem v-if="lostSouls && lostSouls > 0" type="resource" :amount="lostSouls" />
             <PoolItem v-if="bounties && bounties > 0" type="resource" :amount="bounties" />
-            <PoolItem v-if="evidence && evidence > 0" type="resource" :amount="evidence" />
+            <PoolItem v-if="evidence && evidence > 0" type="resource" tooltip="Evidence" :amount="evidence" />
             <Token
               v-for="(sealedToken, index) in enemy.sealedChaosTokens"
               :key="index"
@@ -266,9 +267,18 @@ watch(abilities, (abilities) => {
         :playerId="playerId"
         @choose="$emit('choose', $event)"
       />
+      <Skill
+        v-for="skillId in enemy.skills"
+        :key="skillId"
+        :skill="game.skills[skillId]"
+        :game="game"
+        :playerId="playerId"
+        @choose="$emit('choose', $event)"
+      />
       <template v-if="debug.active">
         <button @click="debug.send(game.id, {tag: 'DefeatEnemy', contents: [id, investigatorId, {tag: 'InvestigatorSource', contents:investigatorId}]})">Defeat</button>
         <button @click="debug.send(game.id, {tag: 'EnemyEvaded', contents: [investigatorId, id]})">Evade</button>
+        <button @click="debug.send(game.id, {tag: 'EnemyDamage', contents: [id, {damageAssignmentSource: {tag: 'InvestigatorSource', contents:investigatorId}, damageAssignmentAmount: 1, damageAssignmentDirect: true, damageAssignmentDelayed: false, damageAssignmentDamageEffect: 'NonAttackDamageEffect'}]})">Add Damage</button>
       </template>
     </div>
 

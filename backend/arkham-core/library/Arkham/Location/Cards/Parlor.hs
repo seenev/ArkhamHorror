@@ -12,7 +12,7 @@ import Arkham.Location.Runner
 import Arkham.Matcher
 
 newtype Parlor = Parlor LocationAttrs
-  deriving anyclass (IsLocation)
+  deriving anyclass IsLocation
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 parlor :: LocationCard Parlor
@@ -28,18 +28,20 @@ instance HasAbilities Parlor where
     withRevealedAbilities attrs
       $ [ withTooltip "\"This is too much for me!\" You run out the front door, fleeing in panic."
             $ locationResignAction attrs
-        , restrictedAbility
-            (proxied (assetIs Cards.litaChantler) attrs)
-            1
-            (Uncontrolled <> OnSameLocation)
-            #parley
+        , skillTestAbility
+            $ restrictedAbility
+              (proxied (assetIs Cards.litaChantler) attrs)
+              1
+              (Uncontrolled <> OnSameLocation)
+              #parley
         ]
 
 instance RunMessage Parlor where
   runMessage msg l@(Parlor attrs) = case msg of
     UseThisAbility iid (isProxySource attrs -> True) 1 -> do
       aid <- selectJust $ assetIs Cards.litaChantler
-      push $ parley iid attrs aid #intellect (Fixed 4)
+      sid <- getRandom
+      push $ parley sid iid attrs aid #intellect (Fixed 4)
       pure l
     PassedThisSkillTest iid (isSource attrs -> True) -> do
       aid <- selectJust $ assetIs Cards.litaChantler

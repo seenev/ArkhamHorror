@@ -10,7 +10,7 @@ import Arkham.Treachery.Cards qualified as Cards
 import Arkham.Treachery.Import.Lifted
 
 newtype ConspiracyOfBlood = ConspiracyOfBlood TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 conspiracyOfBlood :: TreacheryCard ConspiracyOfBlood
@@ -23,11 +23,12 @@ instance HasModifiersFor ConspiracyOfBlood where
 
 instance HasAbilities ConspiracyOfBlood where
   getAbilities (ConspiracyOfBlood attrs) =
-    [ restrictedAbility
-        (proxied (EnemyMatcherSource $ EnemyWithTrait Cultist) attrs)
-        1
-        OnSameLocation
-        parleyAction_
+    [ skillTestAbility
+        $ restrictedAbility
+          (proxied (EnemyMatcherSource $ EnemyWithTrait Cultist) attrs)
+          1
+          OnSameLocation
+          parleyAction_
     ]
 
 instance RunMessage ConspiracyOfBlood where
@@ -37,7 +38,8 @@ instance RunMessage ConspiracyOfBlood where
       attachTreachery attrs currentAgenda
       pure t
     UseThisAbility iid (ProxySource (EnemySource eid) source) 1 | isSource attrs source -> do
-      parley iid (attrs.ability 1) eid #willpower (Fixed 4)
+      sid <- getRandom
+      parley sid iid (attrs.ability 1) eid #willpower (Fixed 4)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       toDiscardBy iid (attrs.ability 1) attrs

@@ -61,6 +61,9 @@ mapOneOf f = oneOf . map f
 notOneOf :: (Not a, OneOf a) => [a] -> a
 notOneOf = not_ . oneOf
 
+instance OneOf SourceMatcher where
+  oneOf = SourceMatchesAny
+
 instance OneOf SkillTestMatcher where
   oneOf = SkillTestOneOf
 
@@ -99,6 +102,9 @@ instance OneOf AssetMatcher where
 
 instance OneOf TreacheryMatcher where
   oneOf = TreacheryOneOf
+
+instance OneOf SkillTestResultMatcher where
+  oneOf = ResultOneOf
 
 class WithTrait a where
   withTrait :: Trait -> a
@@ -183,6 +189,12 @@ assetIs = AssetIs . toCardCode
 assetControlledBy :: InvestigatorId -> AssetMatcher
 assetControlledBy = AssetControlledBy . InvestigatorWithId
 
+assetAttachedToAsset :: AssetId -> AssetMatcher
+assetAttachedToAsset = AssetAttachedToAsset . AssetWithId
+
+assetInPlayAreaOf :: InvestigatorId -> AssetMatcher
+assetInPlayAreaOf = AssetInPlayAreaOf . InvestigatorWithId
+
 assetWithAttachedEvent :: (AsId a, IdOf a ~ EventId) => a -> AssetMatcher
 assetWithAttachedEvent = AssetWithAttachedEvent . EventWithId . asId
 
@@ -202,6 +214,9 @@ enemyAt = EnemyAt . LocationWithId . asId
 
 enemyAtLocationWith :: InvestigatorId -> EnemyMatcher
 enemyAtLocationWith = EnemyAt . locationWithInvestigator
+
+canParleyEnemy :: InvestigatorId -> EnemyMatcher
+canParleyEnemy = CanParleyEnemy . InvestigatorWithId
 
 enemyEngagedWith :: InvestigatorId -> EnemyMatcher
 enemyEngagedWith = EnemyIsEngagedWith . InvestigatorWithId
@@ -318,6 +333,9 @@ fromSets = oneOf . map CardFromEncounterSet
 
 -- ** Extended Card Helpers **
 
+inDeckOf :: InvestigatorId -> ExtendedCardMatcher
+inDeckOf = InDeckOf . InvestigatorWithId
+
 inHandOf :: InvestigatorId -> ExtendedCardMatcher
 inHandOf = InHandOf . InvestigatorWithId
 
@@ -326,6 +344,9 @@ inDiscardOf = InDiscardOf . InvestigatorWithId
 
 basic :: CardMatcher -> ExtendedCardMatcher
 basic = BasicCardMatch
+
+basicCardIs :: HasCardCode a => a -> ExtendedCardMatcher
+basicCardIs = basic . cardIs
 
 -- ** Card List Helpers **
 
@@ -349,6 +370,15 @@ replaceLocationMatcher lid m = over biplate (transform go)
 
 replaceThatLocation :: Data a => LocationId -> a -> a
 replaceThatLocation lid = replaceLocationMatcher lid ThatLocation
+
+replaceEnemyMatcher :: Data a => EnemyId -> EnemyMatcher -> a -> a
+replaceEnemyMatcher lid m = over biplate (transform go)
+ where
+  go n | m == n = EnemyWithId lid
+  go x = x
+
+replaceThatEnemy :: Data a => EnemyId -> a -> a
+replaceThatEnemy lid = replaceEnemyMatcher lid ThatEnemy
 
 defaultRemoveDoomMatchers :: RemoveDoomMatchers
 defaultRemoveDoomMatchers =

@@ -19,7 +19,7 @@ songOfTheMagahBird = treachery SongOfTheMagahBird Cards.songOfTheMagahBird
 instance HasAbilities SongOfTheMagahBird where
   getAbilities (SongOfTheMagahBird a) =
     [ mkAbility a 1 $ forced $ Leaves #after You $ locationWithTreachery a
-    , restrictedAbility a 2 OnSameLocation actionAbility
+    , skillTestAbility $ restrictedAbility a 2 OnSameLocation actionAbility
     ]
 
 instance RunMessage SongOfTheMagahBird where
@@ -35,7 +35,8 @@ instance RunMessage SongOfTheMagahBird where
         ]
       pure t
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      let chooseSkillTest (lbl, sType) = skillTestLabel lbl sType iid (attrs.ability 2) attrs (Fixed 4)
+      sid <- getRandom
+      let chooseSkillTest (lbl, sType) = skillTestLabel lbl sType sid iid (attrs.ability 2) attrs (Fixed 4)
       player <- getPlayer iid
       push
         $ chooseOne player

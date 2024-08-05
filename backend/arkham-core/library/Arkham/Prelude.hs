@@ -73,6 +73,7 @@ import Language.Haskell.TH hiding (location)
 import Safe as X (fromJustNote)
 import System.Random.Shuffle as X
 
+import Control.Monad.Trans.Class
 import Data.Foldable (Foldable (foldMap), foldlM)
 import Data.List.NonEmpty qualified as NE
 
@@ -98,6 +99,13 @@ suffixedFields = defaultFieldRules & lensField .~ suffixedNamer
 
 guardM :: (Alternative m, Monad m) => m Bool -> m ()
 guardM p = p >>= guard
+
+liftGuardM :: (Alternative (t m), Monad m, MonadTrans t) => m Bool -> t m ()
+liftGuardM p = lift p >>= guard
+
+liftGuardsM :: (MonadTrans t, Monad m, Alternative (t m)) => [m Bool] -> t m ()
+liftGuardsM [] = pure ()
+liftGuardsM (a : as) = liftGuardM a >> liftGuardsM as
 
 mapSet :: Ord b => (a -> b) -> Set a -> Set b
 mapSet = Set.map
@@ -210,6 +218,7 @@ deleteFirstMatch f (a' : as) | f a' = as
 deleteFirstMatch f (b' : as) = b' : deleteFirstMatch f as
 
 data With a b = With a b
+  deriving stock Data
 
 instance (Eq a, Eq b) => Eq (With a b) where
   With a1 b1 == With a2 b2 = a1 == a2 && b1 == b2
@@ -350,6 +359,9 @@ instance Foldable Only where
 
 forMaybeM :: Monad m => [a] -> (a -> m (Maybe b)) -> m [b]
 forMaybeM xs f = catMaybes <$> traverse f xs
+
+whenJustM :: Monad m => m (Maybe a) -> (a -> m ()) -> m ()
+whenJustM mma f = mma >>= traverse_ f
 
 concatMapMaybe :: (a -> Maybe [b]) -> [a] -> [b]
 concatMapMaybe f = concat . mapMaybe f

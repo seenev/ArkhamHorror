@@ -20,7 +20,8 @@ instance HasAbilities MtNgranek where
   getAbilities (MtNgranek attrs) =
     veiled
       attrs
-      [ restrictedAbility attrs 1 (not_ $ Remembered ObtainedSuppliesFromBaharna)
+      [ skillTestAbility
+          $ restrictedAbility attrs 1 (not_ $ Remembered ObtainedSuppliesFromBaharna)
           $ forced
           $ oneOf [Enters #after You (be attrs), DiscoverClues #after You (be attrs) AnyValue]
       ]
@@ -32,10 +33,11 @@ instance RunMessage MtNgranek where
       pure . MtNgranek $ attrs & canBeFlippedL .~ False
     UseThisAbility iid (isSource attrs -> True) 1 -> do
       player <- getPlayer iid
+      sid <- getRandom
       push
         $ chooseOne
           player
-          [ SkillLabel sType [beginSkillTest iid (attrs.ability 1) iid sType (Fixed 3)]
+          [ SkillLabel sType [beginSkillTest sid iid (attrs.ability 1) iid sType (Fixed 3)]
           | sType <- [#combat, #agility]
           ]
       pure l

@@ -14,16 +14,16 @@ import Data.Aeson.TH
 import GHC.Records
 
 data CardDrawRules = ShuffleBackInEachWeakness | AfterDrawDiscard Int
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
 
 data CardDrawState
   = UnresolvedCardDraw
   | InProgress [Card]
   | ResolvedCardDraw [Card]
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
 
 data CardDrawKind = StandardCardDraw | StartingHandCardDraw
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
 
 data CardDraw msg = CardDraw
   { cardDrawSource :: Source
@@ -36,7 +36,7 @@ data CardDraw msg = CardDraw
   , cardDrawRules :: Set CardDrawRules
   , cardDrawAndThen :: Maybe msg
   }
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
 
 instance HasField "kind" (CardDraw msg) CardDrawKind where
   getField = cardDrawKind
@@ -55,10 +55,17 @@ data CardDrew = CardDrew
   , cardDrewRules :: Set CardDrawRules
   , cardDrewTarget :: Maybe Target
   }
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
+
+instance HasField "isEncounterDraw" (CardDraw msg) Bool where
+  getField a = case a.deck of
+    EncounterDeck {} -> True
+    _ -> False
 
 instance HasField "isPlayerDraw" (CardDraw msg) Bool where
-  getField _ = True
+  getField a = case a.deck of
+    InvestigatorDeck {} -> True
+    _ -> False
 
 instance HasField "target" CardDrew (Maybe Target) where
   getField = cardDrewTarget

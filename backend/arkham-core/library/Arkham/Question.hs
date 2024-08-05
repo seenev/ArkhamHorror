@@ -4,11 +4,11 @@
 
 module Arkham.Question where
 
-import Arkham.Prelude
+import Arkham.Prelude hiding (maxBound, minBound)
 
 import Arkham.Ability.Types
 import Arkham.Campaigns.TheForgottenAge.Supply
-import Arkham.Card.CardCode
+import Arkham.Card
 import Arkham.ChaosBagStepState
 import Arkham.Id
 import Arkham.SkillType
@@ -18,15 +18,21 @@ import Arkham.Tarot
 import Arkham.Text
 import Arkham.Window
 import Data.Aeson.TH
+import Data.UUID (nil)
 
 data Component
   = InvestigatorComponent {investigatorId :: InvestigatorId, tokenType :: GameTokenType}
   | InvestigatorDeckComponent {investigatorId :: InvestigatorId}
   | AssetComponent {assetId :: AssetId, tokenType :: GameTokenType}
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
 
 data GameTokenType = ResourceToken | ClueToken | DamageToken | HorrorToken | DoomToken
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Data)
+
+pattern ClueLabel :: InvestigatorId -> [msg] -> UI msg
+pattern ClueLabel iid msgs <- ComponentLabel (InvestigatorComponent iid ClueToken) msgs
+  where
+    ClueLabel iid msgs = ComponentLabel (InvestigatorComponent iid ClueToken) msgs
 
 pattern DamageLabel :: InvestigatorId -> [msg] -> UI msg
 pattern DamageLabel iid msgs <- ComponentLabel (InvestigatorComponent iid DamageToken) msgs
@@ -67,7 +73,12 @@ data UI msg
   | GridLabel {gridLabel :: Text, messages :: [msg]}
   | TarotLabel {tarotCard :: TarotCard, messages :: [msg]}
   | AbilityLabel
-      {investigatorId :: InvestigatorId, ability :: Ability, windows :: [Window], messages :: [msg]}
+      { investigatorId :: InvestigatorId
+      , ability :: Ability
+      , windows :: [Window]
+      , before :: [msg]
+      , messages :: [msg]
+      }
   | ComponentLabel {component :: Component, messages :: [msg]}
   | EndTurnButton {investigatorId :: InvestigatorId, messages :: [msg]}
   | StartSkillTestButton {investigatorId :: InvestigatorId}
@@ -76,26 +87,35 @@ data UI msg
   | EffectActionButton {tooltip :: Tooltip, effectId :: EffectId, messages :: [msg]}
   | Done {label :: Text}
   | SkipTriggersButton {investigatorId :: InvestigatorId}
-  deriving stock (Show, Eq)
+  | CardPile {pile :: [PileCard], messages :: [msg]}
+  deriving stock (Show, Eq, Data)
+
+data PileCard = PileCard
+  { cardId :: CardId
+  , cardOwner :: Maybe InvestigatorId
+  }
+  deriving stock (Show, Eq, Data)
 
 data PaymentAmountChoice msg = PaymentAmountChoice
-  { investigatorId :: InvestigatorId
+  { choiceId :: UUID
+  , investigatorId :: InvestigatorId
   , minBound :: Int
   , maxBound :: Int
   , title :: Text
   , message :: msg
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data AmountChoice = AmountChoice
-  { label :: Text
+  { choiceId :: UUID
+  , label :: Text
   , minBound :: Int
   , maxBound :: Int
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data AmountTarget = MinAmountTarget Int | MaxAmountTarget Int | TotalAmountTarget Int | AmountOneOf [Int]
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data Question msg
   = ChooseOne {choices :: [UI msg]}
@@ -129,10 +149,10 @@ data Question msg
   | DropDown {options :: [(Text, msg)]}
   | PickScenarioSettings
   | PickCampaignSettings
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 data ChoosePlayerChoice = SetLeadInvestigator | SetTurnPlayer
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Data)
 
 targetLabel
   :: (Targetable target, msg ~ Element (t msg), MonoFoldable (t msg))
@@ -160,9 +180,26 @@ mapTargetLabelWith g f = map (uncurry targetLabel . (g &&& f))
 
 $(deriveJSON defaultOptions ''GameTokenType)
 $(deriveJSON defaultOptions ''Component)
-$(deriveJSON defaultOptions ''PaymentAmountChoice)
+$(deriveToJSON defaultOptions ''PaymentAmountChoice)
+instance FromJSON msg => FromJSON (PaymentAmountChoice msg) where
+  parseJSON = withObject "PaymentAmountChoice" $ \o -> do
+    choiceId <- o .:? "choiceId" .!= nil
+    investigatorId <- o .: "investigatorId"
+    minBound <- o .: "minBound"
+    maxBound <- o .: "maxBound"
+    title <- o .: "title"
+    message <- o .: "message"
+    pure PaymentAmountChoice {..}
 $(deriveJSON defaultOptions ''ChoosePlayerChoice)
-$(deriveJSON defaultOptions ''AmountChoice)
+$(deriveToJSON defaultOptions ''AmountChoice)
+instance FromJSON AmountChoice where
+  parseJSON = withObject "AmountChoice" $ \o -> do
+    choiceId <- o .:? "choiceId" .!= nil
+    label <- o .: "label"
+    minBound <- o .: "minBound"
+    maxBound <- o .: "maxBound"
+    pure AmountChoice {..}
 $(deriveJSON defaultOptions ''AmountTarget)
+$(deriveJSON defaultOptions ''PileCard)
 $(deriveJSON defaultOptions ''UI)
 $(deriveJSON defaultOptions ''Question)

@@ -13,12 +13,13 @@ import Arkham.Matcher hiding (PlayCard)
 import Arkham.Window (duringTurnWindow)
 
 newtype Meta = Meta {responseCard :: Maybe Card}
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
 
 newtype LeoAnderson = LeoAnderson (InvestigatorAttrs `With` Meta)
-  deriving anyclass (IsInvestigator)
+  deriving anyclass IsInvestigator
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
+  deriving stock Data
 
 leoAnderson :: InvestigatorCard LeoAnderson
 leoAnderson =
@@ -33,7 +34,10 @@ instance HasModifiersFor LeoAnderson where
 
 instance HasAbilities LeoAnderson where
   getAbilities (LeoAnderson a) =
-    [ restrictedAbility a 1 (Self <> PlayableCardExistsWithCostReduction 1 (InHandOf You <> #ally))
+    [ restrictedAbility
+        a
+        1
+        (Self <> PlayableCardExistsWithCostReduction (Reduce 1) (InHandOf You <> #ally))
         $ freeReaction (TurnBegins #after You)
     ]
 

@@ -29,13 +29,15 @@ instance HasAbilities DeconstructionRoom where
   getAbilities (DeconstructionRoom attrs) =
     withBaseAbilities
       attrs
-      [restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 1]
+      [skillTestAbility $ restrictedAbility attrs 1 Here $ ActionAbility [] $ ActionCost 1]
 
 instance RunMessage DeconstructionRoom where
   runMessage msg l@(DeconstructionRoom attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
+      sid <- getRandom
       push
         $ beginSkillTest
+          sid
           iid
           (toAbilitySource attrs 1)
           (InvestigatorTarget iid)

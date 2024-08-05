@@ -22,27 +22,33 @@ instance HasAbilities Room225 where
   getAbilities (Room225 attrs) =
     withRevealedAbilities
       attrs
-      [ withTooltip
-          "{action}: Test {willpower} (3). If you succeed, remember that the investigators \"cleaned up the blood.\""
+      [ skillTestAbility
+          $ withTooltip
+            "{action}: Test {willpower} (3). If you succeed, remember that the investigators \"cleaned up the blood.\""
           $ restrictedAbility attrs 1 Here actionAbility
-      , withTooltip
-          "{action}: Test {combat} (3). If you succeed, remember that the investigators \"hid the body.\""
+      , skillTestAbility
+          $ withTooltip
+            "{action}: Test {combat} (3). If you succeed, remember that the investigators \"hid the body.\""
           $ restrictedAbility attrs 2 Here actionAbility
-      , withTooltip
-          "{action}: Test {intellect} (3). If you succeed, remember that the investigators \"tidied up the room.\""
+      , skillTestAbility
+          $ withTooltip
+            "{action}: Test {intellect} (3). If you succeed, remember that the investigators \"tidied up the room.\""
           $ restrictedAbility attrs 3 Here actionAbility
       ]
 
 instance RunMessage Room225 where
   runMessage msg l@(Room225 attrs) = case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ beginSkillTest iid (toAbilitySource attrs 1) iid #willpower (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource attrs 1) iid #willpower (Fixed 3)
       pure l
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      push $ beginSkillTest iid (toAbilitySource attrs 2) iid #combat (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource attrs 2) iid #combat (Fixed 3)
       pure l
     UseThisAbility iid (isSource attrs -> True) 3 -> do
-      push $ beginSkillTest iid (toAbilitySource attrs 3) iid #intellect (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (toAbilitySource attrs 3) iid #intellect (Fixed 3)
       pure l
     PassedThisSkillTest _ (isAbilitySource attrs 1 -> True) -> do
       push $ Remember CleanedUpTheBlood

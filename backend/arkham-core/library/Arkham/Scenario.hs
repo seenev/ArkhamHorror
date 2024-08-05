@@ -178,7 +178,7 @@ instance HasModifiersFor TarotCard where
             history <- getHistory TurnHistory iid
             currentSkillTypes <- getSkillTestSkillTypes
             let
-              skillTypes = concat $ historySkillTestsPerformed history
+              skillTypes = concatMap fst $ historySkillTestsPerformed history
               firstIntellectTest = #intellect `notElem` skillTypes && #intellect `elem` currentSkillTypes
             pure
               . toModifiers source
@@ -193,7 +193,7 @@ instance HasModifiersFor TarotCard where
             history <- getHistory TurnHistory iid
             currentSkillTypes <- getSkillTestSkillTypes
             let
-              skillTypes = concat $ historySkillTestsPerformed history
+              skillTypes = concatMap fst $ historySkillTestsPerformed history
               firstAgilityTest = #agility `notElem` skillTypes && #agility `elem` currentSkillTypes
             pure
               . toModifiers source
@@ -208,7 +208,7 @@ instance HasModifiersFor TarotCard where
             history <- getHistory TurnHistory iid
             currentSkillTypes <- getSkillTestSkillTypes
             let
-              skillTypes = concat $ historySkillTestsPerformed history
+              skillTypes = concatMap fst $ historySkillTestsPerformed history
               firstCombatTest = #combat `notElem` skillTypes && #combat `elem` currentSkillTypes
             pure
               . toModifiers source
@@ -223,7 +223,7 @@ instance HasModifiersFor TarotCard where
             history <- getHistory TurnHistory iid
             currentSkillTypes <- getSkillTestSkillTypes
             let
-              skillTypes = concat $ historySkillTestsPerformed history
+              skillTypes = concatMap fst $ historySkillTestsPerformed history
               firstWillpowerTest = #willpower `notElem` skillTypes && #willpower `elem` currentSkillTypes
             pure
               . toModifiers source
@@ -449,7 +449,7 @@ instance RunMessage Scenario where
               source
               iid
               [fromDeck]
-              (Matcher.CardWithSubType BasicWeakness)
+              (Matcher.basic $ Matcher.CardWithSubType BasicWeakness)
               (RemoveFoundFromGame iid 1)
             | iid <- investigators
             ]
@@ -591,7 +591,7 @@ instance RunMessage Scenario where
         let abilities = getAbilities card
         player <- getPlayer investigator
         for_ abilities $ \ability -> do
-          push $ chooseOne player [AbilityLabel investigator ability [] []]
+          push $ chooseOne player [AbilityLabel investigator ability [] [] []]
       pure result
     PreScenarioSetup -> do
       result <- go

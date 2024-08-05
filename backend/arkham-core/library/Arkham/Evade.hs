@@ -11,8 +11,9 @@ import Arkham.Source
 withSkillType :: SkillType -> ChooseEvade -> ChooseEvade
 withSkillType skillType chooseEvade = chooseEvade {chooseEvadeSkillType = skillType}
 
-mkChooseEvade :: (Sourceable source, HasGame m) => InvestigatorId -> source -> m ChooseEvade
-mkChooseEvade iid source =
+mkChooseEvade
+  :: (Sourceable source, HasGame m) => SkillTestId -> InvestigatorId -> source -> m ChooseEvade
+mkChooseEvade sid iid source =
   pure
     $ ChooseEvade
       { chooseEvadeInvestigator = iid
@@ -21,10 +22,22 @@ mkChooseEvade iid source =
       , chooseEvadeTarget = Nothing
       , chooseEvadeSkillType = #agility
       , chooseEvadeIsAction = False
+      , chooseEvadeOverride = False
+      , chooseEvadeSkillTest = sid
       }
 
 mkChooseEvadeMatch
-  :: (Sourceable source, HasGame m) => InvestigatorId -> source -> EnemyMatcher -> m ChooseEvade
-mkChooseEvadeMatch iid source matcher = do
-  chooseEvade <- mkChooseEvade iid source
-  pure $ chooseEvade {chooseEvadeEnemyMatcher = matcher}
+  :: (Sourceable source, HasGame m)
+  => SkillTestId
+  -> InvestigatorId
+  -> source
+  -> EnemyMatcher
+  -> m ChooseEvade
+mkChooseEvadeMatch sid iid source matcher = do
+  chooseEvade <- mkChooseEvade sid iid source
+  let
+    isOverriden = case matcher of
+      CanEvadeEnemyWithOverride {} -> True
+      _ -> False
+
+  pure $ chooseEvade {chooseEvadeEnemyMatcher = matcher, chooseEvadeOverride = isOverriden}

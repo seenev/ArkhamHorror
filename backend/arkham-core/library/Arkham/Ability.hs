@@ -21,7 +21,8 @@ import Arkham.Matcher
 import Arkham.Matcher qualified as Matcher
 import Arkham.Modifier
 import Arkham.Source
-import Control.Lens (set)
+import Control.Lens (over, set, transform)
+import Data.Data.Lens (biplate)
 import GHC.Records
 
 withAdditionalCost :: Cost -> Ability -> Ability
@@ -188,6 +189,8 @@ mkAbility :: (Sourceable a, HasCardCode a) => a -> Int -> AbilityType -> Ability
 mkAbility entity idx type' =
   Ability
     { abilitySource = toSource entity
+    , abilityRequestor = toSource entity
+    , abilityTriggersSkillTest = abilityTypeTriggersSkillTest type'
     , abilityCardCode = toCardCode entity
     , abilityIndex = idx
     , abilityType = type'
@@ -205,8 +208,11 @@ mkAbility entity idx type' =
     }
 
 applyAbilityModifiers :: Ability -> [ModifierType] -> Ability
-applyAbilityModifiers a@Ability {abilityType} modifiers =
-  a {Arkham.Ability.Types.abilityType = applyAbilityTypeModifiers abilityType modifiers}
+applyAbilityModifiers a@Ability {abilityType, abilityCriteria} modifiers =
+  a
+    { Arkham.Ability.Types.abilityType = applyAbilityTypeModifiers abilityType modifiers
+    , Arkham.Ability.Types.abilityCriteria = applyAbilityCriteriaModifiers abilityCriteria modifiers
+    }
 
 overrideAbilityCriteria :: CriteriaOverride -> Ability -> Ability
 overrideAbilityCriteria (CriteriaOverride override) ab =
@@ -226,6 +232,9 @@ isActionAbility :: Ability -> Bool
 isActionAbility Ability {abilityType} =
   notNull $ abilityTypeActions abilityType
 
+abilityTypeTriggersSkillTest :: AbilityType -> Bool
+abilityTypeTriggersSkillTest = any (`elem` [#fight, #evade, #investigate, #circle]) . abilityTypeActions
+
 isTriggeredAbility :: Ability -> Bool
 isTriggeredAbility =
   or . sequence [isReactionAbility, isFastAbility, isActionAbility]
@@ -235,6 +244,7 @@ abilityTypeActions = \case
   FastAbility' _ actions -> actions
   ReactionAbility {} -> []
   CustomizationReaction {} -> []
+  ConstantReaction {} -> []
   ActionAbility actions _ -> #activate : actions
   ActionAbilityWithSkill actions _ _ -> #activate : actions
   ActionAbilityWithBefore actions _ _ -> #activate : actions
@@ -243,6 +253,7 @@ abilityTypeActions = \case
   ForcedAbilityWithCost _ _ -> []
   AbilityEffect _ -> []
   Haunted -> []
+  ServitorAbility action -> [action]
   Cosmos -> []
   Objective aType -> abilityTypeActions aType
   ForcedWhen _ aType -> abilityTypeActions aType
@@ -252,6 +263,7 @@ abilityTypeCost = \case
   FastAbility' cost _ -> cost
   ReactionAbility _ cost -> cost
   CustomizationReaction _ _ cost -> cost
+  ConstantReaction _ _ cost -> cost
   ActionAbility _ cost -> cost
   ActionAbilityWithSkill _ _ cost -> cost
   ActionAbilityWithBefore _ _ cost -> cost
@@ -261,6 +273,7 @@ abilityTypeCost = \case
   AbilityEffect cost -> cost
   Haunted -> Free
   Cosmos -> Free
+  ServitorAbility _ -> Free
   Objective aType -> abilityTypeCost aType
   ForcedWhen _ aType -> abilityTypeCost aType
 
@@ -271,6 +284,8 @@ modifyCost f = \case
     ReactionAbility window $ f cost
   CustomizationReaction label window cost ->
     CustomizationReaction label window $ f cost
+  ConstantReaction label window cost ->
+    ConstantReaction label window $ f cost
   ActionAbility mAction cost ->
     ActionAbility mAction $ f cost
   ActionAbilityWithSkill mAction skill cost ->
@@ -284,6 +299,7 @@ modifyCost f = \case
     ForcedAbilityWithCost window $ f cost
   AbilityEffect cost -> AbilityEffect cost -- modifiers don't yet apply here
   Haunted -> Haunted
+  ServitorAbility action -> ServitorAbility action
   Cosmos -> Cosmos
   Objective aType' -> Objective $ modifyCost f aType'
   ForcedWhen c aType' -> ForcedWhen c $ modifyCost f aType'
@@ -291,21 +307,41 @@ modifyCost f = \case
 applyAbilityTypeModifiers :: AbilityType -> [ModifierType] -> AbilityType
 applyAbilityTypeModifiers aType modifiers = modifyCost (`applyCostModifiers` modifiers) aType
 
+applyAbilityCriteriaModifiers :: Criterion -> [ModifierType] -> Criterion
+applyAbilityCriteriaModifiers c modifiers = foldr applyCriterionModifier c modifiers
+ where
+  isLocationCheck = \case
+    OnSameLocation -> True
+    OnLocation _ -> True
+    _ -> False
+  replaceEngagementCheck = \case
+    EnemyIsEngagedWith _ -> AnyEnemy
+    other -> other
+  handleEnemyCriterion = \case
+    EnemyExists em -> EnemyExists $ over biplate (transform replaceEngagementCheck) em
+    NotAttackingEnemy -> NotAttackingEnemy
+    EnemyExistsAtAttachedLocation em -> EnemyExistsAtAttachedLocation $ over biplate (transform replaceEngagementCheck) em
+    ThisEnemy em -> ThisEnemy $ over biplate (transform replaceEngagementCheck) em
+    EnemyMatchesCriteria ems -> EnemyMatchesCriteria $ map handleEnemyCriterion ems
+  handleEngagementCheck = \case
+    EnemyCriteria ec -> EnemyCriteria $ handleEnemyCriterion ec
+    other -> other
+  k x y z = if x z then y else z
+  applyCriterionModifier :: ModifierType -> Criterion -> Criterion
+  applyCriterionModifier IgnoreOnSameLocation c' = overCriteria (k isLocationCheck NoRestriction) c'
+  applyCriterionModifier IgnoreEngagementRequirement c' = overCriteria handleEngagementCheck c'
+  applyCriterionModifier _ c' = c'
+
 applyCostModifiers :: Cost -> [ModifierType] -> Cost
 applyCostModifiers = foldl' applyCostModifier
 
 applyCostModifier :: Cost -> ModifierType -> Cost
 applyCostModifier _ IgnoreAllCosts = Free
+applyCostModifier (ActionCost _) IgnoreActionCost = Free
 applyCostModifier (ActionCost n) (ActionCostModifier m) =
   ActionCost (max 0 $ n + m)
-applyCostModifier (Costs (x : xs)) modifier@(ActionCostModifier _) = case x of
-  ActionCost _ -> Costs (applyCostModifier x modifier : xs)
-  other -> other <> applyCostModifier (Costs xs) modifier
 applyCostModifier (ActionCost _) (ActionCostSetToModifier m) = ActionCost m
-applyCostModifier (Costs (x : xs)) modifier@(ActionCostSetToModifier _) =
-  case x of
-    ActionCost _ -> Costs (applyCostModifier x modifier : xs)
-    other -> other <> applyCostModifier (Costs xs) modifier
+applyCostModifier (Costs xs) modifier = Costs $ map (`applyCostModifier` modifier) xs
 applyCostModifier cost _ = cost
 
 defaultAbilityWindow :: AbilityType -> WindowMatcher
@@ -319,8 +355,10 @@ defaultAbilityWindow = \case
   ForcedAbilityWithCost window _ -> window
   ReactionAbility window _ -> window
   CustomizationReaction _ window _ -> window
+  ConstantReaction _ window _ -> window
   AbilityEffect _ -> AnyWindow
   Haunted -> AnyWindow
+  ServitorAbility _ -> Matcher.DuringTurn You
   Cosmos -> AnyWindow
   Objective aType -> defaultAbilityWindow aType
   ForcedWhen _ aType -> defaultAbilityWindow aType
@@ -334,11 +372,13 @@ isFastAbilityType = \case
   Objective aType -> isFastAbilityType aType
   ReactionAbility {} -> False
   CustomizationReaction {} -> False
+  ConstantReaction {} -> False
   ActionAbility {} -> False
   ActionAbilityWithSkill {} -> False
   ActionAbilityWithBefore {} -> False
   AbilityEffect {} -> False
   Haunted {} -> False
+  ServitorAbility {} -> False
   Cosmos {} -> False
   ForcedWhen _ aType -> isFastAbilityType aType
 
@@ -351,11 +391,13 @@ isReactionAbilityType = \case
   FastAbility' {} -> False
   ReactionAbility {} -> True
   CustomizationReaction {} -> False
+  ConstantReaction {} -> True
   ActionAbility {} -> False
   ActionAbilityWithSkill {} -> False
   ActionAbilityWithBefore {} -> False
   AbilityEffect {} -> False
   Haunted {} -> False
+  ServitorAbility {} -> False
   Cosmos {} -> False
   ForcedWhen _ aType -> isReactionAbilityType aType
 
@@ -368,11 +410,13 @@ isSilentForcedAbilityType = \case
   FastAbility' {} -> False
   ReactionAbility {} -> False
   CustomizationReaction {} -> False
+  ConstantReaction {} -> False
   ActionAbility {} -> False
   ActionAbilityWithSkill {} -> False
   ActionAbilityWithBefore {} -> False
   AbilityEffect {} -> False
   Haunted {} -> False
+  ServitorAbility {} -> False
   Cosmos {} -> False
   ForcedWhen _ aType -> isSilentForcedAbilityType aType
 
@@ -393,6 +437,7 @@ defaultAbilityLimit = \case
   ForcedAbilityWithCost _ _ -> GroupLimit PerWindow 1
   ReactionAbility _ _ -> PlayerLimit PerWindow 1
   CustomizationReaction {} -> PlayerLimit PerWindow 1
+  ConstantReaction {} -> PlayerLimit PerWindow 1
   FastAbility' {} -> NoLimit
   ActionAbility _ _ -> NoLimit
   ActionAbilityWithBefore {} -> NoLimit
@@ -400,6 +445,7 @@ defaultAbilityLimit = \case
   AbilityEffect _ -> NoLimit
   Objective aType -> defaultAbilityLimit aType
   Haunted -> NoLimit
+  ServitorAbility _ -> NoLimit
   Cosmos -> NoLimit
   ForcedWhen _ aType -> defaultAbilityLimit aType
 

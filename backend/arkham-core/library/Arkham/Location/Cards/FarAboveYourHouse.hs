@@ -23,7 +23,8 @@ farAboveYourHouse =
 instance HasAbilities FarAboveYourHouse where
   getAbilities (FarAboveYourHouse attrs) =
     withBaseAbilities attrs
-      $ [ mkAbility attrs 1
+      $ [ skillTestAbility
+          $ mkAbility attrs 1
           $ ForcedAbility
           $ RevealLocation Timing.After You
           $ LocationWithId
@@ -34,7 +35,8 @@ instance HasAbilities FarAboveYourHouse where
 instance RunMessage FarAboveYourHouse where
   runMessage msg l@(FarAboveYourHouse attrs) = case msg of
     UseCardAbility iid (isSource attrs -> True) 1 _ _ -> do
-      push $ beginSkillTest iid (attrs.ability 1) iid SkillWillpower (Fixed 4)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) iid SkillWillpower (Fixed 4)
       pure l
     FailedSkillTest _ _ source SkillTestInitiatorTarget {} _ n
       | isAbilitySource attrs 1 source -> do

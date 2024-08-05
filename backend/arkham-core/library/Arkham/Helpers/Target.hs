@@ -66,9 +66,12 @@ targetTraits = \case
   BatchTarget {} -> pure mempty
   ActiveCostTarget {} -> pure mempty
   LabeledTarget _ t -> targetTraits t
+  ThisTarget -> pure mempty
 
 targetMatches :: forall m. HasGame m => Target -> TargetMatcher -> m Bool
 targetMatches s = \case
+  NotTarget inner -> not <$> targetMatches s inner
+  TargetWithTrait t -> (t `member`) <$> targetTraits s
   TargetMatchesAny ms -> anyM (targetMatches s) ms
   TargetIs s' -> pure $ s == s'
   TargetAtLocation ls -> do
@@ -81,6 +84,7 @@ targetMatches s = \case
       AssetTarget aid -> isLocation AssetLocation aid
       InvestigatorTarget iid -> isLocation InvestigatorLocation iid
       EnemyTarget eid -> isLocation EnemyLocation eid
+      LocationTarget lid -> pure $ lid `elem` locations
       TreacheryTarget tid -> isLocation TreacheryLocation tid
       EventTarget eid -> fieldMapM EventPlacement placementLocation eid <&> maybe False (`elem` locations)
       _ -> pure False
@@ -120,6 +124,24 @@ targetMatches s = \case
       orM
         [ targetMatches left (AgendaTargetMatches agendaMatcher)
         , targetMatches right (AgendaTargetMatches agendaMatcher)
+        ]
+    _ -> pure False
+  AssetTargetMatches assetMatcher -> case s of
+    AssetTarget aid -> aid <=~> assetMatcher
+    ProxyTarget proxyTarget _ -> targetMatches proxyTarget (AssetTargetMatches assetMatcher)
+    BothTarget left right ->
+      orM
+        [ targetMatches left (AssetTargetMatches assetMatcher)
+        , targetMatches right (AssetTargetMatches assetMatcher)
+        ]
+    _ -> pure False
+  EnemyTargetMatches enemyMatcher -> case s of
+    EnemyTarget eid -> eid <=~> enemyMatcher
+    ProxyTarget proxyTarget _ -> targetMatches proxyTarget (EnemyTargetMatches enemyMatcher)
+    BothTarget left right ->
+      orM
+        [ targetMatches left (EnemyTargetMatches enemyMatcher)
+        , targetMatches right (EnemyTargetMatches enemyMatcher)
         ]
     _ -> pure False
   ScenarioCardTarget -> case s of

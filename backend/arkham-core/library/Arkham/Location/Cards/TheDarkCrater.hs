@@ -15,7 +15,7 @@ data Meta = Meta
   { discoveredCluesThisTurn :: [InvestigatorId]
   , hasUsedSuccess :: [InvestigatorId]
   }
-  deriving stock (Generic)
+  deriving stock Generic
   deriving anyclass (FromJSON, ToJSON)
 
 newtype TheDarkCrater = TheDarkCrater LocationAttrs
@@ -36,11 +36,12 @@ instance HasAbilities TheDarkCrater where
     let meta = toResult @Meta attrs.meta
      in extendRevealed
           attrs
-          [ restrictedAbility attrs 1 Here actionAbility
-          , restrictedAbility
-              attrs
-              2
-              (Here <> youExist (oneOf $ map InvestigatorWithId (discoveredCluesThisTurn meta)))
+          [ skillTestAbility $ restrictedAbility attrs 1 Here actionAbility
+          , skillTestAbility
+              $ restrictedAbility
+                attrs
+                2
+                (Here <> youExist (oneOf $ map InvestigatorWithId (discoveredCluesThisTurn meta)))
               $ forced
               $ TurnEnds #when You
           ]
@@ -48,7 +49,8 @@ instance HasAbilities TheDarkCrater where
 instance RunMessage TheDarkCrater where
   runMessage msg l@(TheDarkCrater attrs) = runQueueT $ case msg of
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      beginSkillTest iid (attrs.ability 1) iid #intellect (Fixed 5)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 1) iid #intellect (Fixed 5)
       pure l
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       let meta = toResult @Meta attrs.meta
@@ -58,7 +60,8 @@ instance RunMessage TheDarkCrater where
           reduceAlarmLevel (attrs.ability 1) iid
           pure $ TheDarkCrater $ attrs & metaL .~ toJSON (meta {hasUsedSuccess = iid : hasUsedSuccess meta})
     UseThisAbility iid (isSource attrs -> True) 2 -> do
-      beginSkillTest iid (attrs.ability 2) iid #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 2) iid #willpower (Fixed 3)
       pure l
     FailedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
       raiseAlarmLevel (attrs.ability 2) iid

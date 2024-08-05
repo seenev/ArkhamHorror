@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Arkham.Effect.Types where
 
 import Arkham.Prelude
@@ -20,7 +22,8 @@ import Arkham.Source
 import Arkham.Target
 import Arkham.Trait
 import Arkham.Window (Window)
-import Data.Typeable
+import Data.Aeson.TH
+import Data.Data
 import GHC.Records
 
 class
@@ -65,14 +68,34 @@ data EffectAttrs = EffectAttrs
   -- ^ Sometimes an effect may cause infinite recursion, this bool can be used
   -- to track and escape recursion
   , effectExtraMetadata :: Value
+  , effectSkillTest :: Maybe SkillTestId
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Eq, Data)
+
+replaceNextSkillTest :: SkillTestId -> EffectAttrs -> EffectAttrs
+replaceNextSkillTest sid e = e {effectWindow = replaceNextSkillTestWindow e.window}
+ where
+  replaceNextSkillTestWindow = \case
+    Just EffectNextSkillTestWindow -> Just $ EffectSkillTestWindow sid
+    a -> a
 
 instance HasCardCode EffectAttrs where
   toCardCode = effectCardCode
 
 instance HasField "id" EffectAttrs EffectId where
   getField = effectId
+
+instance HasField "window" EffectAttrs (Maybe EffectWindow) where
+  getField = effectWindow
+
+instance HasField "skillTest" EffectAttrs (Maybe SkillTestId) where
+  getField = effectSkillTest
+
+instance HasField "window" Effect (Maybe EffectWindow) where
+  getField = effectWindow . toAttrs
+
+instance HasField "skillTest" Effect (Maybe SkillTestId) where
+  getField = effectSkillTest . toAttrs
 
 finishedL :: Lens' EffectAttrs Bool
 finishedL = lens effectFinished $ \m x -> m {effectFinished = x}
@@ -94,6 +117,16 @@ instance HasField "metadata" EffectAttrs (Maybe (EffectMetadata Window Message))
 
 instance HasField "meta" EffectAttrs (Maybe (EffectMetadata Window Message)) where
   getField = effectMetadata
+
+instance HasField "metaTarget" EffectAttrs (Maybe Target) where
+  getField e = case e.meta of
+    Just (EffectMetaTarget t) -> Just t
+    _ -> Nothing
+
+instance HasField "metaInt" EffectAttrs (Maybe Int) where
+  getField e = case e.meta of
+    Just (EffectInt t) -> Just t
+    _ -> Nothing
 
 instance HasField "extra" EffectAttrs Value where
   getField = effectExtraMetadata
@@ -119,6 +152,7 @@ baseAttrs cardCode eid meffectMetadata source target =
     , effectWindow = Nothing
     , effectFinished = False
     , effectExtraMetadata = Null
+    , effectSkillTest = Nothing
     }
 
 targetL :: Lens' EffectAttrs Target
@@ -126,23 +160,6 @@ targetL = lens effectTarget $ \m x -> m {effectTarget = x}
 
 metadataL :: Lens' EffectAttrs (Maybe (EffectMetadata Window Message))
 metadataL = lens effectMetadata $ \m x -> m {effectMetadata = x}
-
-instance ToJSON EffectAttrs where
-  toJSON = genericToJSON $ aesonOptions $ Just "effect"
-  toEncoding = genericToEncoding $ aesonOptions $ Just "effect"
-
-instance FromJSON EffectAttrs where
-  parseJSON = withObject "EffectAttrs" $ \o -> do
-    effectId <- o .: "id"
-    effectCardCode <- o .: "cardCode"
-    effectTarget <- o .: "target"
-    effectSource <- o .: "source"
-    effectTraits <- o .: "traits"
-    effectMetadata <- o .: "metadata"
-    effectWindow <- o .: "window"
-    effectFinished <- o .: "finished"
-    effectExtraMetadata <- o .:? "extraMetadata" .!= Null
-    pure EffectAttrs {..}
 
 instance HasAbilities EffectAttrs
 
@@ -173,6 +190,11 @@ instance Sourceable EffectAttrs where
   isSource _ _ = False
 
 data Effect = forall a. IsEffect a => Effect a
+
+instance Data Effect where
+  gunfold _ _ _ = error "gunfold(Effect)"
+  toConstr _ = error "toConstr(Effect)"
+  dataTypeOf _ = error "dataTypeOf(Effect)"
 
 instance Eq Effect where
   (Effect (a :: a)) == (Effect (b :: b)) = case eqT @a @b of
@@ -223,3 +245,5 @@ disable = disableEffect
 
 setEffectMeta :: ToJSON a => a -> EffectAttrs -> EffectAttrs
 setEffectMeta a = extraL .~ toJSON a
+
+$(deriveJSON (aesonOptions $ Just "effect") ''EffectAttrs)

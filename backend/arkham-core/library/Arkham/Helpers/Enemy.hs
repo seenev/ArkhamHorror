@@ -8,6 +8,7 @@ import Arkham.Classes.HasGame
 import Arkham.Classes.HasQueue
 import Arkham.Classes.Query
 import Arkham.Enemy.Types
+import Arkham.Game.Helpers (sourceMatches)
 import Arkham.GameValue
 import Arkham.Helpers.Investigator
 import Arkham.Helpers.Location
@@ -106,9 +107,10 @@ getModifiedKeywords e = do
 
 canEnterLocation :: HasGame m => EnemyId -> LocationId -> m Bool
 canEnterLocation eid lid = do
-  modifiers' <- getModifiers lid
+  modifiers' <- (<>) <$> getModifiers lid <*> getModifiers eid
   not <$> flip anyM modifiers' \case
     Modifier.CannotBeEnteredBy matcher -> eid <=~> matcher
+    Modifier.CannotMove -> fieldMap EnemyPlacement isInPlayPlacement eid
     _ -> pure False
 
 getFightableEnemyIds :: (HasGame m, Sourceable source) => InvestigatorId -> source -> m [EnemyId]
@@ -134,8 +136,10 @@ getFightableEnemyIds iid (toSource -> source) = do
         ( \case
             Modifier.CanOnlyBeAttackedByAbilityOn cardCodes -> case source of
               (AssetSource aid) ->
-                (`member` cardCodes) <$> field AssetCardCode aid
+                (`notMember` cardCodes) <$> field AssetCardCode aid
               _ -> pure True
+            Modifier.CannotBeAttackedByPlayerSourcesExcept sourceMatcher ->
+              not <$> sourceMatches source sourceMatcher
             _ -> pure False
         )
         modifiers'

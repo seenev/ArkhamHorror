@@ -1,5 +1,6 @@
 module Arkham.Helpers.Calculation (module Arkham.Helpers.Calculation, module Arkham.Calculation) where
 
+import Arkham.Asset.Types (Field (..))
 import Arkham.Calculation
 import Arkham.Card
 import Arkham.ClassSymbol
@@ -15,13 +16,16 @@ import Arkham.Helpers.Investigator
 import Arkham.Helpers.Log
 import Arkham.Helpers.Scenario
 import Arkham.Helpers.SkillTest.Target
+import Arkham.Helpers.Slot
 import Arkham.Investigator.Types (Field (..))
 import Arkham.Location.Types (Field (..))
 import Arkham.Matcher
 import Arkham.Modifier
+import Arkham.Name
 import Arkham.Prelude
 import Arkham.Projection
 import Arkham.Scenario.Types (Field (..))
+import Arkham.ScenarioLogKey
 import Arkham.Target
 import Arkham.Token
 
@@ -30,7 +34,7 @@ calculate = go
  where
   go = \case
     Fixed n -> pure n
-    MaxCalculation n d -> min n <$> go d
+    MaxCalculation n d -> min <$> go n <*> go d
     DividedByCalculation d n -> (`div` n) <$> go d
     SumCalculation ds -> sum <$> traverse go ds
     SubtractCalculation d1 d2 -> (-) <$> go d1 <*> go d2
@@ -52,7 +56,7 @@ calculate = go
     AssetFieldCalculation aid fld -> field fld aid
     InvestigatorFieldCalculation iid fld -> field fld iid
     InvestigatorHandLengthCalculation iid -> fieldMap InvestigatorHand length iid
-    EnemyMaybeFieldCalculation eid fld -> fromJustNote "missing maybe field" <$> field fld eid
+    EnemyMaybeFieldCalculation eid fld -> fromMaybe 0 . join <$> fieldMay fld eid
     VictoryDisplayCountCalculation mtchr -> selectCount $ VictoryDisplayCardMatch mtchr
     EnemyMaybeGameValueFieldCalculation eid fld -> maybe (error "missing maybe field") getGameValue =<< field fld eid
     EnemyFieldCalculation eid fld -> field fld eid
@@ -61,11 +65,15 @@ calculate = go
         Just (EnemyTarget eid) -> field fld eid
         _ -> pure 0
     LocationFieldCalculation lid fld -> field fld lid
+    LocationMaybeFieldCalculation lid fld -> fromJustNote "missing maybe field" <$> field fld lid
     InvestigatorLocationFieldCalculation iid fld -> do
       maybe (pure 0) (field fld) =<< field InvestigatorLocation iid
+    InvestigatorLocationMaybeFieldCalculation iid fld -> do
+      maybe (pure 0) (fieldMap fld (fromMaybe 0)) =<< field InvestigatorLocation iid
     CardCostCalculation iid' cId -> getCard cId >>= getModifiedCardCost iid'
     ScenarioInDiscardCountCalculation mtchr -> length <$> findInDiscard mtchr
     InvestigatorTokenCountCalculation iid token -> fieldMap InvestigatorTokens (countTokens token) iid
+    AssetTokenCountCalculation aid token -> fieldMap AssetTokens (countTokens token) aid
     GameValueCalculation gv -> getGameValue gv
     DoomCountCalculation -> getDoomCount
     DistanceFromCalculation iid matcher -> do
@@ -106,3 +114,14 @@ calculate = go
             LocationVengeance
             (LocationWithModifier InVictoryDisplayForCountingVengeance)
       pure $ inVictoryDisplay + locationsWithModifier + vengeanceCards
+    EmptySlotsCalculation investigatorMatcher slotType -> do
+      investigators <- select investigatorMatcher
+      slots <- concatMapM (fieldMap InvestigatorSlots (findWithDefault [] slotType)) investigators
+      pure $ count isEmptySlot slots
+    AmountYouOweToBiancaDieKatz investigatorMatcher -> do
+      i <- selectJust investigatorMatcher
+      let
+        toResources = \case
+          (YouOweBiancaResources (Labeled _ iid') n) | i == iid' -> n
+          _ -> 0
+      sum . map toResources . toList <$> scenarioField ScenarioRemembered

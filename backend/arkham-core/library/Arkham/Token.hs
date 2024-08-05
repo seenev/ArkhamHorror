@@ -19,8 +19,10 @@ data Token
   | Doom
   | Durability
   | Evidence
+  | Growth
   | Horror
   | Key
+  | Lead
   | Leyline
   | Lock
   | LostSoul
@@ -28,7 +30,10 @@ data Token
   | Resource
   | Secret
   | Supply
+  | Suspicion
+  | Time
   | Try
+  | Wish
   | Whistle
   deriving stock (Show, Eq, Ord, Generic, Data)
   deriving anyclass (ToJSON, FromJSON, ToJSONKey, FromJSONKey)

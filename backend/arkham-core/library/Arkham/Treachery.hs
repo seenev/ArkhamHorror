@@ -444,6 +444,11 @@ allTreacheries =
     , SomeTreacheryCard deafeningSilence
     , SomeTreacheryCard ruinedFilm
     , SomeTreacheryCard burdenOfLeadership
+    , -- The Feast of Hemloch Vale
+      -- signature [fhv]
+      SomeTreacheryCard hastyRepairs
+    , SomeTreacheryCard failedExperiment
+    , SomeTreacheryCard wheresPa
     , -- Return to the Night of the Zealot
       -- Return to the Gathering
       SomeTreacheryCard theZealotsSeal
@@ -510,6 +515,15 @@ allTreacheries =
     , SomeTreacheryCard morbidAwareness
     , --- Sins of the Past
       SomeTreacheryCard chillingPresence
+    , -- Parallel
+      --- All or Nothing
+      SomeTreacheryCard hospitalDebtsAdvanced
+    , --- By the Book
+      SomeTreacheryCard coverUpAdvanced
+    , --- Red Tide Rising
+      SomeTreacheryCard abandonedAndAloneAdvanced
+    , --- On the Road Again
+      SomeTreacheryCard hardTimes
     , -- Promo
       --- The Dirge of Reason
       SomeTreacheryCard theDirgeOfReason

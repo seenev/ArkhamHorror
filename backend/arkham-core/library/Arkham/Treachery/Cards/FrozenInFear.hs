@@ -10,7 +10,7 @@ import Arkham.Treachery.Helpers
 import Arkham.Treachery.Runner
 
 newtype FrozenInFear = FrozenInFear TreacheryAttrs
-  deriving anyclass (IsTreachery)
+  deriving anyclass IsTreachery
   deriving newtype (Show, Eq, ToJSON, FromJSON, Entity)
 
 frozenInFear :: TreacheryCard FrozenInFear
@@ -26,7 +26,7 @@ instance HasModifiersFor FrozenInFear where
   getModifiersFor _ _ = pure []
 
 instance HasAbilities FrozenInFear where
-  getAbilities (FrozenInFear a) = [restrictedAbility a 1 (InThreatAreaOf You) $ forced $ TurnEnds #after You]
+  getAbilities (FrozenInFear a) = [skillTestAbility $ restrictedAbility a 1 (InThreatAreaOf You) $ forced $ TurnEnds #after You]
 
 instance RunMessage FrozenInFear where
   runMessage msg t@(FrozenInFear attrs) = case msg of
@@ -34,7 +34,8 @@ instance RunMessage FrozenInFear where
       push $ placeInThreatArea attrs iid
       pure t
     UseThisAbility iid (isSource attrs -> True) 1 -> do
-      push $ beginSkillTest iid (attrs.ability 1) iid #willpower (Fixed 3)
+      sid <- getRandom
+      push $ beginSkillTest sid iid (attrs.ability 1) iid #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 1 -> True) -> do
       push $ toDiscardBy iid (attrs.ability 1) attrs

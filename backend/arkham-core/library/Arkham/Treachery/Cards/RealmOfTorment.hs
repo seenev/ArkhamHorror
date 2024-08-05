@@ -16,7 +16,7 @@ realmOfTorment = treachery RealmOfTorment Cards.realmOfTorment
 instance HasAbilities RealmOfTorment where
   getAbilities (RealmOfTorment a) =
     [ restrictedAbility a 1 (InThreatAreaOf You) $ forced $ TurnBegins #when You
-    , restrictedAbility a 2 (InThreatAreaOf You) $ forced $ TurnEnds #when You
+    , skillTestAbility $ restrictedAbility a 2 (InThreatAreaOf You) $ forced $ TurnEnds #when You
     ]
 
 instance RunMessage RealmOfTorment where
@@ -28,7 +28,8 @@ instance RunMessage RealmOfTorment where
       runHauntedAbilities iid
       pure t
     UseCardAbility iid (isSource attrs -> True) 2 _ _ -> do
-      revelationSkillTest iid (attrs.ability 2) #willpower (Fixed 3)
+      sid <- getRandom
+      beginSkillTest sid iid (attrs.ability 2) iid #willpower (Fixed 3)
       pure t
     PassedThisSkillTest iid (isAbilitySource attrs 2 -> True) -> do
       toDiscardBy iid (attrs.ability 1) attrs
