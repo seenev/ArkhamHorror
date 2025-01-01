@@ -6,7 +6,10 @@ import type { Ability } from '@/arkham/types/Ability';
 import type { Action } from '@/arkham/types/Action';
 import { MessageType } from '@/arkham/types/Message';
 import { replaceIcons } from '@/arkham/helpers';
+import { handleI18n } from '@/arkham/i18n';
+import { useI18n } from 'vue-i18n';
 
+const { t } = useI18n()
 const props = withDefaults(defineProps<{
  ability: AbilityLabel | FightLabel | EvadeLabel | EngageLabel
  tooltipIsButtonText?: boolean
@@ -62,7 +65,78 @@ const isInvestigate = computed(() => isAction("Investigate"))
 const isFight = computed(() => isAction("Fight"))
 const isEvade = computed(() => isAction("Evade"))
 const isEngage = computed(() => isAction("Engage"))
-const display = computed(() => !isAction("Move") || props.showMove)
+
+const abilityLabel = computed(() => {
+  // don't use isButtonText
+  if (isButtonText.value && tooltip.value) {
+    return tooltip.value.content
+  }
+
+  if (props.ability.tag === MessageType.ABILITY_LABEL) {
+    if (props.ability.ability.displayAsAction ?? false) {
+      const { cost } = ability.value.type
+      return replaceIcons("{action}".repeat(totalActionCost(cost)))
+    }
+  }
+
+  if (props.ability.tag === MessageType.EVADE_LABEL) {
+    return t('Evade')
+  }
+
+  if (props.ability.tag === MessageType.FIGHT_LABEL) {
+    return t('Fight')
+  }
+
+  if (props.ability.tag === MessageType.ENGAGE_LABEL) {
+    return t('Engage')
+  }
+
+  if (isForcedAbility.value === true) {
+    return t('Forced')
+  }
+
+  if (isDelayedAbility.value === true) {
+    return t('Delayed')
+  }
+
+  if (isObjective.value === true) {
+    return t('Objective')
+  }
+
+  if (ability.value && ability.value.type.tag === "CustomizationReaction") {
+    return ability.value.type.label
+  }
+
+  if (ability.value && ability.value.type.tag === "ConstantReaction") {
+    return ability.value.type.label
+  }
+
+  if (ability.value && ability.value.type.tag === "ServitorAbility") {
+    return ability.value.type.action
+  }
+
+  if (isReactionAbility.value === true) {
+    return ""
+  }
+
+  if (ability.value && (ability.value.type.tag === "ActionAbility" || ability.value.type.tag === "ActionAbilityWithBefore" || ability.value.type.tag === "ActionAbilityWithSkill")) {
+    const { actions, cost } = ability.value.type
+    const total = totalActionCost(cost)
+    if (actions.length === 1) {
+      return `${total > 0 ? replaceIcons("{action}".repeat(total)) : ""}${actions[0]}`
+    }
+
+    return replaceIcons("{action}".repeat(totalActionCost(cost)))
+  }
+
+  if (isHaunted.value === true) {
+    return t('Haunted')
+  }
+
+  return ""
+})
+const display = computed(() => !(isAction("Move") && ability.value.index === 102) || props.showMove) && abilityLabel != ""
+
 const isSingleActionAbility = computed(() => {
   if (!ability.value) {
     return false
@@ -77,8 +151,9 @@ const isSingleActionAbility = computed(() => {
 })
 
 const tooltip = computed(() => {
-  const body = ability.value && ability.value.tooltip
+  var body = ability.value && ability.value.tooltip
   if (body) {
+    body = body.startsWith("$") ? handleI18n(body, t) : body
     const content = replaceIcons(body).replace(/_([^_]*)_/g, '<b>$1</b>')
     return { content, html: true }
   }
@@ -129,71 +204,11 @@ const isObjective = computed(() => ability.value && ability.value.type.tag === "
 const isFastActionAbility = computed(() => ability.value && ability.value.type.tag === "FastAbility")
 const isReactionAbility = computed(() => ability.value && ability.value.type.tag === "ReactionAbility")
 const isForcedAbility = computed(() => ability.value && ability.value.type.tag === "ForcedAbility")
+const isDelayedAbility = computed(() => ability.value && ability.value.type.tag === "DelayedAbility")
 const isHaunted = computed(() => ability.value && ability.value.type.tag === "Haunted")
 
 const isNeutralAbility = computed(() => !(isInvestigate.value || isFight.value || isEvade.value || isEngage.value))
 
-const abilityLabel = computed(() => {
-  // don't use isButtonText
-  if (isButtonText.value) {
-    return tooltip.value.content
-  }
-
-  if (props.ability.tag === MessageType.ABILITY_LABEL) {
-    if (props.ability.ability.displayAsAction ?? false) {
-      return ""
-    }
-  }
-
-  if (props.ability.tag === MessageType.EVADE_LABEL) {
-    return "Evade"
-  }
-
-  if (props.ability.tag === MessageType.FIGHT_LABEL) {
-    return "Fight"
-  }
-
-  if (props.ability.tag === MessageType.ENGAGE_LABEL) {
-    return "Engage"
-  }
-
-  if (isForcedAbility.value === true) {
-    return "Forced"
-  }
-
-  if (isObjective.value === true) {
-    return "Objective"
-  }
-
-  if (ability.value.type.tag === "CustomizationReaction") {
-    return ability.value.type.label
-  }
-
-  if (ability.value.type.tag === "ConstantReaction") {
-    return ability.value.type.label
-  }
-
-  if (ability.value.type.tag === "ServitorAbility") {
-    return ability.value.type.action
-  }
-
-  if (isReactionAbility.value === true) {
-    return ""
-  }
-
-  if (ability.value && (ability.value.type.tag === "ActionAbility" || ability.value.type.tag === "ActionAbilityWithBefore" || ability.value.type.tag === "ActionAbilityWithSkill")) {
-    const { actions } = ability.value.type
-    if (actions.length === 1) {
-      return actions[0]
-    }
-  }
-
-  if (isHaunted.value === true) {
-    return "Haunted"
-  }
-
-  return ""
-})
 
 const classObject = computed(() => {
   if (isButtonText.value) {
@@ -201,12 +216,10 @@ const classObject = computed(() => {
   }
   return {
     'zeroed-ability-button': isZeroedActionAbility.value && isNeutralAbility.value,
-    'ability-button': isSingleActionAbility.value && isNeutralAbility.value,
-    'double-ability-button': isDoubleActionAbility.value,
-    'triple-ability-button': isTripleActionAbility.value,
     'fast-ability-button': isFastActionAbility.value,
     'reaction-ability-button': isReactionAbility.value,
     'forced-ability-button': isForcedAbility.value,
+    'delayed-ability-button': isDelayedAbility.value,
     'investigate-button': isInvestigate.value,
     'fight-button': isFight.value,
     'evade-button': isEvade.value,
@@ -223,17 +236,21 @@ const classObject = computed(() => {
     :class="classObject"
     @click="$emit('choose', ability)"
     v-tooltip="!isButtonText && tooltip"
-    >{{abilityLabel}}</button>
+    v-html="abilityLabel"
+    ></button>
 </template>
 
 <style lang="scss" scoped>
 .button{
+  border: 0;
   margin-top: 2px;
   color: #fff;
   cursor: pointer;
   border-radius: 4px;
   background-color: #555;
   z-index: 1000;
+  width: 100%;
+  min-width: max-content;
 }
 
 .objective-button {
@@ -324,6 +341,13 @@ const classObject = computed(() => {
 
 .forced-ability-button {
   background-color: #222;
+  outline: 2px solid var(--select);
+  color: #fff;
+}
+
+.delayed-ability-button {
+  background-color: #222;
+  outline: 2px solid var(--select);
   color: #fff;
 }
 

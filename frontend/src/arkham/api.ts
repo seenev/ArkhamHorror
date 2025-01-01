@@ -1,5 +1,5 @@
 import api from '@/api';
-import { Game, gameDecoder } from '@/arkham/types/Game';
+import { Game, GameDetailsEntry, gameDecoder, gameDetailsEntryDecoder } from '@/arkham/types/Game';
 import { Deck, deckDecoder } from '@/arkham/types/Deck';
 import { CardDef, cardDefDecoder } from '@/arkham/types/CardDef';
 import { Difficulty } from '@/arkham/types/Difficulty';
@@ -42,15 +42,15 @@ export const fetchGameReplay = (gameId: string, step: number): Promise<FetchRepl
       .then((gameData) => Promise.resolve({ game: gameData, totalSteps }));
   });
 
-export const fetchGames = (): Promise<Game[]> => api
+export const fetchGames = (): Promise<GameDetailsEntry[]> => api
   .get('arkham/games')
   .then((resp) => {
-      const failed = resp.data.filter((g) => g.error !== undefined)
+      const failed = resp.data.filter((g: any) => g.error !== undefined)
       if (failed.length > 0) {
         console.log(failed)
       }
 
-      return JsonDecoder.array(gameDecoder, 'ArkhamGame[]').decodeToPromise(resp.data.filter((g: any) => g.error === undefined))
+      return JsonDecoder.array(gameDetailsEntryDecoder, 'GameEntryDetails[]').decodeToPromise(resp.data.filter((g: any) => g.error === undefined))
   });
 
 export const fetchDecks = (): Promise<Deck[]> => api
@@ -74,9 +74,9 @@ export const fetchCard = (cardCode: string): Promise<CardDef> => {
   .then((resp) => cardDefDecoder.decodeToPromise(resp.data));
 }
 
-export const fetchInvestigators = (): Promise<CardDef[]> => api
+export const fetchInvestigators = (): Promise<string[]> => api
   .get('arkham/investigators')
-  .then((resp) => JsonDecoder.array(cardDefDecoder, 'CardDef[]').decodeToPromise(resp.data));
+  .then((resp) => JsonDecoder.array(JsonDecoder.string, 'string[]').decodeToPromise(resp.data));
 
 export const newDeck = (
   deckId: string,
@@ -103,6 +103,9 @@ export const deleteDeck = (deckId: string): Promise<void> => api
 export const syncDeck = (deckId: string): Promise<Deck> => api
   .post(`arkham/decks/${deckId}/sync`)
   .then((resp) => deckDecoder.decodeToPromise(resp.data));
+
+export const fileBug = (gameId: string): Promise<void> => api
+  .post(`arkham/games/${gameId}/file-bug`)
 
 export const updateGame = (gameId: string, choice: number, investigatorId: string | null): Promise<void> => api
   .put(`arkham/games/${gameId}`,  {tag: 'Answer', contents: { choice, investigatorId }})
@@ -167,6 +170,9 @@ export const joinGame = (gameId: string): Promise<Game> => api
 
 export const undoChoice = (gameId: string): Promise<void> => api
   .put(`arkham/games/${gameId}/undo`)
+
+export const undoScenarioChoice = (gameId: string): Promise<void> => api
+  .put(`arkham/games/${gameId}/undo/scenario`)
 
 export const debugGame = (formData: FormData): Promise<Game> => api
   .post("arkham/games/import", formData, { headers: { 'Content-Type': 'multipart/form-data' } })

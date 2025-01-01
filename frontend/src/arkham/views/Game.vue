@@ -1,40 +1,40 @@
 <script lang="ts" setup>
+import { LottieAnimation } from "lottie-web-vue"
+import { useRouter } from 'vue-router'
+import processingJSON from "@/assets/processing.json"
+import { onMounted, reactive, ref, computed, provide, onUnmounted, watch } from 'vue'
 import GameDetails from '@/arkham/components/GameDetails.vue';
+import * as ArkhamGame from '@/arkham/types/Game';
 import { JsonDecoder } from 'ts.data.json';
+import { EyeIcon, ArrowsRightLeftIcon, BugAntIcon, ExclamationTriangleIcon, BackwardIcon, DocumentTextIcon, BeakerIcon, BoltIcon, DocumentArrowDownIcon, AdjustmentsHorizontalIcon } from '@heroicons/vue/20/solid'
 import { useWebSocket, useClipboard } from '@vueuse/core'
-import { reactive, ref, computed, provide, onUnmounted, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import * as Arkham from '@/arkham/types/Game'
 import { imgsrc } from '@/arkham/helpers';
-import { fetchGame, undoChoice } from '@/arkham/api'
+import { fetchGame, undoChoice, undoScenarioChoice } from '@/arkham/api'
+import * as Api from '@/arkham/api'
+import Draggable from '@/components/Draggable.vue'
 import GameLog from '@/arkham/components/GameLog.vue'
+import * as Message from '@/arkham/types/Message'
 import api from '@/api'
 import CardView from '@/arkham/components/Card.vue'
+import Menu from '@/components/Menu.vue'
+import { useMenu } from '@/composeable/menu'
+import { MenuItem } from '@headlessui/vue'
 import CardOverlay from '@/arkham/components/CardOverlay.vue'
 import StandaloneScenario from '@/arkham/components/StandaloneScenario.vue'
 import ScenarioSettings from '@/arkham/components/ScenarioSettings.vue'
 import Campaign from '@/arkham/components/Campaign.vue'
 import CampaignLog from '@/arkham/components/CampaignLog.vue'
 import CampaignSettings from '@/arkham/components/CampaignSettings.vue'
+import Settings from '@/arkham/components/Settings.vue'
 import { Card, cardDecoder, toCardContents } from '@/arkham/types/Card'
 import { TarotCard, tarotCardDecoder, tarotCardImage } from '@/arkham/types/TarotCard'
 import { useCardStore } from '@/stores/cards'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useDebug } from '@/arkham/debug'
 
-export interface Props {
-  gameId: string
-  spectate?: boolean
-}
-
-const source = ref(`${window.location.href}/join`) // fix-syntax`
-
-const props = withDefaults(defineProps<Props>(), { spectate: false })
-
-const debug = useDebug()
-const store = useCardStore()
-const { copy } = useClipboard({ source })
-
+// Types
 interface GameCard {
   title: string
   card: Card
@@ -46,6 +46,90 @@ interface GameCardOnly {
   card: Card
 }
 
+// TODO: contents should not be string
+type ServerResult =
+  | { tag: "GameError"; contents: string }
+  | { tag: "GameMessage"; contents: string }
+  | { tag: "GameTarot"; contents: string }
+  | { tag: "GameCard"; contents: string }
+  | { tag: "GameCardOnly"; contents: string }
+  | { tag: "GameUpdate"; contents: string }
+
+// Setup
+export interface Props {
+  gameId: string
+  spectate?: boolean
+}
+const props = withDefaults(defineProps<Props>(), { spectate: false })
+
+const debug = useDebug()
+const source = ref(`${window.location.href}/join`) // fix-syntax`
+const store = useCardStore()
+const userStore = useUserStore()
+const { copy } = useClipboard({ source })
+const { addEntry, menuItems } = useMenu()
+const router = useRouter()
+
+store.fetchCards()
+
+// Refs
+const game = ref<Arkham.Game | null>(null)
+const gameCard = ref<GameCard | null>(null)
+const gameLog = ref<readonly string[]>(Object.freeze([]))
+const playerId = ref<string | null>(null)
+const ready = ref(false)
+const resultQueue = ref<any>([])
+const showLog = ref(false);
+const showShortcuts = ref(false)
+const showSidebar = ref(JSON.parse(localStorage.getItem("showSidebar")??'true'))
+const socketError = ref(false)
+const error = ref<string | null>(null)
+const solo = ref(false)
+const tarotCards = ref<TarotCard[]>([])
+const uiLock = ref<boolean>(false)
+const showSettings = ref(false)
+const processing = ref(false)
+const oldQuestion = ref<Record<string, Question> | null>(null)
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
+
+addEntry({
+  id: "viewSettings",
+  icon: AdjustmentsHorizontalIcon,
+  content: t('gameBar.viewSettings'),
+  shortcut: "S",
+  nested: 'view',
+  action: () => showSettings.value = !showSettings.value
+})
+
+// Reactive
+const preloaded = reactive<string[]>([])
+
+// Computed
+const cards = computed(() => store.cards)
+const choices = computed(() => {
+  if (!game.value || !playerId.value) return []
+  return ArkhamGame.choices(game.value, playerId.value)
+})
+const gameOver = computed(() => game.value?.gameState.tag === "IsOver")
+const question = computed(() => playerId.value ? game.value?.question[playerId.value] : null)
+const websocketUrl = computed(() => {
+  const spectatePrefix = props.spectate ? "/spectate" : ""
+  return `${baseURL}/api/v1/arkham/games/${props.gameId}${spectatePrefix}?token=${userStore.token}`.
+    replace(/https/, 'wss').
+    replace(/http/, 'ws')
+})
+
+await fetchGame(props.gameId, props.spectate).then(async ({ game: newGame, playerId: newPlayerId, multiplayerMode}) => {
+    try { await loadAllImages(newGame) } catch (e) { console.error(e) }
+    game.value = newGame
+    solo.value = multiplayerMode === "Solo"
+    gameLog.value = Object.freeze(newGame.log)
+    playerId.value = newPlayerId
+    ready.value = true
+})
+
+// Local Decoders
 const gameCardDecoder = JsonDecoder.object<GameCard>(
   {
     title: JsonDecoder.string,
@@ -63,66 +147,43 @@ const gameCardOnlyDecoder = JsonDecoder.object<GameCardOnly>(
   'GameCard'
 );
 
-
-const gameCard = ref<GameCard | null>(null)
-const tarotCards = ref<TarotCard[]>([])
-
 const baseURL = `${window.location.protocol}//${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`
-const spectatePrefix = props.spectate ? "/spectate" : ""
 
-const userStore = useUserStore()
-const socketError = ref(false)
-const onError = () => socketError.value = true
-const onConnected = () => socketError.value = false
-const websocketUrl = `${baseURL}/api/v1/arkham/games/${props.gameId}${spectatePrefix}?token=${userStore.token}`.
-  replace(/https/, 'wss').
-  replace(/http/, 'ws')
-const { data, send, close } = useWebSocket(websocketUrl, { autoReconnect: true, onError, onConnected })
-
-onBeforeRouteLeave(() => close())
-onUnmounted(() => close())
-
-store.fetchCards()
-const cards = computed(() => store.cards)
-
-const ready = ref(false)
-const solo = ref(false)
-const game = ref<Arkham.Game | null>(null)
-const playerId = ref<string | null>(null)
-const gameLog = ref<readonly string[]>(Object.freeze([]))
-
-const question = computed(() => playerId.value ? game.value?.question[playerId.value] : null)
-
-async function undo() {
-  resultQueue.value = []
-  gameCard.value = null
-  tarotCards.value = []
-  uiLock.value = false
-  undoChoice(props.gameId)
+// Socket Handling
+const onError = () => {
+  processing.value = false
+  if (game.value && oldQuestion.value) {
+    game.value.question = oldQuestion.value
+  }
+  socketError.value = true
+}
+const onConnected = () => {
+  socketError.value = false
+  processing.value = false
 }
 
-const uiLock = ref<boolean>(false)
+const onMessage = (_ws: WebSocket, event: MessageEvent) => {
+  const result = JSON.parse(event.data)
+  handleResult(result)
+  oldQuestion.value = null
+}
 
-const resultQueue = ref<any>([])
-
-// TODO: contents should not be string
-type ServerResult =
-  | { tag: "GameError"; contents: string }
-  | { tag: "GameMessage"; contents: string }
-  | { tag: "GameTarot"; contents: string }
-  | { tag: "GameCard"; contents: string }
-  | { tag: "GameCardOnly"; contents: string }
-  | { tag: "GameUpdate"; contents: string }
-
+const { send, close } = useWebSocket(websocketUrl.value, { autoReconnect: true, onError, onConnected, onMessage })
 const handleResult = (result: ServerResult) => {
+  processing.value = false
   switch(result.tag) {
     case "GameError":
-      alert(result.contents)
+      if (props.spectate) return
+      error.value = result.contents
+      if(oldQuestion.value) {
+        game.value.question = oldQuestion.value
+      }
       return
     case "GameMessage":
       gameLog.value = Object.freeze([...gameLog.value, result.contents])
       return
     case "GameTarot":
+      if (props.spectate) return
       if (uiLock.value) {
         resultQueue.value.push(result)
       } else {
@@ -133,6 +194,7 @@ const handleResult = (result: ServerResult) => {
       }
       return
     case "GameCard":
+      if (props.spectate) return
       if (uiLock.value) {
         resultQueue.value.push(result)
       } else {
@@ -143,6 +205,7 @@ const handleResult = (result: ServerResult) => {
       }
       return
     case "GameCardOnly":
+      if (props.spectate) return
       if (uiLock.value) {
         resultQueue.value.push(result)
       } else {
@@ -184,34 +247,153 @@ const handleResult = (result: ServerResult) => {
   }
 }
 
+watch(uiLock, async () => {
+  if (uiLock.value) return
+  const r = resultQueue.value.shift()
+  if (r) handleResult(r)
+})
+
+// Keyboard Shortcuts
+const handleKeyPress = (event: KeyboardEvent) => {
+  if (filingBug.value) return
+  if (event.ctrlKey) return
+  if (event.metaKey) return
+  if (event.altKey) return
+
+  if (event.key === 'u') {
+    undo()
+    return
+  }
+
+  if (event.key === 'U') {
+    if (!import.meta.env.PROD) {
+      undoScenario()
+      return
+    }
+  }
+
+  if (event.key === 'D') {
+    debug.toggle()
+    return
+  }
+
+  if (event.key === '?') {
+    showShortcuts.value = !showShortcuts.value
+    return
+  }
+
+  if (event.key === ' ') {
+    const skipTriggers = choices.value.findIndex((c) => c.tag === Message.MessageType.SKIP_TRIGGERS_BUTTON)
+    if (skipTriggers !== -1) choose(skipTriggers)
+    return
+  }
+
+  if (event.key === 'd') {
+    const draw = choices.value.findIndex((c) => {
+      if (c.tag !== Message.MessageType.COMPONENT_LABEL) return false
+      if (c.component.tag !== "InvestigatorDeckComponent") return false
+      if (!playerId.value) return false
+      return game.value?.investigators[c.component.investigatorId]?.playerId === playerId.value
+    })
+    if (draw !== -1) {
+      choose(draw)
+    } else {
+      const drawEncounter = choices.value.findIndex((c) => {
+        if (c.tag !== Message.MessageType.TARGET_LABEL) return false
+        return c.target.tag === "EncounterDeckTarget"
+      })
+
+      if (drawEncounter !== -1) choose(drawEncounter)
+    }
+    return
+  }
+
+  if (event.key === 'r') {
+    const resource = choices.value.findIndex((c) => {
+      if (c.tag !== Message.MessageType.COMPONENT_LABEL) return false
+      if (c.component.tag !== "InvestigatorComponent") return false
+      if (c.component.tokenType !== "ResourceToken") return false
+      if (!playerId.value) return false
+      return game.value?.investigators[c.component.investigatorId]?.playerId === playerId.value
+    })
+    if (resource !== -1) choose(resource)
+    return
+  }
+
+  if (event.key === 'e') {
+    const endTurn = choices.value.findIndex((c) => {
+      if (c.tag !== Message.MessageType.END_TURN_BUTTON) return false
+      return game.value?.investigators[c.investigatorId]?.playerId === playerId.value
+    })
+    if (endTurn !== -1) choose(endTurn)
+    return
+  }
+
+  menuItems.value.forEach((item) => {
+    if (item.shortcut === event.key) item.action()
+  })
+}
+
+// Sidebar
+const toggleSidebar = function () {
+  showSidebar.value = !showSidebar.value
+  localStorage.setItem("showSidebar", JSON.stringify(showSidebar.value))
+}
+
+// Undo
+async function undo() {
+  processing.value = true
+  if (game.value) game.value.question = {}
+  resultQueue.value = []
+  gameCard.value = null
+  tarotCards.value = []
+  uiLock.value = false
+  undoChoice(props.gameId)
+}
+
+async function undoScenario() {
+  processing.value = true
+  if (game.value) game.value.question = {}
+  resultQueue.value = []
+  gameCard.value = null
+  tarotCards.value = []
+  uiLock.value = false
+  undoScenarioChoice(props.gameId)
+}
+
+const filingBug = ref(false)
+const submittingBug = ref(false)
+const bugTitle = ref("")
+const bugDescription = ref("")
+
+async function fileBug() {
+  submittingBug.value = true
+  filingBug.value = false
+  Api.fileBug(props.gameId).then((response) => {
+    const title = encodeURIComponent(bugTitle.value)
+    const body = encodeURIComponent(`${bugDescription.value}\n\nfile: ${response.data}`)
+    window.open(`https://github.com/halogenandtoast/ArkhamHorror/issues/new?labels=bug&title=${title}&body=${body}&assignee=halogenandtoast&projects=halogenandtoast/2`, '_blank')
+    submittingBug.value = false
+  }).catch(() => {
+    alert(t('gameBar.bugSubmittingFail'))
+    submittingBug.value = false
+  })
+}
+
 const continueUI = () => {
   gameCard.value = null
   tarotCards.value = []
   uiLock.value = false
 }
 
-watch(data, async (newData) => {
-  const result = JSON.parse(newData)
-  handleResult(result)
-})
-
-watch(uiLock, async () => {
-  if(!uiLock.value) {
-    const r = resultQueue.value.shift()
-    if (r) {
-      handleResult(r)
-    }
-  }
-})
-
-const preloaded = reactive<string[]>([])
-
+// Image Preloading
 function loadAllImages(game: Arkham.Game): Promise<void[]> {
   const images = Object.values(game.cards).map((card) => {
     return new Promise<void>((resolve, reject) => {
       const { cardCode, isFlipped } = toCardContents(card)
       const suffix = isFlipped ? 'b' : ''
-      const url = imgsrc(`cards/${cardCode.replace(/^c/, '')}${suffix}.jpg`)
+      const actualCardCode = `${cardCode.replace(/^c/, '')}${suffix}`
+      const url = imgsrc(`cards/${actualCardCode}.avif`)
       if (preloaded.includes(url)) return resolve()
       const img = new Image()
       img.src = url
@@ -219,55 +401,66 @@ function loadAllImages(game: Arkham.Game): Promise<void[]> {
         preloaded.push(url)
         resolve()
       }
-      img.onerror = reject
+      img.onerror = () => reject(`Could not load card ${actualCardCode}`)
       })
   })
 
   return Promise.all(images)
 }
 
-fetchGame(props.gameId, props.spectate).then(({ game: newGame, playerId: newPlayerId, multiplayerMode}) => {
-  loadAllImages(newGame).then(() => {
-    game.value = newGame
-    solo.value = multiplayerMode === "Solo"
-    gameLog.value = Object.freeze(newGame.log)
-    playerId.value = newPlayerId
-    ready.value = true
-  })
-})
+window.sendDebug = function (msg: any) {
+  if (!game.value) return
+  debug.send(game.value.id, msg)
+}
 
+// Callbacks
 async function choose(idx: number) {
   if (idx !== -1 && game.value && !props.spectate) {
+    oldQuestion.value = game.value.question
+    game.value.question = {}
+    processing.value = true
     send(JSON.stringify({tag: 'Answer', contents: { choice: idx , playerId: playerId.value } }))
   }
 }
 
 async function chooseDeck(deckId: string): Promise<void> {
   if(game.value && !props.spectate) {
+    oldQuestion.value = game.value.question
+    game.value.question = {}
+    processing.value = true
     send(JSON.stringify({tag: 'DeckAnswer', deckId, playerId: playerId.value}))
   }
 }
 
 async function choosePaymentAmounts(amounts: Record<string, number>): Promise<void> {
   if(game.value && !props.spectate) {
+    oldQuestion.value = game.value.question
+    game.value.question = {}
+    processing.value = true
     send(JSON.stringify({tag: 'PaymentAmountsAnswer', contents: { amounts } }))
   }
 }
 
 async function chooseAmounts(amounts: Record<string, number>): Promise<void> {
   if(game.value && !props.spectate) {
+    oldQuestion.value = game.value.question
+    game.value.question = {}
+    processing.value = true
     send(JSON.stringify({tag: 'AmountsAnswer', contents: { amounts } }))
   }
 }
 
-function switchInvestigator (newPlayerId: string) { playerId.value = newPlayerId }
-
 async function update(state: Arkham.Game) { game.value = state }
 
-
+function switchInvestigator (newPlayerId: string) { playerId.value = newPlayerId }
 function debugExport () {
   fetch(new Request(`${api.defaults.baseURL}/arkham/games/${props.gameId}/export`))
-  .then(resp => resp.blob())
+  .then(resp => {
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+    return resp.blob()
+  })
   .then(blob => {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -285,28 +478,168 @@ function debugExport () {
   })
 }
 
-const gameOver = computed(() => game.value?.gameState.tag === "IsOver")
-
+// provides
 provide('chooseDeck', chooseDeck)
 provide('choosePaymentAmounts', choosePaymentAmounts)
 provide('chooseAmounts', chooseAmounts)
 provide('switchInvestigator', switchInvestigator)
 provide('solo', solo)
+
+
+// callbacks
+onMounted(() => document.addEventListener('keydown', handleKeyPress))
+onBeforeRouteLeave(() => close())
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeyPress)
+  close()
+})
+
 </script>
 
 <template>
-  <div id="game" v-if="ready && game && playerId">
+  <div v-if="submittingBug" class="column page-container">
+    <div class="page-content column">
+      <h2 class="title">{{ $t('gameBar.bugSubmittingTitle') }}</h2>
+      <section class="box">
+        {{ $t('gameBar.bugSubmittingContent') }}
+      </section>
+    </div>
+  </div>
+  <div id="game" v-else-if="ready && game && playerId">
+    <dialog v-if="error" class="error-dialog">
+      <h2>{{$t('error')}}</h2>
+      <p>{{error}}</p>
+      <p>{{$t('errorContent')}}</p>
+      <div class="buttons">
+        <button @click="bugDescription = error ?? ''; error = null; filingBug = true"><ExclamationTriangleIcon aria-hidden="true" /> {{$t('fileBug')}}</button>
+        <button @click="error = null">{{$t('close')}}</button>
+      </div>
+    </dialog>
+    <div v-if="processing" class="processing">
+      <LottieAnimation 
+        :animation-data="processingJSON"
+        :auto-play="true"
+        :loop="true"
+        :speed="1"
+        ref="anim" />
+    </div>
     <CardOverlay />
+    <Draggable v-if="showShortcuts">
+      <template #handle>
+        <header>
+          <h2>{{ $t('gameBar.shortcutsTitle') }}</h2>
+        </header>
+      </template>
+      <dl class="shortcuts">
+        <dt> </dt>
+        <dd>{{ $t('gameBar.shortcutSkipTriggers') }}</dd>
+        <dt>u</dt>
+        <dd>{{ $t('gameBar.shortcutUndo') }}</dd>
+        <dt>D</dt>
+        <dd>{{ $t('gameBar.shortcutToggleDebug') }}</dd>
+        <dt>?</dt>
+        <dd>{{ $t('gameBar.shortcutShowOrHideShortcuts') }}</dd>
+        <dt>d</dt>
+        <dd>{{ $t('gameBar.shortcutDraw') }}</dd>
+        <dt>r</dt>
+        <dd>{{ $t('gameBar.shortcutTakeResources') }}</dd>
+        <dt>e</dt>
+        <dd>{{ $t('gameBar.shortcutEndTurn') }}</dd>
+        <template v-for="item in menuItems" :key="item.id">
+          <template v-if="item.shortcut">
+            <dt>{{item.shortcut}}</dt>
+            <dd>{{item.content}}</dd>
+          </template>
+        </template>
+      </dl>
+    </Draggable>
+    <Draggable v-if="filingBug">
+      <template #handle>
+        <header clas="file-a-bug-header">
+          <h2>{{ $t('gameBar.fileABug') }}</h2>
+        </header>
+      </template>
+     <form @submit.prevent="fileBug" class="column bug-form box">
+      <!-- file path: frontend/src/locales/en/gameBoard/game_bar.json -->
+      <!-- This will store the current game state, and fill in a GitHub issue. You will need a GitHub account in order to proceed. -->
+       <p>{{ $t('gameBar.fileBugPart1') }}</p> 
+       <!-- Please note that it will take some time to submit the bug and you can not resume playing until it is done. -->
+       <p class="warning">{{ $t('gameBar.fileBugPart2') }}</p>
+       <input required type="text" v-model="bugTitle" v-bind:placeholder="$t('gameBar.bugTitleholder')" />
+       <textarea required v-model="bugDescription" v-bind:placeholder="$t('gameBar.bugDescriptionholder')"></textarea>
+       <div class="buttons">
+         <button type="submit">{{ $t('submit') }}</button>
+         <button @click="filingBug = false">{{ $t('cancel') }}</button>
+       </div>
+     </form>
+    </Draggable>
     <div v-if="socketError" class="socketWarning">
-       <p>Your game is out of sync, trying to reconnect...</p>
+      <!-- frontend/src/locales/en/gameBoard/base.json -->
+       <p>{{ $t('outOfSyncHint') }}</p>
+    </div>
+    <div class="game-bar">
+      <div class="game-bar-item">
+        <div>
+          <button @click="showLog = !showLog"><DocumentTextIcon aria-hidden="true" /> {{ showLog ? $t('gameBar.closeLog') : $t('gameBar.viewLog') }}</button>
+        </div>
+      </div>
+      <div>
+        <Menu>
+          <EyeIcon aria-hidden="true" />
+          {{ $t('gameBar.view') }}
+          <template #items>
+            <MenuItem v-slot="{ active }">
+              <button :class="{ active }" @click="showShortcuts = !showShortcuts">
+                <BoltIcon aria-hidden="true" /> {{ $t('gameBar.shortcuts') }} <span class="shortcut">?</span>
+              </button>
+            </MenuItem>
+            <template v-for="item in menuItems" :key="item.id">
+              <MenuItem v-if="item.nested === 'view'" v-slot="{ active }">
+                <button :class="{ active }" @click="item.action">
+                  <component v-if="item.icon" v-bind:is="item.icon"></component>
+                  {{item.content}}
+                  <span v-if="item.shortcut" class="shortcut">{{item.shortcut}}</span>
+                </button>
+              </MenuItem>
+            </template>
+          </template>
+        </Menu>
+      </div>
+      <div>
+        <Menu>
+          <BeakerIcon aria-hidden="true" />
+          {{ $t('gameBar.debug') }}
+          <template #items>
+            <MenuItem v-slot="{ active }">
+              <button :class="{ active }" @click="debug.toggle"><BugAntIcon aria-hidden="true" />  {{ $t('gameBar.toggleDebug') }} <span class="shortcut">D</span></button>
+            </MenuItem>
+            <MenuItem v-slot="{ active }">
+              <button :class="{ active }" @click="debugExport"><DocumentArrowDownIcon aria-hidden="true" /> {{ $t('gameBar.debugExport') }} </button>
+            </MenuItem>
+          </template>
+        </Menu>
+      </div>
+      <div><button @click="undo"><BackwardIcon aria-hidden="true" /> {{ $t('gameBar.undo') }} </button></div>
+      <div><button @click="filingBug = true"><ExclamationTriangleIcon aria-hidden="true" /> {{ $t('fileBug') }} </button></div>
+      <div v-for="item in menuItems" :key="item.id">
+        <template v-if="item.nested === null || item.nested === undefined">
+          <button @click="item.action">
+            <component v-if="item.icon" v-bind:is="item.icon"></component>
+            {{item.content}}
+          </button>
+        </template>
+      </div>
+      <div class="right">
+        <button @click="toggleSidebar"><ArrowsRightLeftIcon aria-hidden="true" /> {{ $t('gameBar.toggleSidebar') }} </button>
+      </div>
     </div>
     <div v-if="game.gameState.tag === 'IsPending'" class="invite-container">
       <header>
-        <h2>Waiting for more players</h2>
+        <h2>{{ $t('waitingForMorePlayers') }}</h2>
       </header>
       <GameDetails :game="game" id="invite">
         <div v-if="playerId == game.activePlayerId" class="full-width">
-          <p>Invite them with this url:</p>
+          <p>{{ $t('showInviteLink') }}</p>
           <div class="invite-link">
             <input type="text" :value="source"><button @click="copy()"><font-awesome-icon icon="copy" /></button>
           </div>
@@ -314,7 +647,11 @@ provide('solo', solo)
       </GameDetails>
     </div>
     <template v-else>
-      <div class="game-main">
+      <Draggable v-if="showSettings">
+      <Settings :game="game" :playerId="playerId" :closeSettings="() => showSettings = false" />
+      </Draggable>
+      <CampaignLog v-if="showLog && game !== null" :game="game" :cards="cards" :playerId="playerId" />
+      <div v-else class="game-main">
         <div v-if="gameCard" class="revelation">
           <div class="revelation-container">
             <h2>{{gameCard.title}}</h2>
@@ -374,26 +711,16 @@ provide('solo', solo)
           @choose="choose"
           @update="update"
         />
-        <div class="sidebar" v-if="game.scenario !== null && (game.gameState.tag === 'IsActive' || game.gameState.tag === 'IsOver')">
+        <div class="sidebar" v-if="showSidebar && game.scenario !== null && (game.gameState.tag === 'IsActive' || game.gameState.tag === 'IsOver')">
           <GameLog :game="game" :gameLog="gameLog" @undo="undo" />
-          <router-link class="button-link" :to="`/games/${game.id}/log`" v-slot="{href, navigate}"
-  >
-            <button :href="href" @click="navigate">View Log</button>
-          </router-link>
-          <button @click="debug.toggle">Toggle Debug</button>
-          <button @click="debugExport">Debug Export</button>
         </div>
         <div class="game-over" v-if="gameOver">
-          <p>Game over</p>
-          <CampaignLog v-if="game !== null" :game="game" :cards="cards" />
+          <p>{{ $t('gameOver') }}</p>
+          <button class="replay-button" @click="router.push({name: 'ReplayGame', params: { gameId }})">{{ $t('watchReplay') }}</button>
+          <CampaignLog v-if="game !== null" :game="game" :cards="cards" :playerId="playerId" />
         </div>
         <div class="sidebar" v-if="game.scenario === null">
           <GameLog :game="game" :gameLog="gameLog" @undo="undo" />
-          <router-link class="button-link" :to="`/games/${game.id}/log`" v-slot="{href, navigate}">
-            <button :href="href" @click="navigate">View Log</button>
-          </router-link>
-          <button @click="debug.toggle">Toggle Debug</button>
-          <button @click="debugExport">Debug Export</button>
         </div>
       </div>
     </template>
@@ -401,15 +728,14 @@ provide('solo', solo)
 </template>
 
 <style lang="scss" scoped>
-.action { border: 5px solid $select; border-radius: 15px; }
+.action { border: 5px solid var(--select); border-radius: 15px; }
 
 #game {
   width: 100vw;
-  height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   flex: 1;
-  position: relative;
+  overflow: hidden;
 }
 
 .game-main {
@@ -445,16 +771,18 @@ provide('solo', solo)
 .sidebar {
   height: 100%;
   width: 25vw;
-  max-width: 500px;
+  max-width: 300px;
   display: flex;
   flex-direction: column;
   background: #d0d9dc;
 
+  @media (max-width: 800px) {
+    display: none;
+  }
+
   @media (prefers-color-scheme: dark) {
     background: #1C1C1C;
   }
-
-  box-sizing: border-box;
 }
 
 #invite {
@@ -573,7 +901,7 @@ header {
   p {
     text-transform: uppercase;
     background: rgba(0, 0, 0, 0.5);
-    width: 80%;
+    width: 100%;
     padding: 10px 20px;
     color: white;
     text-align: center;
@@ -673,38 +1001,21 @@ header {
 }
 
 .revelation {
-  //--clr-1: Indigo;
-  //--clr-2: MediumOrchid;
-  //--clr-3: DarkOrchid;
-  //background: conic-gradient(
-  //  from var(--gradient-angle),
-  //  var(--clr-1),
-  //  var(--clr-2),
-  //  var(--clr-3),
-  //  var(--clr-2),
-  //  var(--clr-1));
-  padding: 30px;
   position: absolute;
-  //background: Black;
   transform: all 0.5s;
   z-index: 1000;
-  display: flex;
-  flex-direction: column;
   color: white;
   text-align:center;
   margin: auto;
   inset: 0;
   width: fit-content;
   height: fit-content;
-  animation: revelation 0.3s ease-in-out, glow 4s cubic-bezier(0.550, 0.085, 0.680, 0.530) infinite;
-
-  //animation: revelation 0.3s ease-in-out, anim 30s infinite, rotation 30s linear infinite;
-
   display: grid;
   // glow effect
   filter: drop-shadow(0 0 3vmin Indigo) drop-shadow(0 5vmin 4vmin Orchid)
 		drop-shadow(2vmin -2vmin 15vmin MediumSlateBlue)
 		drop-shadow(0 0 7vmin MediumOrchid);
+  animation: revelation 0.3s ease-in-out, glow 4s cubic-bezier(0.550, 0.085, 0.680, 0.530) infinite;
 
   button {
     width: 100%;
@@ -722,6 +1033,10 @@ header {
   i {
     font-style: normal;
   }
+
+  .card {
+    border-radius: 15px;
+  }
 }
 
 
@@ -736,13 +1051,16 @@ header {
   :deep(.card) {
     animation: revelation 0.6s ease-in-out;
     width: 300px !important;
+    aspect-ratio: var(--card-ratio);
     overflow: hidden;
+    border-radius: 15px;
   }
 }
 
 .revelation-container {
   display: flex;
   flex-direction: column;
+  gap: 10px;
   align-items: center;
   align-self: center;
   align-content: center;
@@ -798,6 +1116,7 @@ header {
   flex-direction: column;
   width: fit-content;
   height: fit-content;
+  gap: 10px;
 
   .tarot-cards {
     gap: 15px;
@@ -805,13 +1124,15 @@ header {
     flex-direction: row;
     width: fit-content;
     height: fit-content;
+    &:deep(img) {
+      border-radius: 10px;
+    }
   }
 
   .revelation-card {
     position: relative;
     width: 300px;
-    padding-bottom: 15px;
-    aspect-ratio: 5/7;
+    aspect-ratio: var(--card-aspect);
     perspective: 1000px;
     &:nth-child(1) {
       animation-delay: 0.3s;
@@ -833,7 +1154,6 @@ header {
       left: 0;
       backface-visibility: hidden;
       animation: flip-front 0.3s linear;
-      //animation-delay: 0.3s;
       animation-fill-mode: forwards;
       animation-delay: inherit;
     }
@@ -922,5 +1242,185 @@ header {
 .full-width {
   flex: 1;
   padding-bottom: 10px;
+}
+
+.game-bar {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  background: var(--background-mid);
+  div {
+    &.right {
+        margin-left: auto;
+    }
+    display: inline;
+    transition: 0.3s;
+    height: 100%;
+    a {
+      display: inline;
+    }
+    button {
+      background: none;
+      border: 0;
+      display: inline;
+      padding: 5px 10px;
+      display: flex;
+      gap: 5px;
+      height: 100%;
+      align-items: center;
+      svg {
+        width: 15px;
+      }
+      &:hover {
+        background: rgba(0,0,0,0.4);
+      }
+      height: 100%;
+    }
+  }
+  justify-content: flex-start;
+}
+
+.game-bar-item.active, .game-bar-item:hover {
+  background: rgba(0, 0, 0, 0.21);
+  color: var(--title);
+}
+
+dl.shortcuts {
+  display: grid;
+  grid-gap: 4px 16px;
+  grid-template-columns: max-content;
+  padding: 10px;
+  font-size: 1.2em;
+  color: white;
+  dt {
+    font-weight: bold;
+    background-color: var(--box-background);
+    border: 1px solid var(--title);
+    color: white;
+    padding: 5px;
+    text-align: center;
+    aspect-ratio: 1/1;
+  }
+  dd {
+    margin: 0;
+    grid-column-start: 2;
+    align-self: center;
+  }
+}
+
+.shortcut {
+  margin-left: auto;
+  border: 1px solid var(--title);
+  background-color: var(--box-background);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+button:hover .shortcut {
+  background-color: var(--box-border);
+}
+
+.bug-form {
+  padding: 10px;
+  font-size: 1.2em;
+  input, textarea, button {
+    font-size: 1.2em;
+    padding: 5px 10px;
+  }
+
+}
+
+.error-dialog {
+  backdrop-filter: blur(3px);
+  background-color: rgba(0,0,0,0.8);
+  position: absolute;
+  width: 50%;
+  inset: 0;
+  display: flex;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+
+  p {
+    padding: 10px;
+  }
+
+  h2 {
+    font-family: Teutonic;
+    font-size: 2em;
+  }
+
+  button {
+    background: none;
+    border: 0;
+    display: inline;
+    padding: 5px 10px;
+    display: flex;
+    gap: 5px;
+    height: 100%;
+    align-items: center;
+    svg {
+      width: 15px;
+    }
+    &:hover {
+      background: rgba(0,0,0,0.4);
+    }
+      height: 100%;
+  }
+
+  justify-content: center;
+  align-items: center;
+  justify-self: center;
+  align-self: center;
+}
+.loader {
+  z-index: 1000;
+  position: absolute;
+  top: 50px;
+  left: 20px;
+  width: 60px;
+  aspect-ratio: 1;
+  display: flex;
+  color: #d0d0d099;
+  border: 4px solid;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: 
+    radial-gradient(circle 5px, currentColor 95%,#0000),
+    linear-gradient(currentColor 50%,#0000 0) 50%/4px 60% no-repeat;
+  animation: l1 30s infinite linear;
+}
+.loader:before {
+  content: "";
+  flex: 1;
+  background:linear-gradient(currentColor 50%,#0000 0) 50%/4px 80% no-repeat;
+  animation: inherit;
+}
+@keyframes l1 {
+  100% {transform: rotate(1turn)}
+}
+
+.processing {
+  z-index: 1000;
+  position: absolute;
+  top: 5px;
+  left: 00px;
+  width: 80px;
+  filter: invert(48%) sepia(32%) saturate(393%) hue-rotate(37deg) brightness(92%) contrast(89%);
+  aspect-ratio: 1;
+}
+
+.replay-button {
+  padding: 10px;
+  width: 100%;
+  font-size: 1.2em;
+  border: 0;
+  background-color: var(--spooky-green);
+  &:hover {
+    background-color: var(--spooky-green-dark);
+  }
 }
 </style>

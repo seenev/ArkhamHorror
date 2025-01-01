@@ -16,6 +16,7 @@ export interface Props {
   treachery: Arkham.Treachery
   playerId: string
   attached?: boolean
+  overlayDelay?: number
 }
 
 const props = withDefaults(defineProps<Props>(), { attached: false })
@@ -26,7 +27,7 @@ const choose = (idx: number) => emits('choose', idx)
 
 const debug = useDebug()
 const image = computed(() => {
-  return imgsrc(`cards/${props.treachery.cardCode.replace('c', '')}.jpg`)
+  return imgsrc(`cards/${props.treachery.cardCode.replace('c', '')}.avif`)
 })
 const id = computed(() => props.treachery.id)
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
@@ -78,12 +79,13 @@ const evidence = computed(() => props.treachery.tokens[TokenType.Evidence])
 const cardAction = computed(() => choices.value.findIndex(canInteract))
 </script>
 <template>
-  <div class="treachery" :class="{ attached: attached }">
+  <div class="treachery" :class="{ attached }">
     <img
       :src="image"
       class="card"
-      :class="{ 'treachery--can-interact': cardAction !== -1 }"
+      :class="{ 'treachery--can-interact': cardAction !== -1, attached }"
       @click="$emit('choose', cardAction)"
+      :data-delay="overlayDelay"
     />
     <AbilityButton
       v-for="ability in abilities"
@@ -126,13 +128,13 @@ const cardAction = computed(() => choices.value.findIndex(canInteract))
 
 <style lang="scss" scoped>
 .card {
-  width: $card-width;
-  max-width: $card-width;
+  width: var(--card-width);
+  max-width: var(--card-width);
   border-radius: 5px;
 }
 
 .treachery--can-interact {
-  border: 2px solid $select;
+  border: 2px solid var(--select);
   cursor:pointer;
 }
 
@@ -140,12 +142,13 @@ const cardAction = computed(() => choices.value.findIndex(canInteract))
   display: flex;
   flex-direction: column;
   position: relative;
+  width: fit-content;
 }
 
 .attached .card {
   object-fit: cover;
   object-position: left bottom;
-  height: $card-width*0.6;
+  height: calc(var(--card-width) * 0.6);
 }
 
 .pool {

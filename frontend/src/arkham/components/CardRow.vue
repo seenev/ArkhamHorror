@@ -1,8 +1,12 @@
 <script lang="ts" setup>
 import type { Game } from '@/arkham/types/Game';
 import type { CardContents } from '@/arkham/types/Card';
+import * as CardT from '@/arkham/types/Card';
 import Card from '@/arkham/components/Card.vue';
 import Draggable from '@/components/Draggable.vue';
+import { useDebug } from '@/arkham/debug';
+
+const debug = useDebug()
 
 withDefaults(defineProps<{
   game: Game
@@ -11,19 +15,41 @@ withDefaults(defineProps<{
   isDiscards?: boolean
   title: string
 }>(), { isDiscards: false })
+
+const emit = defineEmits<{
+  choose: [value: number]
+  close: []
+}>()
+
+function startDrag(event: DragEvent, card: (CardContents | CardT.Card)) {
+  if (!debug.active) {
+    event.preventDefault()
+    return
+  }
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+    const cardId = CardT.toCardContents(card).id
+    event.dataTransfer.setData('text/plain', JSON.stringify({ "tag": "CardTarget", "contents": cardId }))
+  }
+}
 </script>
 
 <template>
-  <Draggable class="card-row">
+  <Draggable>
     <template #handle>
       <h2>{{title}}</h2>
     </template>
-    <div class="card-row-cards">
-      <div v-for="card in cards" :key="card.id" class="card-row-card" :class="{ discard: isDiscards }">
-        <Card :game="game" :card="card" :playerId="playerId" @choose="$emit('choose', $event)" />
+    <div class="card-row-container">
+      <div class="card-row-cards">
+        <div v-for="card in cards" :key="card.id" class="card-row-card" :class="{ discard: isDiscards }">
+          <Card 
+            :draggable="debug.active"
+            @dragstart="startDrag($event, card)"
+            :game="game" :card="card" :playerId="playerId" @choose="emit('choose', $event)" />
+        </div>
       </div>
+      <button class="button close" @click="emit('close')">{{ $t('close') }}</button>
     </div>
-    <button class="close" @click="$emit('close')">Close</button>
   </Draggable>
 </template>
 
@@ -53,7 +79,7 @@ withDefaults(defineProps<{
 }
 
 .card {
-  width: $card-width;
+  width: var(--card-width);
   border-radius: 6px;
   margin: 2px;
 }
@@ -65,12 +91,14 @@ button {
   background-color: #532e61;
   font-weight: bold;
   border-radius: 0.6em;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   color: #EEE;
   font: Arial, sans-serif;
+  width: 100%;
   &:hover {
     background-color: #4d2b61;
   }
-  margin-bottom: 10px;
 }
 
 .card-row {
@@ -90,4 +118,5 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.3);
   z-index: 1000000;
 }
+
 </style>

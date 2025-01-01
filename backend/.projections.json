@@ -1,7 +1,7 @@
 {
-  "arkham-core/library/Arkham/Effect/Effects/*.hs": {
+  "arkham-api/library/Arkham/Effect/Effects/*.hs": {
     "type": "effect",
-    "alternate": "arkham-core/tests/Arkham/Effect/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Effect/Cards/{}Spec.hs",
     "template": [
       "module Arkham.Effect.Effects.{dot}",
       "  ( {dot}(..)",
@@ -27,14 +27,11 @@
       "    {dot} <$> runMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Act/Cards/*.hs": {
+  "arkham-api/library/Arkham/Act/Cards/*.hs": {
     "type": "act",
-    "alternate": "arkham-core/tests/Arkham/Act/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Act/Cards/{}Spec.hs",
     "template": [
-       "module Arkham.Act.Cards.{dot}",
-       "  ( {dot}(..)",
-       "  , {dot|snakecase|camelcase}",
-       "  ) where",
+       "module Arkham.Act.Cards.{dot} ({dot|snakecase|camelcase}) where",
        "",
        "import Arkham.Act.Cards qualified as Cards",
        "import Arkham.Act.Import.Lifted",
@@ -54,22 +51,18 @@
        "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Scenario/Scenarios/*.hs": {
+  "arkham-api/library/Arkham/Scenario/Scenarios/*.hs": {
     "type": "scenario",
-    "alternate": "arkham-core/tests/Arkham/Scenario/Scenarios/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Scenario/Scenarios/{}Spec.hs",
     "template": [
       "module Arkham.Scenario.Scenarios.{dot}",
       "  ( {dot}(..)",
       "  , {dot|snakecase|camelcase}",
       "  ) where",
       "",
-      "import Arkham.Prelude",
-      "",
-      "import Arkham.Classes",
-      "import Arkham.Difficulty",
-      "import Arkham.Helpers.Scenario",
-      "import Arkham.Scenario.Runner",
-      "import Arkham.ChaosToken",
+      "import Arkham.Scenario.Import.Lifted",
+      "import Arkham.Scenarios.{dot}.Helpers",
+      "import Arkham.EncounterSet qualified as Set",
       "",
       "newtype {dot} = {dot} ScenarioAttrs",
       "  deriving anyclass (IsScenario, HasModifiersFor)",
@@ -92,13 +85,18 @@
       "    otherFace -> getChaosTokenValue iid otherFace attrs",
       "",
       "instance RunMessage {dot} where",
-      "  runMessage msg ({dot} attrs) =",
-      "    {dot} <$> runMessage msg attrs"
+      "  runMessage msg s@({dot} attrs) = runQueueT $ scenarioI18n $ case msg of",
+      "    PreScenarioSetup -> do",
+      "      story $ i18nWithTitle \"intro1\"",
+      "      pure s",
+      "    Setup -> runScenarioSetup {dot} attrs do",
+      "      gather Set.{dot}",
+      "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Campaign/Campaigns/*.hs": {
+  "arkham-api/library/Arkham/Campaign/Campaigns/*.hs": {
     "type": "campaign",
-    "alternate": "arkham-core/tests/Arkham/Campaign/Campaigns/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Campaign/Campaigns/{}Spec.hs",
     "template": [
        "module Arkham.Campaign.Campaigns.{dot}",
        "  ( {dot}(..)",
@@ -143,14 +141,11 @@
        "  runMessage msg c@({dot} _attrs) = defaultCampaignRunner msg c"
     ]
   },
-  "arkham-core/library/Arkham/Agenda/Cards/*.hs": {
+  "arkham-api/library/Arkham/Agenda/Cards/*.hs": {
     "type": "agenda",
-    "alternate": "arkham-core/tests/Arkham/Agenda/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Agenda/Cards/{}Spec.hs",
     "template": [
-      "module Arkham.Agenda.Cards.{dot}",
-      "  ( {dot}(..)",
-      "  , {dot|snakecase|camelcase}",
-      "  ) where",
+      "module Arkham.Agenda.Cards.{dot} ({dot|snakecase|camelcase}) where",
       "",
       "import Arkham.Agenda.Cards qualified as Cards",
       "import Arkham.Agenda.Import.Lifted",
@@ -167,18 +162,14 @@
       "    AdvanceAgenda (isSide B attrs -> True) -> do",
       "      advanceAgendaDeck attrs",
       "      pure a",
-      "    _ -> {dot} <$> runMessage msg attrs"
+      "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Treachery/Cards/*.hs": {
+  "arkham-api/library/Arkham/Treachery/Cards/*.hs": {
     "type": "treachery",
-    "alternate": "arkham-core/tests/Arkham/Treachery/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Treachery/Cards/{}Spec.hs",
     "template": [
-      "module Arkham.Treachery.Cards.{dot}",
-      "  ( {dot|snakecase|camelcase}",
-      "  , {dot}(..)",
-      "  )",
-      "where",
+      "module Arkham.Treachery.Cards.{dot} ({dot|snakecase|camelcase}) where",
       "",
       "import Arkham.Treachery.Cards qualified as Cards",
       "import Arkham.Treachery.Import.Lifted",
@@ -196,9 +187,9 @@
       "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Investigator/Cards/*.hs": {
+  "arkham-api/library/Arkham/Investigator/Cards/*.hs": {
     "type": "investigator",
-    "alternate": "arkham-core/tests/Arkham/Investigator/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Investigator/Cards/{}Spec.hs",
     "template": [
       "module Arkham.Investigator.Cards.{dot}",
       "  ( {dot|snakecase|camelcase}",
@@ -231,21 +222,14 @@
       "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Enemy/Cards/*.hs": {
+  "arkham-api/library/Arkham/Enemy/Cards/*.hs": {
     "type": "enemy",
-    "alternate": "arkham-core/tests/Arkham/Enemy/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Enemy/Cards/{}Spec.hs",
     "template": [
-      "module Arkham.Enemy.Cards.{dot}",
-      "  ( {dot|snakecase|camelcase}",
-      "  , {dot}(..)",
-      "  )",
-      "where",
+      "module Arkham.Enemy.Cards.{dot} ({dot|snakecase|camelcase}) where",
       "",
-      "import Arkham.Prelude",
-      "",
-      "import Arkham.Classes",
       "import Arkham.Enemy.Cards qualified as Cards",
-      "import Arkham.Enemy.Runner",
+      "import Arkham.Enemy.Import.Lifted",
       "",
       "newtype {dot} = {dot} EnemyAttrs",
       "  deriving anyclass (IsEnemy, HasModifiersFor)",
@@ -255,19 +239,15 @@
       "{dot|snakecase|camelcase} = enemy {dot} Cards.{dot|snakecase|camelcase} (0, Static 1, 0) (0, 0)",
       "",
       "instance RunMessage {dot} where",
-      "  runMessage msg ({dot} attrs) =",
-      "    {dot} <$> runMessage msg attrs"
+      "  runMessage msg ({dot} attrs) = runQueueT $ case msg of",
+      "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Asset/Cards/*.hs": {
+  "arkham-api/library/Arkham/Asset/Assets/*.hs": {
     "type": "asset",
-    "alternate": "arkham-core/tests/Arkham/Asset/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Asset/Assets/{}Spec.hs",
     "template": [
-      "module Arkham.Asset.Cards.{dot}",
-      "  ( {dot|snakecase|camelcase}",
-      "  , {dot}(..)",
-      "  )",
-      "where",
+      "module Arkham.Asset.Assets.{dot} ({dot|snakecase|camelcase}) where",
       "",
       "import Arkham.Asset.Cards qualified as Cards",
       "import Arkham.Asset.Import.Lifted",
@@ -284,15 +264,11 @@
       "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Event/Cards/*.hs": {
+  "arkham-api/library/Arkham/Event/Events/*.hs": {
     "type": "event",
-    "alternate": "arkham-core/tests/Arkham/Event/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Event/Events/{}Spec.hs",
     "template": [
-      "module Arkham.Event.Cards.{dot}",
-      "  ( {dot|snakecase|camelcase}",
-      "  , {dot}(..)",
-      "  )",
-      "where",
+      "module Arkham.Event.Events.{dot} ({dot|snakecase|camelcase}) where",
       "",
       "import Arkham.Event.Cards qualified as Cards",
       "import Arkham.Event.Import.Lifted",
@@ -311,15 +287,11 @@
       "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Location/Cards/*.hs": {
+  "arkham-api/library/Arkham/Location/Cards/*.hs": {
     "type": "location",
-    "alternate": "arkham-core/tests/Arkham/Location/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Location/Cards/{}Spec.hs",
     "template": [
-      "module Arkham.Location.Cards.{dot}",
-      "  ( {dot|snakecase|camelcase}",
-      "  , {dot}(..)",
-      "  )",
-      "where",
+      "module Arkham.Location.Cards.{dot} ({dot|snakecase|camelcase}) where",
       "",
       "import Arkham.Location.Cards qualified as Cards",
       "import Arkham.Location.Import.Lifted",
@@ -340,9 +312,9 @@
       "    _ -> {dot} <$> liftRunMessage msg attrs"
       ]
   },
-  "arkham-core/library/Arkham/Skill/Cards/*.hs": {
+  "arkham-api/library/Arkham/Skill/Cards/*.hs": {
     "type": "skill",
-    "alternate": "arkham-core/tests/Arkham/Skill/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Skill/Cards/{}Spec.hs",
     "template": [
       "module Arkham.Skill.Cards.{dot}",
       "  ( {dot|snakecase|camelcase}",
@@ -365,14 +337,11 @@
       "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/Story/Cards/*.hs": {
+  "arkham-api/library/Arkham/Story/Cards/*.hs": {
     "type": "story",
-    "alternate": "arkham-core/tests/Arkham/Story/Cards/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/Story/Cards/{}Spec.hs",
     "template": [
-       "module Arkham.Story.Cards.{dot}",
-       "  ( {dot}(..)",
-       "  , {dot|snakecase|camelcase}",
-       "  ) where",
+       "module Arkham.Story.Cards.{dot} ({dot|snakecase|camelcase}) where",
        "",
        "import Arkham.Story.Cards qualified as Cards",
        "import Arkham.Story.Import.Lifted",
@@ -391,9 +360,9 @@
        "    _ -> {dot} <$> liftRunMessage msg attrs"
     ]
   },
-  "arkham-core/library/Arkham/*.hs": {
+  "arkham-api/library/Arkham/*.hs": {
     "type": "core",
-    "alternate": "arkham-core/tests/Arkham/{}Spec.hs",
+    "alternate": "arkham-api/tests/Arkham/{}Spec.hs",
     "template": [
       "module Arkham.{dot}",
       "  ( undefined",
@@ -403,8 +372,8 @@
       "import Arkham.Prelude"
     ]
   },
-  "arkham-core/tests/Arkham/*Spec.hs": {
-    "alternate": "arkham-core/library/Arkham/{}.hs",
+  "arkham-api/tests/Arkham/*Spec.hs": {
+    "alternate": "arkham-api/library/Arkham/{}.hs",
     "template": [
       "module Arkham.{dot}Spec",
       "  ( spec",

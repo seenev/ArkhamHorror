@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n';
+import { handleI18n } from '@/arkham/i18n';
 import { choiceRequiresModal, MessageType } from '@/arkham/types/Message';
-import { computed, inject, ref, watch, onMounted } from 'vue';
-import { imgsrc, replaceIcons } from '@/arkham/helpers';
-import { AmountChoice, QuestionType } from '@/arkham/types/Question';
+import { computed, inject, ref, watch, onMounted, h } from 'vue';
+import { imgsrc, formatContent } from '@/arkham/helpers';
+import { AmountChoice, QuestionType, FlavorTextEntry, FlavorTextModifier } from '@/arkham/types/Question';
 import Card from '@/arkham/components/Card.vue';
 import * as ArkhamGame from '@/arkham/types/Game';
 import { tarotCardImage } from '@/arkham/types/TarotCard';
@@ -12,6 +13,7 @@ import DropDown from '@/components/DropDown.vue';
 import Token from '@/arkham/components/Token.vue';
 import type { Game } from '@/arkham/types/Game';
 import ChaosBagChoice from '@/arkham/components/ChaosBagChoice.vue';
+import FormattedEntry from '@/arkham/components/FormattedEntry.vue';
 
 export interface Props {
   game: Game
@@ -25,6 +27,37 @@ const { t } = useI18n()
 const choose = (idx: number) => emit('choose', idx)
 const investigator = computed(() => Object.values(props.game.investigators).find(i => i.playerId === props.playerId))
 
+function formatEntry(entry: FlavorTextEntry): any {
+  console.log(entry)
+  switch (entry.tag) {
+    //case 'BasicEntry': return h('div', formatContent(entry.text.startsWith('$') ? t(entry.text.slice(1)) : entry.text))
+    // case 'I18nEntry': return h('div', formatContent(t(entry.key, entry.variables)))
+    // case 'ModifyEntry': return h('div', { class: entryStyles(entry) }, [formatEntry(entry.entry)])
+    // case 'CompositeEntry': return h('div', entry.entries.map(formatEntry))
+    default: return h('div', "Unknown entry type")
+  }
+}
+
+function modifierToStyle(modifier: FlavorTextModifier): string {
+  switch (modifier) {
+    case 'BlueEntry': return 'blue'
+    case 'RightAligned': return 'right'
+    case 'PlainText': return 'basic'
+    case 'InvalidEntry': return 'invalid'
+    case 'ValidEntry': return 'valid'
+    default: throw new Error("Unknown modifier")
+  }
+}
+
+function entryStyles(entry: FlavorTextEntry): { [key: string]: boolean } {
+  switch (entry.tag) {
+    case 'BasicEntry': return {}
+    case 'I18nEntry': return {}
+    case 'ModifyEntry': return entry.modifiers.map((m) => { return { [modifierToStyle(m)]: true }})
+    case 'CompositeEntry': return {}
+    default: return {}
+  }
+}
 
 function zoneToLabel(s: string) {
   switch(s) {
@@ -61,7 +94,7 @@ const focusedCards = computed(() => {
 
 
 const showChoices = computed(() => {
-  if (props.game.skillTest) {
+  if (props.game.skillTest && !props.isSkillTest) {
     return false
   }
   if (choices.value.some(choiceRequiresModal)) {
@@ -72,14 +105,14 @@ const showChoices = computed(() => {
 
 const label = function(body: string) {
   if (body.startsWith("$")) {
-    return t(body.slice(1))
+    return formatContent(handleI18n(body.slice(1), t))
   }
-  return replaceIcons(body).replace(/_([^_]*)_/g, '<b>$1</b>').replace(/\*([^*]*)\*/g, '<i>$1</i>')
+  return formatContent(body)
 }
 
 const paymentAmountsLabel = computed(() => {
   if (question.value?.tag === QuestionType.CHOOSE_PAYMENT_AMOUNTS) {
-    return replaceIcons(question.value.label)
+    return formatContent(question.value.label)
   }
 
   return null
@@ -87,7 +120,7 @@ const paymentAmountsLabel = computed(() => {
 
 const amountsLabel = computed(() => {
   if (question.value?.tag === QuestionType.CHOOSE_AMOUNTS) {
-    return replaceIcons(question.value.label)
+    return formatContent(question.value.label)
   }
 
   if (question.value?.tag === QuestionType.QUESTION_LABEL && question.value?.question?.tag === QuestionType.CHOOSE_AMOUNTS) {
@@ -288,7 +321,7 @@ const submitAmounts = async () => {
 }
 
 const cardLabelImage = (cardCode: string) => {
-  return imgsrc(`cards/${cardCode.replace('c', '')}.jpg`);
+  return imgsrc(`cards/${cardCode.replace('c', '')}.avif`);
 }
 
 const cardIdImage = (cardId: string) => {
@@ -304,6 +337,10 @@ const portraitLabelImage = (investigatorId: string) => {
 
   return imgsrc(`portraits/${player.cardCode.replace('c', '')}.jpg`)
 }
+
+const portraits = computed<[Message, number]>(() =>
+  choices.value.map((x: Message, i: number) => [x, i] as [Message, number]).filter(([choice,]) => choice.tag === "PortraitLabel")
+)
 
 const tarotLabels = computed(() =>
   choices.value.
@@ -358,10 +395,7 @@ const cardPiles = computed(() => {
   </div>
 
   <div class="intro-text" v-if="question && question.tag === QuestionType.READ">
-    <p
-      v-for="(paragraph, index) in question.flavorText.body"
-      :key="index" v-html="label(paragraph)">
-    </p>
+    <FormattedEntry v-for="(paragraph, index) in question.flavorText.body" :key="index" :entry="paragraph" />
   </div>
 
   <div class="question-label dropdown" v-if="question && question.tag === 'DropDown'">
@@ -372,9 +406,9 @@ const cardPiles = computed(() => {
     <DropDown @choose="choose" :options="question.question.options" />
   </div>
 
-  <template v-if="!isSkillTest && !inSkillTest">
+  <div v-if="!isSkillTest && !inSkillTest && focusedChaosTokens.length > 0" class="tokens">
     <Token v-for="(focusedToken, index) in focusedChaosTokens" :key="index" :token="focusedToken" :playerId="playerId" :game="game" @choose="choose" />
-  </template>
+  </div>
 
   <div v-if="showChoices" class="choices">
     <div v-if="focusedCards.length > 0 && choices.length > 0" class="modal">
@@ -444,15 +478,25 @@ const cardPiles = computed(() => {
       </div>
       <div class="modal-contents amount-contents">
         <form @submit.prevent="submitAmounts" :disabled="unmetAmountRequirements">
-          <legend>{{paymentAmountsLabel}}</legend>
+          <legend v-html="amountsLabel"></legend>
           <template v-for="paymentChoice in chooseAmountsChoices" :key="paymentChoice.choiceId">
             <div v-if="paymentChoice.maxBound !== 0">
-              {{paymentChoice.label}} <input type="number" :min="paymentChoice.minBound" :max="paymentChoice.maxBound" v-model.number="amountSelections[paymentChoice.choiceId]" onclick="this.select()" />
+              <label :for="`choice-${paymentChoice.choiceId}`" v-html="formatContent(paymentChoice.label)"></label> <input type="number" :min="paymentChoice.minBound" :max="paymentChoice.maxBound" v-model.number="amountSelections[paymentChoice.choiceId]" :name="`choice-${paymentChoice.choiceId}`" onclick="this.select()" />
             </div>
           </template>
           <button :disabled="unmetAmountRequirements">Submit</button>
         </form>
       </div>
+    </div>
+
+    <div v-if="portraits.length > 0" class="portraits">
+      <template v-for="([choice, index]) in portraits" :key="index">
+        <template v-if="choice.tag === 'PortraitLabel'">
+          <div class="portrait">
+            <img class="active" :src="portraitLabelImage(choice.investigatorId)" @click="choose(index)" />
+          </div>
+        </template>
+      </template>
     </div>
 
     <template v-for="(choice, index) in choices" :key="index">
@@ -461,9 +505,6 @@ const cardPiles = computed(() => {
       </template>
       <template v-if="choice.tag === MessageType.ABILITY_LABEL && choice.ability.type.tag === 'ConstantReaction'">
         <button @click="choose(index)">{{choice.ability.type.label}}</button>
-      </template>
-      <template v-if="choice.tag === 'PortraitLabel'">
-        <img class="portrait card active" :src="portraitLabelImage(choice.investigatorId)" @click="choose(index)" />
       </template>
       <div v-if="choice.tag === MessageType.LABEL" class="message-label">
         <button v-if="choice.label == 'Choose {skull}'" @click="choose(index)">
@@ -494,15 +535,15 @@ const cardPiles = computed(() => {
         class="button"
         @click="choose(index)"
       >
-        Use <i :class="`icon${choice.skillType}`">: {{choice.label}}</i>
+        Use <i :class="`icon${choice.skillType}`"></i>: {{choice.label}}
       </a>
 
     </template>
   </div>
-  <div v-else-if="question && question.tag === 'QuestionLabel'" class="standalone-label">
+  <div v-else-if="question && question.tag === 'QuestionLabel' && question.question.tag !== 'DropDown'" class="standalone-label">
       {{label(question.label)}}
   </div>
-  <div v-if="doneLabel && !inSkillTest">
+  <div v-if="doneLabel">
     <button class="done" @click="$emit('choose', doneLabel.index)" v-html="label(doneLabel.label)"></button>
   </div>
 </template>
@@ -578,39 +619,68 @@ section {
 }
 
 .intro-text {
+  color: #222;
   max-width: 50vw;
   text-align: justify;
-  background: linear-gradient(#DFDAD8, darken(#DFDAD8, 10%));
+  background: linear-gradient(#DFDAD8, #c9c4c2);
   padding: 10px;
-  margin: 10px 10px 0 10px;
+  margin: 10px;
   border-radius: 5px;
-  box-sizing: border-box;
   font-size: 1.1em;
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased !important;
   -moz-font-smoothing: antialiased !important;
   text-rendering: optimizelegibility !important;
   letter-spacing: .03em;
-}
+  max-height: 70vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 
-.intro-text h1 {
-  font-family: "Teutonic";
-  font-weight: 500;
-  color: #38615F;
-  margin: 0 0 10px 0;
-  padding-bottom: 2px;
-  border-bottom: 1px solid #38615f;
-}
-
-.intro-text h1::after {
-  display: block;
-  content: " ";
-  margin-top: 2px;
-  border-bottom: 1px solid #38615f;
-}
-
-.intro-text p {
-  margin: 10px;
+  &:has(.resolution) {
+    background: #BAA898;
+  }
+  &:has(.checkpoint header h1), &:has(.interlude header h1) {
+    padding-top: 2em;
+  }
+  &:has(.checkpoint), &:has(.interlude) {
+    background: #AFA9A9;
+    box-shadow: unset;
+    overflow: hidden;
+    &::after {
+      border: 20px solid #D4CCC3;
+      border-left-width: 10px;
+      border-right-width: 10px;
+      position: absolute;
+      inset: 0px;
+      box-sizing: border-box;
+      content: "";
+      filter: blur(0.25em);
+      z-index: 1;
+    }
+    h1 {
+      color: #19214F;
+      border-bottom: 1px solid #19214F;
+      &::after {
+        border-bottom: 1px solid #19214F;
+      }
+      font-size: 1.3em;
+      font-weight: 500;
+    }
+    padding: 50px;
+    position: relative;
+    &::before {
+      z-index: 2;
+      pointer-events: none;
+      position: absolute;
+      inset: 10px;
+      border-image: url(/img/arkham/checkpoint_fleur.png) 49.9%;
+      border-image-repeat: no-repeat;
+      border-image-width: 50px;
+      content: "";
+    }
+  }
 }
 
 .status-bar {
@@ -633,9 +703,9 @@ button:hover {
 }
 
 .card {
-  width: min-width($card-width * 2);
+  width: min-width(calc(var(--card-width) * 2));
   margin: 2px;
-  height: max($card-width * 2);
+  height: max(calc(var(--card-width) * 2));
 }
 
 .question-label {
@@ -659,15 +729,22 @@ button:hover {
 }
 
 .portrait {
+  min-width: fit-content;
   border-radius: 3px;
-  width: $card-width;
-  margin-right: 2px;
+  margin: 10px;
+
+  img {
+    border-radius: 5px;
+    width: auto;
+    height: max(calc(var(--card-width) * 2));
+  }
+
+  img.active {
+    border: 1px solid var(--select);
+    cursor: pointer;
+  }
 }
 
-.portrait.active {
-  border: 1px solid $select;
-  cursor: pointer;
-}
 
 .status-bar:empty {
   display: none;
@@ -686,6 +763,8 @@ button:hover {
   flex-direction: column;
   gap: 10px;
   margin-inline: 10px;
+  margin-block: 10px;
+  flex-wrap: wrap;
 }
 
 .choices button {
@@ -723,10 +802,6 @@ p :deep(i):last-child {
   padding-bottom: 1.3em;
 }
 
-.message-label {
-  margin: 10px 0;
-}
-
 h2 {
   font-family: "Teutonic";
   letter-spacing: 1px;
@@ -737,38 +812,51 @@ h2 {
   text-transform: uppercase;
   color: white;
   background-color: #222;
+  padding: 10px;
 }
 
 .dropdown {
   padding: 10px;
-}
+  background: #735e7b;
+  width: 100%;
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 
-.dropdown :deep(form) {
-  min-width: 30vw;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+  & :deep(button) {
+    background: #4a3d50;
+    display: inline;
+    border: 0;
+    color: white;
+    padding: 0.5em;
+  }
 
-.dropdown form select {
-  font-size: 1.2em;
-  padding: 5px;
-}
+  & :deep(form) {
+    min-width: 30vw;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 
-.dropdown form button {
-  text-align: center;
-  font-size: 1.2em;
-  transition: all 0.3s ease-in;
-  border: 0;
-  padding: 10px;
-  background-color: #532e61;
-  border-radius: 0.6em;
-  color: #EEE;
-  font: Arial, sans-serif;
-}
+    select {
+      font-size: 1.2em;
+      padding: 5px;
+    }
 
-.dropdown form button:hover {
-  background-color: #311b3e;
+    button {
+      text-align: center;
+      font-size: 1.2em;
+      transition: all 0.3s ease-in;
+      border: 0;
+      padding: 10px;
+      background-color: #532e61;
+      border-radius: 0.6em;
+      color: #EEE;
+      font: Arial, sans-serif;
+    }
+
+    button:hover {
+      background-color: #311b3e;
+    }
+  }
 }
 
 .cardPiles {
@@ -794,7 +882,7 @@ h2 {
 }
 
 .card-pile .portrait {
-  width: calc($card-width / 2);
+  width: calc(var(--card-width) / 2);
 }
 
 .modal-contents {
@@ -812,9 +900,12 @@ h2 {
 .amount-contents {
   background: #735e7b;
   padding: 10px;
-  box-sizing: border-box;
   border-bottom-left-radius: 15px;
   border-bottom-right-radius: 15px;
+  width: 100%;
+  form {
+    flex: 1;
+  }
 }
 
 .amount-contents div {
@@ -852,7 +943,6 @@ h2 {
 }
 
 .choices {
-  padding-bottom: 20px;
   text-align: center;
 }
 
@@ -903,6 +993,72 @@ h2 {
 
 .done:hover {
   background-color: #311b3e;
+}
+
+.tokens {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 10px;
+  gap: 10px;
+}
+
+.cardLabels {
+  margin: 10px;
+  img {
+    border: 1px solid var(--select);
+    border-radius: 5px;
+  }
+}
+
+.portraits {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  .portrait {
+    min-width: fit-content;
+  }
+}
+
+.intro-text {
+  &:has(.resolution) {
+    background-color: #BAA597;
+    box-shadow: unset;
+    overflow: hidden;
+    &::after {
+      border: 20px solid #D4CCC3;
+      border-left-width: 10px;
+      border-right-width: 10px;
+      position: absolute;
+      inset: 0px;
+      box-sizing: border-box;
+      content: "";
+      filter: blur(0.25em);
+      z-index: 1;
+    }
+    h1 {
+      color: #19214F;
+      border-bottom: 1px solid #19214F;
+      &::after {
+        border-bottom: 1px solid #19214F;
+      }
+      font-size: 1.3em;
+      font-weight: 500;
+    }
+    padding: 50px;
+    position: relative;
+    &::before {
+      z-index: 2;
+      pointer-events: none;
+      position: absolute;
+      inset: 10px;
+      border-image: url(/img/arkham/resolution_fleur.png) 49.9%;
+      border-image-repeat: no-repeat;
+      border-image-width: 50px;
+      content: "";
+    }
+  }
 }
 
 </style>

@@ -1,12 +1,12 @@
 import { JsonDecoder } from 'ts.data.json';
-import { Investigator, investigatorDecoder } from '@/arkham/types/Investigator';
+import { Investigator, InvestigatorDetails, investigatorDecoder, investigatorDetailsDecoder } from '@/arkham/types/Investigator';
 import { Enemy, enemyDecoder } from '@/arkham/types/Enemy';
 import { Story, storyDecoder } from '@/arkham/types/Story';
 import { Location, locationDecoder } from '@/arkham/types/Location';
 import { Message } from '@/arkham/types/Message';
 import { Source } from '@/arkham/types/Source';
-import { Scenario, scenarioDecoder } from '@/arkham/types/Scenario';
-import { Campaign, campaignDecoder } from '@/arkham/types/Campaign';
+import { Scenario, ScenarioDetails, scenarioDecoder, scenarioDetailsDecoder } from '@/arkham/types/Scenario';
+import { Campaign, CampaignDetails, campaignDecoder, campaignDetailsDecoder } from '@/arkham/types/Campaign';
 import { ChaosToken, chaosTokenDecoder } from '@/arkham/types/ChaosToken';
 import { Act, actDecoder } from '@/arkham/types/Act';
 import { Agenda, agendaDecoder } from '@/arkham/types/Agenda';
@@ -20,16 +20,40 @@ import { SkillTest, skillTestDecoder, SkillTestResults, skillTestResultsDecoder 
 import { Card, cardDecoder, } from '@/arkham/types/Card';
 import { TarotCard, tarotCardDecoder, } from '@/arkham/types/TarotCard';
 
-type GameState = { tag: 'IsPending' } | { tag: 'IsActive' } | { tag: 'IsOver' };
+type GameState = { tag: 'IsPending' } | { tag: 'IsActive' } | { tag: 'IsOver' } | { tag: 'IsChooseDecks', contents: string[] };
 
 export const gameStateDecoder = JsonDecoder.oneOf<GameState>(
   [
     JsonDecoder.object({ tag: JsonDecoder.isExactly('IsPending') }, 'IsPending'),
     JsonDecoder.object({ tag: JsonDecoder.isExactly('IsActive') }, 'IsActive'),
     JsonDecoder.object({ tag: JsonDecoder.isExactly('IsOver') }, 'IsOver'),
+    JsonDecoder.object({ tag: JsonDecoder.isExactly('IsChooseDecks'), contents: JsonDecoder.array(JsonDecoder.string, 'string[]') }, 'IsChooseDecks'),
   ],
   'GameState'
 );
+
+export type GameDetails = {
+  id: string;
+  scenario: ScenarioDetails | null;
+  campaign: CampaignDetails | null;
+  gameState: GameState;
+  name: string;
+  investigators: InvestigatorDetails[];
+  otherInvestigators: InvestigatorDetails[];
+  multiplayerVariant: MultiplayerVariant;
+}
+
+export type MultiplayerVariant = 'WithFriends' | 'Solo'
+
+const multiplayerVariantDecoder = JsonDecoder.oneOf<MultiplayerVariant>(
+  [
+    JsonDecoder.isExactly('WithFriends'),
+    JsonDecoder.isExactly('Solo'),
+  ],
+  'MultiplayerVariant'
+);
+
+export type GameDetailsEntry = GameDetails & { tag: "game" }| { error: string, tag: "error" }
 
 export type Game = {
   id: string;
@@ -43,8 +67,6 @@ export type Game = {
   events: Record<string, Event>;
   enemies: Record<string, Enemy>;
   stories: Record<string, Story>;
-  outOfPlayEnemies: Record<string, Enemy>;
-  enemiesInVoid: Record<string, Enemy>;
   gameState: GameState;
   investigators: Record<string, Investigator>;
   otherInvestigators: Record<string, Investigator>;
@@ -73,12 +95,12 @@ export type Game = {
   cards: Record<string, Card>;
 }
 
-export function choices(game: Game, investigatorId: string): Message[] {
-  if (!game.question[investigatorId]) {
+export function choices(game: Game, playerId: string): Message[] {
+  if (!game.question[playerId]) {
     return [];
   }
 
-  const question: Question = game.question[investigatorId];
+  const question: Question = game.question[playerId];
 
   const toContents = (q: Question): Message[] => {
     switch (q.tag) {
@@ -97,7 +119,7 @@ export function choices(game: Game, investigatorId: string): Message[] {
       case 'QuestionLabel':
         return toContents(q.question);
       case 'Read':
-        return q.readChoices;
+        return q.readChoices.contents;
       case 'PickSupplies':
         return q.choices;
       default:
@@ -138,6 +160,28 @@ export const modeDecoder = JsonDecoder.object<Mode>(
   'Mode'
 );
 
+export const gameDetailsDecoder = JsonDecoder.object<GameDetails>(
+  {
+    id: JsonDecoder.string,
+    scenario: JsonDecoder.nullable(scenarioDetailsDecoder),
+    campaign: JsonDecoder.nullable(campaignDetailsDecoder),
+    gameState: gameStateDecoder,
+    name: JsonDecoder.string,
+    investigators: JsonDecoder.array(investigatorDetailsDecoder, 'InvestigatorDetails[]'),
+    otherInvestigators: JsonDecoder.array(investigatorDetailsDecoder, 'InvestigatorDetails[]'),
+    multiplayerVariant: multiplayerVariantDecoder,
+  },
+  'GameDetails',
+);
+
+export const gameDetailsEntryDecoder = JsonDecoder.oneOf<GameDetailsEntry>(
+  [
+    gameDetailsDecoder.map(details => ({ ...details, tag: 'game' })),
+    JsonDecoder.object({ error: JsonDecoder.string }, 'Error').map(error => ({ ...error, tag: 'error' }))
+  ],
+  'GameDetailsEntry'
+);
+
 export const gameDecoder = JsonDecoder.object<Game>(
   {
     id: JsonDecoder.string,
@@ -151,8 +195,6 @@ export const gameDecoder = JsonDecoder.object<Game>(
     events: JsonDecoder.dictionary<Event>(eventDecoder, 'Dict<UUID, Event>'),
     enemies: JsonDecoder.dictionary<Enemy>(enemyDecoder, 'Dict<UUID, Enemy>'),
     stories: JsonDecoder.dictionary<Story>(storyDecoder, 'Dict<UUID, Story>'),
-    outOfPlayEnemies: JsonDecoder.dictionary<Enemy>(enemyDecoder, 'Dict<UUID, Enemy>'),
-    enemiesInVoid: JsonDecoder.dictionary<Enemy>(enemyDecoder, 'Dict<UUID, Enemy>'),
     gameState: gameStateDecoder,
     investigators: JsonDecoder.dictionary<Investigator>(investigatorDecoder, 'Dict<UUID, Investigator>'),
     otherInvestigators: JsonDecoder.dictionary<Investigator>(investigatorDecoder, 'Dict<UUID, Investigator>'),

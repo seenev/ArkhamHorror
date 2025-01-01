@@ -1,10 +1,11 @@
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import { watch, ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router'
 import { fetchDeck, deleteDeck, fetchCards, syncDeck } from '@/arkham/api';
 import { imgsrc } from '@/arkham/helpers';
 import * as Arkham from '@/arkham/types/CardDef';
 import type {Deck} from '@/arkham/types/Deck';
+import * as DeckHelpers from '@/arkham/types/Deck';
 import Prompt from '@/components/Prompt.vue'
 import { useToast } from "vue-toastification";
 
@@ -58,7 +59,7 @@ fetchCards(true).then((response) => {
   })
 })
 
-const image = (card: Arkham.CardDef) => imgsrc(`cards/${card.art}.jpg`)
+const image = (card: Arkham.CardDef) => imgsrc(`cards/${card.art}.avif`)
 const view = ref(View.List)
 
 const cards = computed(() => {
@@ -114,7 +115,7 @@ const cardTraits = (card: Arkham.CardDef) => {
 }
 
 const levelText = (card: Arkham.CardDef) => {
-  if (card.level === 0) return ''
+  if (card.level === 0 || card.level === null) return ''
   return ` (${card.level})`
 }
 
@@ -180,14 +181,48 @@ const deckUrlToPage = (url: string): string => {
   // to https://arkhamdb.com/deck/view/25027
   return url.replace("/api/public/decklist", "/decklist/view").replace("/api/public/deck", "/deck/view")
 }
+
+const deckInvestigator = computed(() => {
+  if (deck.value) {
+    if (deck.value.list.meta) {
+      try {
+        const result = JSON.parse(deck.value.list.meta)
+        if (result && result.alternate_front) {
+          return result.alternate_front
+        }
+      } catch (e) { console.log("No parse") }
+    }
+    return deck.value.list.investigator_code.replace('c', '')
+  }
+
+  return null
+})
+
+const deckClass = computed(() => {
+  if (deck.value) return DeckHelpers.deckClass(deck.value)
+  return {}
+})
+
+
+watch(deckRef, (el) => {
+  if (el !== null) {
+    const observer = new IntersectionObserver(
+      ([e]) => e.target.classList.toggle("is-pinned", e.intersectionRatio < 1),
+      { threshold: [1] }
+    );
+
+    observer.observe(el);
+  }
+})
+
 </script>
 
 <template>
   <div class="container">
     <div class="results">
-      <header class="deck" v-show="deck" ref="deckRef">
+      <header class="deck" v-show="deck" ref="deckRef" :class="deckClass">
         <template v-if="deck">
-          <img class="portrait--decklist" :src="imgsrc(`cards/${deck.list.investigator_code.replace('c', '')}.jpg`)" />
+          <img v-if="deckInvestigator" class="portrait--decklist" :src="imgsrc(`cards/${deckInvestigator}.avif`)" />
           <div class="deck--details">
             <h1 class="deck-title">{{deck.name}}</h1>
             <div class="deck--actions">
@@ -217,7 +252,7 @@ const deckUrlToPage = (url: string): string => {
       <div class="cards" v-if="view == View.Image">
         <img class="card" v-for="(card, idx) in cards" :key="idx" :src="image(card)" />
       </div>
-      <table class="list" v-if="view == View.List">
+      <table class="box" v-if="view == View.List">
         <thead>
           <tr><th>Name</th><th>Class</th><th>Cost</th><th>Type</th><th>Icons</th><th>Traits</th><th>Set</th></tr>
         </thead>
@@ -248,7 +283,9 @@ const deckUrlToPage = (url: string): string => {
 <style scoped lang="scss">
 .container {
   display: flex;
-  margin-top: 0;
+  min-width: 60vw;
+  margin: 0 auto;
+  margin-top: 20px;
 }
 
 .results {
@@ -259,6 +296,7 @@ const deckUrlToPage = (url: string): string => {
   width: calc(100% - 20px);
   margin: 10px;
   border-radius: 10px;
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
 }
 
 .cards {
@@ -266,17 +304,16 @@ const deckUrlToPage = (url: string): string => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   padding: 10px;
-  box-sizing: border-box;
 }
 
-table {
+table.box {
   width: calc(100% - 40px);
-  box-sizing: border-box;
-  padding: 20px 0;
+  padding: 0;
   margin: 20px;
   border-radius: 10px;
-  background-color: rgba(255,255,255,0.9);
-  border-collapse: collapse;
+  border-spacing: 0;
+  background-color: rgba(255,255,255,0.05);
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
 }
 
 th {
@@ -292,40 +329,67 @@ tr th:nth-child(1){
 }
 
 tbody td {
-  border-top: 1px solid #999;
-  padding: 2px 0;
+  padding: 5px;
+}
+
+thead tr th {
+  color: #aaa;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 5px 5px;
+
+  &:nth-child(1) {
+    border-top-left-radius: 10px;
+  }
+
+  &:last-child {
+    border-top-right-radius: 10px;
+  }
+}
+
+tr {
+  color: #cecece;
 }
 
 tr:nth-child(even) {
-  background-color: #f2f2f2;
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 .willpower {
-  color: $guardian;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--willpower);
 }
 
 .intellect {
-  color: $mystic;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--intellect);
 }
 
 .combat {
-  color: $survivor;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--combat);
 }
 
 .agility {
-  color: $rogue;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--agility);
 }
 
 .wild {
-  color: $seeker;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--wild);
 }
 
 a {
   font-weight: bold;
-  color: $spooky-green;
+  color: var(--spooky-green);
   text-decoration: none;
   &:hover {
-    color: $spooky-green-light;
+    color: var(--spooky-green)-light;
   }
 }
 
@@ -343,20 +407,8 @@ i {
 }
 
 .pressed {
-  background-color: #777;
+  background-color: #333;
   color: white;
-}
-
-thead tr th {
-  background-color: #BBB;
-
-  &:nth-child(1) {
-    border-top-left-radius: 10px;
-  }
-
-  &:last-child {
-    border-top-right-radius: 10px;
-  }
 }
 
 /* deck header */
@@ -377,7 +429,7 @@ thead tr th {
   justify-self: flex-end;
   align-self: flex-start;
   a {
-    color: #660000;
+    color: var(--title);
     &:hover {
       color: #990000;
     }
@@ -385,9 +437,10 @@ thead tr th {
 }
 
 .portrait--decklist {
-  width: 300px;
+  width: 200px;
   margin-right: 10px;
   border-radius: 10px;
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
 }
 
 .deck-title {
@@ -403,17 +456,65 @@ thead tr th {
   color: #f0f0f0;
   margin: 0 20px;
   padding: 20px;
+
+  &.guardian {
+    background-color: var(--guardian-dark);
+    background: linear-gradient(30deg, var(--guardian-extra-dark), var(--guardian-dark));
+  }
+
+  &.seeker {
+    background: linear-gradient(30deg, var(--seeker-extra-dark), var(--seeker-dark));
+  }
+
+  &.rogue {
+    background: linear-gradient(30deg, var(--rogue-extra-dark), var(--rogue-dark));
+  }
+
+  &.mystic {
+    background: linear-gradient(30deg, var(--mystic-extra-dark), var(--mystic-dark));
+  }
+
+  &.survivor {
+    background: linear-gradient(30deg, var(--survivor-extra-dark), var(--survivor-dark));
+  }
+
+  &.neutral {
+    background-color: var(--neutral-dark);
+    background-image: linear-gradient(30deg, var(--neutral-extra-dark), var(--neutral-dark));
+  }
+
+  /*&.survivor::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    inset: 0;
+    background: #0000000d;
+    mask-position: left top;
+    mask-size: cover;
+    -webkit-mask-image: url(/img/arkham/masks/survivor.svg);
+    mask-image: url(/img/arkham/masks/survivor.svg);
+    z-index: -1;
+  }*/
   a {
-    color: #365488;
+    color: var(--title);
     font-weight: bolder;
+    &:hover {
+      color: rgba(0, 0, 0, 0.4);
+    }
   }
 
   display: flex;
 
   width: calc(100% - 40px);
-  box-sizing: border-box;
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+  &.is-pinned {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    opacity: 0.98;
+  }
   background-color: rgba(0,0,0,0.3);
 
   color: white;

@@ -1,4 +1,5 @@
 {
+  "about": "About",
   "activeGames": "Active Games",
   "cancel": "Cancel",
   "cards": "Cards",
@@ -7,6 +8,7 @@
   "doDeleteGame": "Are you sure you want to delete this game?",
   "email": "Email",
   "finishedGames": "Finished Games",
+  "forgotPassword": "Forgot Password",
   "home": "Home",
   "invalidEmailOrPassword": "Invalid email or password",
   "language": "Language",
@@ -22,5 +24,30 @@
   "settings": "Settings",
   "updatePassword": "Update Password",
   "username": "Username",
-  "usernameOrEmailAlreadyTaken": "Username or Email already taken"
+  "usernameOrEmailAlreadyTaken": "Username or Email already taken",
+  "labels": {
+    "drawTopCardOfEncounterDeck": "Draw the top card of the encounter deck",
+    "takeControlOfKey": "Take control of key"
+  },
+  "tooltips": {
+    "takeControlOfKey": "Take control of {key} key"
+  },
+  "shuffleRemainder": "Shuffle the remainder of the encounter cards to build the encounter deck.",
+  "readyToBegin": "You are now ready to begin.",
+
+  "Yes": "Yes",
+  "No": "No",
+
+  "Evade": "Evade",
+  "Fight": "Fight",
+  "Engage": "Engage",
+  "Forced": "Forced",
+  "Delayed": "Delayed",
+  "Objective": "Objective",
+  "Haunted": "Haunted",
+
+  "Results": "Results",
+  "Story": "Story",
+  "ChooseOne": "Choose one",
+  "Choose": "Choose"
 }

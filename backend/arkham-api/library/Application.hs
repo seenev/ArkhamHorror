@@ -3,6 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoStrictData #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Application (
@@ -70,9 +71,11 @@ import Text.Regex.Posix ((=~))
 
 import Api.Handler.Arkham.Cards
 import Api.Handler.Arkham.Decks
+import Api.Handler.Arkham.Game.Bug
 import Api.Handler.Arkham.Game.Debug
 import Api.Handler.Arkham.Games
 import Api.Handler.Arkham.Investigators
+import Api.Handler.Arkham.Old
 import Api.Handler.Arkham.PendingGames
 import Api.Handler.Arkham.Replay
 import Api.Handler.Arkham.Undo

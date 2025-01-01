@@ -137,6 +137,16 @@ export const abilityEffectDecoder = JsonDecoder.object<AbilityEffect>({
   cost: costDecoder
 }, 'AbilityEffect')
 
+export type DelayedAbility = {
+  tag: "DelayedAbility"
+  abilityType: AbilityType
+}
+
+export const delayedAbilityDecoder = JsonDecoder.object<DelayedAbility>({
+  tag: JsonDecoder.isExactly("DelayedAbility"),
+  abilityType: JsonDecoder.lazy<AbilityType>(() => abilityTypeDecoder)
+}, 'DelayedAbility')
+
 export type Objective = {
   tag: "Objective"
   abilityType: AbilityType
@@ -156,7 +166,7 @@ export const hauntedDecoder = JsonDecoder.object<Haunted>({
 }, 'Haunted')
 
 
-export type AbilityType = ServitorAbility | FastAbility | ReactionAbility | CustomizationReaction | ConstantReaction | ActionAbility | ActionAbilityWithSkill | ActionAbilityWithBefore | SilentForcedAbility | ForcedAbility | ForcedAbilityWithCost | AbilityEffect | Objective | Haunted
+export type AbilityType = ServitorAbility | FastAbility | ReactionAbility | CustomizationReaction | ConstantReaction | ActionAbility | ActionAbilityWithSkill | ActionAbilityWithBefore | SilentForcedAbility | ForcedAbility | ForcedAbilityWithCost | AbilityEffect | Objective | Haunted | DelayedAbility
 
 export type ForcedWhen = {
   tag: "ForcedWhen"
@@ -183,6 +193,7 @@ export const abilityTypeDecoder: JsonDecoder.Decoder<AbilityType> = JsonDecoder.
   forcedAbilityWithCostDecoder,
   abilityEffectDecoder,
   objectiveDecoder,
+  delayedAbilityDecoder,
   hauntedDecoder,
   forcedWhenDecoder.map((fw: ForcedWhen) => fw.abilityType)
 ], 'AbilityType')
@@ -192,6 +203,7 @@ export type Ability = {
   source: Source
   tooltip: string | null
   displayAsAction: boolean
+  index: number
 }
 
 export const abilityDecoder = JsonDecoder.object(
@@ -199,5 +211,6 @@ export const abilityDecoder = JsonDecoder.object(
     type: abilityTypeDecoder,
     source: sourceDecoder,
     tooltip: JsonDecoder.nullable(JsonDecoder.string),
-    displayAsAction: JsonDecoder.boolean
+    displayAsAction: JsonDecoder.boolean,
+    index: JsonDecoder.number
   }, 'Ability')

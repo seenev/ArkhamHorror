@@ -33,7 +33,7 @@ const chooseDeck = computed(() => {
 
   const { tag } = question
 
-  if (tag === 'ChooseDeck') {
+  if (tag === 'ChooseDeck' || props.game.gameState.tag === 'IsChooseDecks') {
     return true
   }
 
@@ -65,7 +65,7 @@ const questionHash = computed(() => {
 
 <template>
   <div v-if="upgradeDeck" id="game" class="game">
-    <UpgradeDeck :game="game" :key="playerId" :playerId="playerId" />
+    <UpgradeDeck :game="game" :key="playerId" :playerId="playerId" @choose="choose" />
   </div>
   <div v-else-if="chooseDeck" id="game" class="game">
     <h2 v-if="questionLabel" class="question-label">{{ questionLabel }}</h2>
@@ -91,12 +91,12 @@ const questionHash = computed(() => {
   box-shadow: 0 3px 6px rgba(0,0,0,0.23), 0 3px 6px rgba(0,0,0,0.53);
   border-radius: 6px;
   margin: 2px;
-  width: $card-width;
+  width: var(--card-width);
 }
 
 .card--sideways {
   width: auto;
-  height: $card-width * 2;
+  height: calc(var(--card-width) * 2);
 }
 
 .scenario-cards {
@@ -136,7 +136,6 @@ const questionHash = computed(() => {
 }
 
 .game {
-  background-image: linear-gradient(darken(#E5EAEC, 10), #E5EAEC);
   width: 100%;
   z-index: 1;
 }
@@ -155,11 +154,11 @@ const questionHash = computed(() => {
 
 .portrait--can-move {
   cursor: pointer;
-  border: 3px solid $select;
+  border: 3px solid var(--select);
 }
 
 .location--can-move-to {
-  border: 3px solid $select;
+  border: 3px solid var(--select);
   cursor: pointer;
 }
 
@@ -187,5 +186,9 @@ const questionHash = computed(() => {
 
 .question-label {
   text-align: center;
+  background-color: var(--background);
+  padding: 0;
+  margin: 0;
+  margin-top: 10px;
 }
 </style>

@@ -1,10 +1,10 @@
 <script lang="ts" setup>
 import { ComputedRef, computed, ref } from 'vue'
-import { useDebug } from '@/arkham/debug'
 import { type Game } from '@/arkham/types/Game'
 import { type Card, cardImage } from '@/arkham/types/Card'
-import AbilityButton from '@/arkham/components/AbilityButton.vue'
+import AbilitiesMenu from '@/arkham/components/AbilitiesMenu.vue'
 import PoolItem from '@/arkham/components/PoolItem.vue';
+import Key from '@/arkham/components/Key.vue';
 import Treachery from '@/arkham/components/Treachery.vue';
 import * as ArkhamGame from '@/arkham/types/Game'
 import { AbilityLabel, AbilityMessage, type Message } from '@/arkham/types/Message'
@@ -26,9 +26,13 @@ const emits = defineEmits<{
 }>()
 
 const showAbilities = ref(false)
+const frame = ref(null)
 
 const id = computed(() => props.act.id)
-const image = computed(() => {
+
+const keys = computed(() => props.act.keys)
+
+const cardCode = computed(() => {
   const side = props.act.sequence.side.toLowerCase().replace('a', '')
   const sidePart = id.value.endsWith(side) ? "" : side
 
@@ -42,7 +46,17 @@ const image = computed(() => {
     newId = newId.replace(/e$/, '')
   }
 
-  return imgsrc(`cards/${newId}${sidePart}.jpg`)
+  // handle threads of fate as hardcoded values because I don't want to deal with it
+  if (parseInt(newId) >= 4117 && parseInt(newId) <= 4140) {
+    const adjustedSidePart = sidePart.replace(/[ace]/, '').replace(/[df]/, 'b')
+    return `${newId}${adjustedSidePart}`
+  }
+
+  return `${newId}${sidePart}`
+})
+
+const image = computed(() => {
+  return imgsrc(`cards/${cardCode.value}.avif`)
 })
 
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
@@ -96,8 +110,6 @@ const cardsUnder = computed(() => props.cardsUnder)
 
 const showCardsUnderAct = () => emits('show', cardsUnder, 'Cards Under Act', false)
 
-const debug = useDebug()
-
 async function clicked() {
   if (interactAction.value !== -1) {
     emits('choose', interactAction.value)
@@ -106,10 +118,19 @@ async function clicked() {
   }
 }
 
-async function chooseAbility(ability: AbilityMessage) {
+async function chooseAbility(index: number) {
   showAbilities.value = false
-  emits('choose', ability.index)
+  emits('choose', index)
 }
+
+const isOtherEncounterCard = computed(() => {
+  return ["04134b", "04137b"].includes(cardCode.value)
+})
+
+const breaches = computed(() => {
+  const {breaches} = props.act
+  return breaches ?? 0
+})
 
 </script>
 
@@ -117,28 +138,22 @@ async function chooseAbility(ability: AbilityMessage) {
   <div class="act-container">
     <div class="card-container" :class="{ 'act--objective': hasObjective }">
       <img
-        :class="{ 'act--can-progress': interactAction !== -1, 'act--can-interact': canInteract }"
-        class="card card--sideways"
+        :class="{ 'act--can-progress': interactAction !== -1, 'act--can-interact': canInteract, 'card--sideways': !isOtherEncounterCard}"
+        class="card"
         @click="clicked"
         :src="image"
+        ref="frame"
       />
 
-      <div class="abilities" v-if="showAbilities">
-        <AbilityButton
-          v-for="ability in abilities"
-          :key="ability.index"
-          :ability="ability.contents"
-          :data-image="image"
-          @click="chooseAbility(ability)"
-          />
-
-        <template v-if="debug.active">
-          <button @click="debug.send(game.id, {tag: 'AdvanceAct', contents: [id, {tag: 'TestSource', contents:[]}]})">Advance</button>
-        </template>
-
-        <button v-if="cardsUnder.length > 0" class="view-cards-under-button" @click="showCardsUnderAct">{{viewUnderLabel}}</button>
-      </div>
     </div>
+    <AbilitiesMenu
+      :frame="frame"
+      v-model="showAbilities"
+      :abilities="abilities"
+      position="bottom"
+      @choose="chooseAbility"
+      />
+    <button v-if="cardsUnder.length > 0" class="view-cards-under-button" @click="showCardsUnderAct">{{viewUnderLabel}}</button>
     <img
       v-for="(card, idx) in cardsNextTo"
       class="card card--sideways"
@@ -160,13 +175,16 @@ async function chooseAbility(ability: AbilityMessage) {
         type="clue"
         :amount="act.clues"
       />
+      <PoolItem v-if="breaches > 0" type="resource" :amount="breaches" />
+      <Key v-for="key in keys" :key="key" :name="key" />
     </div>
   </div>
 </template>
 
 <style scoped lang="scss">
-.card {
-  width: $card-width;
+.act-container :deep(.card) {
+  flex: 0;
+  width: var(--card-width);
   border-radius: inherit;
 }
 
@@ -177,12 +195,11 @@ async function chooseAbility(ability: AbilityMessage) {
 
 .card-container {
   --gradient-angle: 0deg;
-  margin: 4px;
-  -webkit-box-shadow: 0 3px 6px rgba(0, 0, 0, 0.23), 0 3px 6px rgba(0, 0, 0, 0.53);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.23), 0 3px 6px rgba(0, 0, 0, 0.53);
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
   position: relative;
   border-radius: 6px;
-  height: $card-width;
+  height: var(--card-width);
+  width: fit-content;
 }
 
 @property --gradient-angle {
@@ -220,15 +237,16 @@ async function chooseAbility(ability: AbilityMessage) {
 .act-container {
   display: flex;
   flex-direction: column;
+  gap: 5px;
 }
 
-.card--sideways {
+.act-container :deep(.card--sideways) {
   width: auto;
-  height: $card-width;
+  height: var(--card-width);
+  aspect-ratio: var(--card-sideways-aspect);
 }
 
 .act--can-progress {
-  box-sizing: border-box;
   border: 2px solid #ff00ff;
   border-radius: 8px;
   cursor: pointer;
@@ -251,18 +269,18 @@ async function chooseAbility(ability: AbilityMessage) {
 }
 
 .abilities {
-  position: absolute;
-  top:100%;
   padding: 10px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
-  z-index: 10000;
+  button {
+    padding: 4px;
+  }
 }
 
 
 .card-container:not(.act--objective) {
   .act--can-interact {
-    border: 2px solid $select;
+    border: 2px solid var(--select);
     cursor: pointer;
   }
 }

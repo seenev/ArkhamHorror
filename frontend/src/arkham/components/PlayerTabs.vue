@@ -35,6 +35,7 @@ function tabClass(investigator: Investigator) {
       'tab--active-player': investigator.id === props.activePlayerId,
       'tab--lead-player': investigator.id === props.game.leadInvestigatorId,
       'tab--has-actions': pid !== props.playerId && hasChoices(investigator.playerId),
+      'glow-effect': investigator.id === 'c89001',
     },
     `tab--${investigator.class}`,
   ]
@@ -161,7 +162,8 @@ ul.tabs__header > li {
   color: white;
   filter: contrast(50%);
   border-radius: 5px 5px 0 0;
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   span {
     display: block;
     width: fit-content;
@@ -175,27 +177,27 @@ ul.tabs__header > li.tab--selected {
 }
 
 .tab--Guardian {
-  background-color: $guardian;
+  background-color: var(--guardian-extra-dark);
 }
 
 .tab--Seeker {
-  background-color: $seeker;
+  background-color: var(--seeker-extra-dark);
 }
 
 .tab--Rogue {
-  background-color: $rogue;
+  background-color: var(--rogue-extra-dark);
 }
 
 .tab--Mystic {
-  background-color: $mystic;
+  background-color: var(--mystic-extra-dark);
 }
 
 .tab--Survivor {
-  background-color: $survivor;
+  background-color: var(--survivor-extra-dark);
 }
 
 .tab--Neutral {
-  background-color: $neutral;
+  background-color: var(--neutral-dark);
 }
 
 .tab--active-player {
@@ -217,7 +219,7 @@ ul.tabs__header > li.tab--selected {
     position: absolute;
     content: "";
     inset: 0;
-    top: -5px;
+    top: -15px;
     margin-inline: auto;
     transform: translateY(-100%);
     width: 25px;
@@ -228,6 +230,7 @@ ul.tabs__header > li.tab--selected {
 }
 
 .switch-investigators {
+  height: 100%;
   background: none;
   border: none;
   color: white;
@@ -265,5 +268,15 @@ ul.tabs__header > li.tab--selected {
 
 ul.tabs__header > li.inactive {
   filter: grayscale(100%);
+  &:before {
+    font-family: "ArkhamIcons";
+    content: "\e912";
+    font-size: 0.8em;
+    margin-left: 5px;
+  }
+}
+
+.glow-effect {
+  box-shadow: inset 0 -10px 20px -10px rgba(0, 255, 0, 0.7); /* Inset shadow for glow effect */
 }
 </style>

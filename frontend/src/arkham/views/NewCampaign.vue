@@ -1,13 +1,13 @@
 <script lang="ts" setup>
-import { watch, ref, computed } from 'vue'
+import { watch, ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useRoute } from 'vue-router'
 import type { User } from '@/types'
 import { useRouter } from 'vue-router'
 import * as Arkham from '@/arkham/types/Deck'
 import { fetchDecks, newGame } from '@/arkham/api'
 import { imgsrc } from '@/arkham/helpers'
 import type { Difficulty } from '@/arkham/types/Difficulty'
-import NewDeck from '@/arkham/components/NewDeck.vue'
 
 import campaignJSON from '@/arkham/data/campaigns.json'
 import scenarioJSON from '@/arkham/data/scenarios.json'
@@ -15,6 +15,18 @@ import sideStoriesJSON from '@/arkham/data/side-stories.json'
 
 const store = useUserStore()
 const currentUser = computed<User | null>(() => store.getCurrentUser)
+const route = useRoute();
+const queryParams = route.query;
+
+onMounted(async () => {
+  if (queryParams.alpha !== undefined) {
+    localStorage.setItem('alpha', 'true')
+  }
+})
+
+const alpha = computed(() => {
+  return queryParams.alpha !== undefined || localStorage.getItem('alpha') === 'true'
+})
 
 type GameMode = 'Campaign' | 'Standalone' | 'SideStory'
 
@@ -23,7 +35,7 @@ const gameMode = ref<GameMode>('Campaign')
 const includeTarotReadings = ref(false)
 
 const scenarios = computed(() => scenarioJSON.filter((s) =>
-  s.beta
+  s.beta || s.alpha
     ? currentUser.value && currentUser.value.beta
     : true
 ))
@@ -36,11 +48,15 @@ const scenarios = computed(() => scenarioJSON.filter((s) =>
 
 const sideStories = computed(() => sideStoriesJSON)
 
-const campaigns = computed(() => campaignJSON.filter((c) =>
-  c.beta
+const dev = import.meta.env.PROD ? false : true
+
+const campaigns = computed(() => campaignJSON.filter((c) => {
+  if (c.dev && !dev && !alpha.value) return false
+
+  return c.beta || c.alpha
     ? currentUser.value && currentUser.value.beta
     : true
-))
+}))
 
 const difficulties = computed<Difficulty[]>(() => {
   if(gameMode.value === 'SideStory') {
@@ -91,11 +107,6 @@ fetchDecks().then((result) => {
   decks.value = result;
   ready.value = true;
 })
-
-async function addDeck(d: Arkham.Deck) {
-  decks.value = [d]
-  deckIds.value[0] = d.id
-}
 
 const selectedCampaignReturnToId = computed(() => {
   const campaign = campaigns.value.find((c) => c.id === selectedCampaign.value);
@@ -184,18 +195,13 @@ async function start() {
 <template>
   <div v-if="ready" class="container">
     <transition-group name="slide">
-      <div v-if="decks.length == 0">
-        <header>
-          <h2>No decks, please add one first:</h2>
-        </header>
-        <NewDeck @new-deck="addDeck" />
-      </div>
-      <div v-else>
+      <div key="new-game">
         <header>
           <h2>{{$t('newGame')}}</h2>
+          <slot name="cancel"></slot>
         </header>
         <form id="new-campaign" @submit.prevent="start">
-          <p>Number of Players</p>
+          <p>{{$t('create.numberOfPlayers')}}</p>
           <div class="options">
             <input type="radio" v-model="playerCount" :value="1" id="player1" /><label for="player1">1</label>
             <input type="radio" v-model="playerCount" :value="2" id="player2" /><label for="player2">2</label>
@@ -204,15 +210,15 @@ async function start() {
           </div>
           <transition name="slide">
             <div v-if="playerCount > 1" class="options">
-              <input type="radio" v-model="multiplayerVariant" value="WithFriends" id="friends" /><label for="friends">With Friends</label>
-              <input type="radio" v-model="multiplayerVariant" value="Solo" id="solo" /><label for="solo">Multi-handed Solo</label>
+              <input type="radio" v-model="multiplayerVariant" value="WithFriends" id="friends" /><label for="friends">{{$t('create.withFriends')}}</label>
+              <input type="radio" v-model="multiplayerVariant" value="Solo" id="solo" /><label for="solo">{{$t('create.multihandedSolo')}}</label>
             </div>
           </transition>
 
           <div class="options">
-            <input type="radio" v-model="gameMode" :value="'Campaign'" id="campaign"> <label for="campaign">Campaign</label>
-            <input type="radio" v-model="gameMode" :value="'Standalone'" id="standalone"> <label for="standalone">Standalone</label>
-            <input type="radio" v-model="gameMode" :value="'SideStory'" id="sideStory"> <label for="sideStory">Side Story</label>
+            <input type="radio" v-model="gameMode" :value="'Campaign'" id="campaign"> <label for="campaign">{{$t('create.campaign')}}</label>
+            <input type="radio" v-model="gameMode" :value="'Standalone'" id="standalone"> <label for="standalone">{{$t('create.standalone')}}</label>
+            <input type="radio" v-model="gameMode" :value="'SideStory'" id="sideStory"> <label for="sideStory">{{$t('create.sideStory')}}</label>
           </div>
 
           <template v-if="gameMode === 'SideStory'">
@@ -225,21 +231,24 @@ async function start() {
           <template v-else>
             <!-- <select v-model="selectedCampaign"> -->
               <div class="campaigns">
-                <div v-for="campaign in campaigns" :key="campaign.id" class="campaign">
-                  <img class="campaign-box" :class="{ 'selected-campaign': selectedCampaign == campaign.id }" :src="imgsrc(`boxes/${campaign.id}.jpg`)" @click="selectCampaign(campaign.id)">
+                <div v-for="campaign in campaigns" :key="campaign.id" class="campaign" :class="{ beta: campaign.beta, alpha: campaign.alpha }">
+                  <input type="image" class="campaign-box" :class="{ 'selected-campaign': selectedCampaign == campaign.id }" :src="imgsrc(`boxes/${campaign.id}.jpg`)" @click.prevent="selectCampaign(campaign.id)">
                 </div>
               </div>
+
+              <div class="alpha-warning" v-if="campaign && campaign.alpha">{{$t('create.alphaWarning')}}</div>
+              <div class="beta-warning" v-if="campaign && campaign.beta">{{$t('create.betaWarning')}}</div>
             <!-- </select> -->
           </template>
 
           <div v-if="gameMode === 'Campaign' && selectedCampaign && selectedCampaignReturnToId" class="options">
-            <input type="radio" v-model="returnTo" :value="false" id="normal"> <label for="normal">Normal</label>
-            <input type="radio" v-model="returnTo" :value="true" id="returnTo"> <label for="returnTo">Return to...</label>
+            <input type="radio" v-model="returnTo" :value="false" id="normal"> <label for="normal">{{$t('create.normal')}}</label>
+            <input type="radio" v-model="returnTo" :value="true" id="returnTo"> <label for="returnTo">{{$t('create.returnTo')}}</label>
           </div>
 
           <div v-if="gameMode === 'Campaign' && campaign && campaign.settings" class="options">
-            <input type="radio" v-model="fullCampaign" :value="true" id="full"> <label for="full">Full Campaign</label>
-            <input type="radio" v-model="fullCampaign" :value="false" id="partial"> <label for="partial">Partial Campaign</label>
+            <input type="radio" v-model="fullCampaign" :value="true" id="full"> <label for="full">{{$t('create.fullCampaign')}}</label>
+            <input type="radio" v-model="fullCampaign" :value="false" id="partial"> <label for="partial">{{$t('create.partialCampaign')}}</label>
           </div>
 
           <template v-if="(gameMode === 'Standalone' || (gameMode !== 'SideStory' && !fullCampaign)) && selectedCampaign">
@@ -250,7 +259,7 @@ async function start() {
             </div>
           </template>
 
-          <p>Difficulty</p>
+          <p>{{$t('create.difficulty')}}</p>
           <div class="options">
             <template v-for="difficulty in difficulties" :key="difficulty">
               <input
@@ -260,11 +269,11 @@ async function start() {
                 :checked="difficulty === selectedDifficulty"
                 :id="`difficulty${difficulty}`"
               />
-              <label :for="`difficulty${difficulty}`">{{difficulty}}</label>
+              <label :for="`difficulty${difficulty}`">{{$t('create.'+difficulty)}}</label>
             </template>
           </div>
 
-          <p>Include Tarot Readings</p>
+          <p>{{$t('create.includeTarotReadings')}}</p>
           <div class="options">
             <input
               type="radio"
@@ -273,7 +282,7 @@ async function start() {
               :checked="!includeTarotReadings"
               id="tarotNo"
             />
-            <label for="tarotNo">No</label>
+            <label for="tarotNo">{{$t('No')}}</label>
             <input
               type="radio"
               v-model="includeTarotReadings"
@@ -281,15 +290,15 @@ async function start() {
               :checked="includeTarotReadings"
               id="tarotYes"
             />
-            <label for="tarotYes">Yes</label>
+            <label for="tarotYes">{{$t('Yes')}}</label>
           </div>
 
           <div>
-            <p>Game Name</p>
+            <p>{{$t('create.gameName')}}</p>
             <input type="text" v-model="campaignName" :placeholder="currentCampaignName" />
           </div>
 
-          <button type="submit" :disabled="disabled">Create</button>
+          <button type="submit" :disabled="disabled">{{$t('create.create')}}</button>
         </form>
       </div>
     </transition-group>
@@ -298,19 +307,16 @@ async function start() {
 
 <style lang="scss" scoped>
 .container {
-  width: 100%;
-  max-width: 800px;
+  min-width: 60vw;
   margin: 0 auto;
-  margin-top: 10px;
+  margin-top: 20px;
 }
 
 #new-campaign {
-  box-sizing: border-box;
   width: 100%;
   color: #FFF;
-  background-color: #15192C;
-  padding: 10px;
   border-radius: 3px;
+  margin-bottom: 20px;
   button {
     outline: 0;
     padding: 15px;
@@ -320,7 +326,7 @@ async function start() {
     border: 0;
     width: 100%;
     &:hover {
-      background: darken(#6E8640, 7%);
+      background: hsl(80, 35%, 32%);
     }
   }
   button[disabled] {
@@ -332,11 +338,10 @@ async function start() {
   }
   input[type=text] {
     outline: 0;
-    border: 1px solid #000;
+    border: 1px solid var(--background);
     padding: 15px;
-    background: #F2F2F2;
+    background: var(--background-dark);
     width: 100%;
-    box-sizing: border-box;
     margin-bottom: 10px;
   }
   select {
@@ -345,7 +350,6 @@ async function start() {
     padding: 15px;
     background: #F2F2F2;
     width: 100%;
-    box-sizing: border-box;
     margin-bottom: 10px;
     background-image:
       linear-gradient(45deg, transparent 50%, gray 50%),
@@ -373,9 +377,13 @@ async function start() {
 }
 
 h2 {
-  color: #656A84;
+  color: #cecece;
   margin-left: 10px;
   text-transform: uppercase;
+  font-family: Teutonic;
+  font-size: 2em;
+  padding: 0;
+  margin: 0;
 }
 
 .difficulties {
@@ -391,11 +399,11 @@ input[type=radio] {
 input[type=radio] + label {
   display:inline-block;
   padding: 4px 12px;
-  background-color: desaturate(#6E8640, 30%);
-  &:hover {
-    background-color: desaturate(#6E8640, 20%);
-  }
+  background-color: hsl(80, 5%, 39%);
   border-color: #ddd;
+  &:hover {
+    background-color: hsl(80, 15%, 39%);
+  }
 }
 
 input[type=radio]:checked + label {
@@ -410,9 +418,9 @@ input[type=checkbox] {
 input[type=checkbox] + label {
   display:inline-block;
   padding: 4px 12px;
-  background-color: desaturate(#6E8640, 30%);
+  background-color: hsl(80, 5%, 39%);
   &:hover {
-    background-color: desaturate(#6E8640, 20%);
+    background-color: hsl(80, 15%, 39%);
   }
 
   &.invert {
@@ -427,8 +435,12 @@ input[type=checkbox] + label {
 input[type=checkbox]:checked + label {
   background: #6E8640;
   &.invert {
-    background-color: desaturate(#6E8640, 30%);
+    background-color: hsl(80, 5%, 39%);
   }
+}
+
+input[type=image] {
+  width: 100%;
 }
 
 .invert[type=checkbox] + label {
@@ -439,7 +451,7 @@ input[type=checkbox]:checked + label {
 }
 
 .invert[type=checkbox]:checked + label {
-  background-color: desaturate(#6E8640, 30%);
+  background-color: hsl(80, 5%, 39%);
 }
 
 header {
@@ -448,6 +460,11 @@ header {
   justify-items: center;
   align-content: center;
   justify-content: center;
+
+  h2 {
+    flex: 1;
+  }
+
 }
 
 .back-link {
@@ -473,13 +490,16 @@ header {
   display: grid;
   gap: 10px;
   line-height: 0;
+  grid-template-columns: repeat(auto-fill, calc((1 / 6 * 100%) - 9px));
+  margin-bottom: 10px;
 
-  grid-template-columns: repeat(auto-fill, calc((1 / 3 * 100%) - 7px));
+  @media (max-width: 1500px) {
+    grid-template-columns: repeat(auto-fill, calc((1 / 3 * 100%) - 7px));
+  }
 
   img {
     width: 100%;
   }
-  margin-bottom: 10px;
 }
 
 .campaign-box:not(.selected-campaign) {
@@ -526,5 +546,69 @@ header {
   overflow: hidden;
   max-height: 0;
   opacity: 0;
+}
+
+.campaign {
+  position: relative;
+  overflow: hidden;
+  &.beta:after{
+    content: "beta";
+    position: absolute;
+    z-index: 1070;
+    width: 80px;
+    height: 25px;
+    background: darkgoldenrod;
+    top: 7px;
+    left: -20px;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 1px;
+    font-family: sans-serif;
+    text-transform: uppercase;
+    font-weight: bold;
+    color: white;
+    line-height: 27px;
+    -ms-transform:rotate(-45deg);
+    -webkit-transform:rotate(-45deg);
+    transform:rotate(-45deg);
+  }
+
+  &.alpha:after{
+    content: "alpha";
+    position: absolute;
+    z-index: 1070;
+    width: 80px;
+    height: 25px;
+    background: darkred;
+    top: 7px;
+    left: -20px;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 1px;
+    font-family: sans-serif;
+    text-transform: uppercase;
+    font-weight: bold;
+    color: white;
+    line-height: 27px;
+    -ms-transform:rotate(-45deg);
+    -webkit-transform:rotate(-45deg);
+    transform:rotate(-45deg);
+  }
+}
+
+.beta-warning {
+  font-size: 1.2em;
+  text-transform: uppercase;
+  padding: 10px;
+  background: darkgoldenrod;
+  margin-block: 10px;
+}
+
+.alpha-warning {
+  font-size: 1.2em;
+  text-transform: uppercase;
+  padding: 10px;
+  background: darkred;
+  margin-block: 10px;
 }
 </style>

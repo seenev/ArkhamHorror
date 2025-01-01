@@ -40,12 +40,12 @@
   { "name": "Dark Side of the Moon", "min": 6195, "max": 6233, "playerCards": 11, "code": "dsm", "cycle": 6 },
   { "name": "Point of No Return", "min": 6234, "max": 6275, "playerCards": 13, "code": "pnr", "cycle": 6 },
   { "name": "Where the Gods Dwell", "min": 6276, "max": 6322, "playerCards": 10, "code": "wgd", "cycle": 6 },
-  { "name": "Weaver of the Cosmos", "min": 6323, "max": 6354, "playerCards": 10, "code": "woc", "cycle": 6 },
+  { "name": "Weaver of the Cosmos", "min": 6323, "max": 6354, "playerCards": 10, "code": "woc", "cycle": 6, "encounterDuplicates": 1},
 
   { "name": "The Innsmouth Conspiracy", "min": 7001, "max": 7107, "playerCards": 40, "code": "tic", "cycle": 7 },
   { "name": "In Too Deep", "min": 7108, "max": 7151, "playerCards": 15, "code": "itd", "cycle": 7 },
-  { "name": "Devil Reef", "min": 7152, "max": 7188, "playerCards": 11, "code": "def", "cycle": 7 },
-  { "name": "Horror in High Gear", "min": 7189, "max": 7219, "playerCards": 9, "code": "hhg", "cycle": 7 },
+  { "name": "Devil Reef", "min": 7152, "max": 7188, "playerCards": 11, "code": "def", "cycle": 7, "encounterDuplicates": 4 },
+  { "name": "Horror in High Gear", "min": 7189, "max": 7219, "playerCards": 9, "code": "hhg", "cycle": 7, "encounterDuplicates": 8 },
   { "name": "A Light in the Fog", "min": 7220, "max": 7260, "playerCards": 11, "code": "lif", "cycle": 7 },
   { "name": "The Lair of Dagon", "min": 7261, "max": 7300, "playerCards": 13, "code": "lod", "cycle": 7 },
   { "name": "Into the Maelstrom", "min": 7301, "max": 7338, "playerCards": 10, "code": "itm", "cycle": 7 },
@@ -80,6 +80,7 @@
   { "name": "War of the Outer Gods", "min": 86001, "max": 86055, "playerCards": 0, "code": "wog", "cycle": 70 },
   { "name": "Machinations Through Time", "min": 87001, "max": 87057, "playerCards": 0, "code": "mtt", "cycle": 70 },
   { "name": "Fortune and Folly", "min": 88001, "max": 88053, "playerCards": 0, "code": "faf", "cycle": 70 },
+  { "name": "The Blob That Ate Everything ELSE!", "min": 89001, "max": 89021, "playerCards": 5, "code": "blbe", "cycle": 70 },
 
   { "name": "Hour of the Huntress", "min": 98001, "max": 98003, "playerCards": 3, "code": "hoth", "cycle": 80 },
   { "name": "The Dirge of Reason", "min": 98004, "max": 98006, "playerCards": 3, "code": "tdor", "cycle": 80 },
@@ -99,5 +100,6 @@
   { "name": "Laid to Rest", "min": 90049, "max": 90058, "playerCards": 5, "code": "ltr", "cycle": 90 },
   { "name": "Path to the Righteous", "min": 90059, "max": 90061, "playerCards": 3, "code": "ptr", "cycle": 90 },
   { "name": "Relics of the Past", "min": 90062, "max": 90077, "playerCards": 3, "code": "rop", "cycle": 90 },
-  { "name": "Hunting for Answers", "min": 90078, "max": 90080, "playerCards": 3, "code": "hfa", "cycle": 90 }
+  { "name": "Hunting for Answers", "min": 90078, "max": 90080, "playerCards": 3, "code": "hfa", "cycle": 90 },
+  { "name": "Pistols and Pearls", "min": 90084, "max": 90086, "playerCards": 3, "code": "pap", "cycle": 90 }
 ]

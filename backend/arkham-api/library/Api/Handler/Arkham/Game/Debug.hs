@@ -26,25 +26,7 @@ import UnliftIO.Exception (catch, try)
 getApiV1ArkhamGameExportR :: ArkhamGameId -> Handler ArkhamExport
 getApiV1ArkhamGameExportR gameId = do
   _ <- fromJustNote "Not authenticated" <$> getRequestUserId
-  runDB $ do
-    ge <- get404 gameId
-    players <- select $ do
-      players <- from $ table @ArkhamPlayer
-      where_ (players ^. ArkhamPlayerArkhamGameId ==. val gameId)
-      pure players
-    steps <- select $ do
-      steps <- from $ table @ArkhamStep
-      where_ $ steps ^. ArkhamStepArkhamGameId ==. val gameId
-      orderBy [desc $ steps ^. ArkhamStepStep]
-      pure steps
-
-    entries <- getGameLogEntries gameId
-
-    pure
-      $ ArkhamExport
-        { aeCampaignPlayers = map (arkhamPlayerInvestigatorId . entityVal) players
-        , aeCampaignData = arkhamGameToExportData ge (map entityVal steps) entries
-        }
+  generateExport gameId
 
 postApiV1ArkhamGamesFixR :: Handler ()
 postApiV1ArkhamGamesFixR = do
@@ -98,12 +80,12 @@ postApiV1ArkhamGamesImportR = do
             $ ArkhamGame agedName agedCurrentData agedStep Solo now now
         insertMany_ $ map (\e -> e {arkhamLogEntryArkhamGameId = gameId}) agedLog
         traverse_ (insert_ . ArkhamPlayer userId gameId) investigatorIds
-        traverse_
-          ( \s ->
-              insert_
-                $ ArkhamStep gameId (arkhamStepChoice s) (arkhamStepStep s) (arkhamStepActionDiff s)
-          )
-          agedSteps
+        rawExecute "ALTER TABLE arkham_steps DISABLE TRIGGER enforce_step_order_per_game;" []
+        for_ agedSteps \s ->
+          insert_
+            $ ArkhamStep gameId (arkhamStepChoice s) (arkhamStepStep s) (arkhamStepActionDiff s)
+
+        rawExecute "ALTER TABLE arkham_steps ENABLE TRIGGER enforce_step_order_per_game;" []
         pure gameId
       pure
         $ toPublicGame

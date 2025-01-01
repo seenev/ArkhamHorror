@@ -35,7 +35,8 @@ const hasPool = computed(() => {
 
 const cardCode = computed(() => props.event.cardCode)
 const image = computed(() => {
-  return imgsrc(`cards/${cardCode.value.replace('c', '')}.jpg`)
+  const mutated = props.event.mutated ? `_${props.event.mutated}` : ''
+  return imgsrc(`cards/${cardCode.value.replace('c', '')}${mutated}.avif`)
 })
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
 
@@ -91,7 +92,7 @@ const choose = (index: number) => emits('choose', index)
   <div class="event" :class="{ attached }">
     <img
       :src="image"
-      :class="{ 'event--can-interact': cardAction !== -1, exhausted }"
+      :class="{ 'event--can-interact': cardAction !== -1, exhausted, attached }"
       class="card event"
       @click="$emit('choose', cardAction)"
       :data-customizations="JSON.stringify(event.customizations)"
@@ -129,8 +130,8 @@ const choose = (index: number) => emits('choose', index)
 
 <style lang="scss" scoped>
 .card {
-  width: $card-width;
-  max-width: $card-width;
+  width: var(--card-width);
+  max-width: var(--card-width);
   border-radius: 5px;
 }
 
@@ -141,7 +142,7 @@ const choose = (index: number) => emits('choose', index)
 }
 
 .event--can-interact {
-  border: 2px solid $select;
+  border: 2px solid var(--select);
   cursor:pointer;
 }
 
@@ -178,7 +179,7 @@ const choose = (index: number) => emits('choose', index)
 .attached .card {
   object-fit: cover;
   object-position: left bottom;
-  height: $card-width*0.6;
+  height: calc(var(--card-width)*0.6);
 }
 
 .exhausted {

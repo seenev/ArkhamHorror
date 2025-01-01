@@ -1,8 +1,11 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
+import { imgsrc, formatContent } from '@/arkham/helpers';
 import { Game } from '@/arkham/types/Game';
-import type { Read } from '@/arkham/types/Question';
+import type { Read, FlavorTextEntry } from '@/arkham/types/Question';
 import Token from '@/arkham/components/Token.vue';
+import { useI18n } from 'vue-i18n';
+import FormattedEntry from '@/arkham/components/FormattedEntry.vue';
 
 export interface Props {
   game: Game
@@ -13,45 +16,69 @@ export interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits(['choose'])
 const choose = (idx: number) => emit('choose', idx)
+const { t } = useI18n()
 
 const format = function(body: string) {
-  return body.replace(/_([^_]*)_/g, '<b>$1</b>').replace(/\*([^*]*)\*/g, '<i>$1</i>')
+  return formatContent(body)
 }
 
-const readChoices = props.question.readChoices.reduce<{ label: string, index: number}[]>((acc, v, i) => {
-  if ("label" in v) {
-    return [...acc, { label: v.label, index: i }]
+const maybeFormat = function(body: string) {
+  return body.startsWith("$") ? t(tformat(body.split(' ')[0])) : body
+}
+
+const readCards = computed(() => props.question.readCards || [])
+
+const readChoices = computed(() => {
+  switch (props.question.readChoices.tag) {
+    case "BasicReadChoices":
+      return props.question.readChoices.contents.reduce<{ label: string, index: number}[]>((acc, v, i) => {
+        if ("label" in v) {
+          return [...acc, { label: v.label, index: i }]
+        }
+        return acc
+      }, [] as { label: string, index: number }[])
+
+    case "LeadInvestigatorMustDecide":
+      return props.question.readChoices.contents.reduce<{ label: string, index: number}[]>((acc, v, i) => {
+        if ("label" in v) {
+          return [...acc, { label: v.label, index: i }]
+        }
+        return acc
+      }, [] as { label: string, index: number }[])
   }
-  return acc
-}, [] as { label: string, index: number }[])
+})
 
 const focusedChaosTokens = computed(() => props.game.focusedChaosTokens)
 
-const formatted = computed(() => {
-  return props.question.flavorText.body[0].startsWith("$") ? props.question.flavorText.body[0].slice(1) : null
-})
+function formatEntry(entry: FlavorTextEntry): string {
+  switch (entry.tag) {
+    case 'BasicEntry': return formatContent(entry.text.startsWith('$') ? t(entry.text.slice(1)) : entry.text)
+    case 'I18nEntry': return formatContent(t(entry.key, entry.variables))
+    case 'ModifyEntry': return formatEntry(entry.entry)
+    case 'CompositeEntry': return entry.entries.map(formatEntry).join(' ')
+    default: return "Unknown entry type"
+  }
+}
 
 const tformat = (t:string) => t.startsWith("$") ? t.slice(1) : t
 
 </script>
 <template>
   <div class="intro-text">
-    <div class="entry" v-if="formatted" v-html="$t(formatted)"></div>
-    <div v-else class="entry">
-      <h1 v-if="question.flavorText.title">{{question.flavorText.title}}</h1>
+    <div class="entry">
+      <h1 v-if="question.flavorText.title">{{maybeFormat(question.flavorText.title)}}</h1>
       <Token v-for="(focusedToken, index) in focusedChaosTokens" :key="index" :token="focusedToken" :playerId="playerId" :game="game" @choose="() => {}" />
-      <p
-        v-for="(paragraph, index) in question.flavorText.body"
-        :key="index"
-        v-html="format(paragraph)"
-        ></p>
+      <div class="entry-body">
+        <img :src="imgsrc(`cards/${cardCode.replace('c', '')}.avif`)" v-for="cardCode in readCards" class="card no-overlay" />
+        <FormattedEntry v-for="(paragraph, index) in question.flavorText.body" :key="index" :entry="paragraph" />
+      </div>
     </div>
     <div class="options">
       <button
         v-for="readChoice in readChoices"
         @click="choose(readChoice.index)"
         :key="readChoice.index"
-      ><i class="option"></i>{{$t(tformat(readChoice.label))}}</button>
+        ><i class="option"></i><span v-html="formatContent(tformat(readChoice.label))"></span></button>
     </div>
   </div>
 </template>
@@ -63,13 +90,68 @@ const tformat = (t:string) => t.startsWith("$") ? t.slice(1) : t
   box-shadow: inset 0 0 170px rgba(0,0,0,0.5), 1px 1px 3px rgba(0,0,0,0.6);
 }
 
+.entry {
+  &:has(.iceAndDeath) {
+    h1 {
+      color: #19214F;
+      border-bottom: 1px solid #19214F;
+      &::after {
+        border-bottom: 1px solid #19214F;
+      }
+    }
+
+    :deep(li){
+      &::marker {
+        color: #19214F;
+      }
+    }
+  }
+  &:has(.checkpoint), &:has(.interlude) {
+    background-color: #AFA9A9;
+    box-shadow: unset;
+    overflow: hidden;
+    &::after {
+      border: 20px solid #D4CCC3;
+      border-left-width: 10px;
+      border-right-width: 10px;
+      position: absolute;
+      inset: 0px;
+      box-sizing: border-box;
+      content: "";
+      filter: blur(0.25em);
+      z-index: 1;
+    }
+    h1 {
+      color: #19214F;
+      border-bottom: 1px solid #19214F;
+      &::after {
+        border-bottom: 1px solid #19214F;
+      }
+      font-size: 1.3em;
+      font-weight: 500;
+    }
+    padding: 50px;
+    position: relative;
+    &::before {
+      z-index: 2;
+      pointer-events: none;
+      position: absolute;
+      inset: 10px;
+      border-image: url(/img/arkham/checkpoint_fleur.png) 49.9%;
+      border-image-repeat: no-repeat;
+      border-image-width: 50px;
+      content: "";
+    }
+  }
+}
+
 .intro-text {
+  color: #333;
   font-size: 1.5em;
   overflow: auto;
   height: 100%;
-  background: #001721;
   padding: 20px;
-  box-sizing: border-box;
+  margin-bottom: 20px;
   :deep(h1) {
     font-family: "Teutonic";
     font-weight: 500;
@@ -105,7 +187,7 @@ p {
   }
 }
 
-button {
+button, a.button {
   width: 100%;
   border: 0;
   text-align: left;
@@ -113,15 +195,27 @@ button {
   text-transform: uppercase;
   background-color: #532e61;
   font-weight: bold;
-  color: #EEE;
+  color: #CFCFCF;
   font: Arial, sans-serif;
   &:hover {
     background-color: #311b3e;
+    &:deep(strong) {
+      color: white;
+    }
   }
 
   i {
     font-style: normal;
   }
+
+  &:deep(strong) {
+    color: white;
+  }
+}
+
+a.button {
+  display: block;
+  font-size: 0.7em;
 }
 
 
@@ -132,4 +226,41 @@ button {
     margin-right: 10px;
   }
 }
+
+.card {
+  flex-basis: 30%;
+  flex-shrink: 0;
+  height: fit-content;
+  border-radius: 15px;
+}
+
+.entry-text {
+  flex: 1;
+  &:deep(.right) {
+    text-align: right;
+  }
+  &:deep(.basic) {
+    font-style: normal;
+    font-family: auto;
+  }
+
+  &:deep(i) {
+    font-style: italic;
+  }
+}
+
+.entry-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  p {
+    flex: 1;
+  }
+
+  &:has(.card) {
+    flex-direction: row;
+    gap: 20px;
+  }
+}
+
 </style>

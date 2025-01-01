@@ -23,6 +23,7 @@
         !/import ApiV1ArkhamGamesImportR POST
         !/fix ApiV1ArkhamGamesFixR POST
         !/reload ApiV1ArkhamGamesReloadR GET
+        !/old ApiV1ArkhamGamesOldR GET
         /#ArkhamGameId ApiV1ArkhamGameP:
           / ApiV1ArkhamGameR GET PUT DELETE
           /raw ApiV1ArkhamGameRawR PUT
@@ -30,6 +31,8 @@
           /replay/#Int ApiV1ArkhamGameReplayR GET
           /decks ApiV1ArkhamGameDecksR PUT
           /undo ApiV1ArkhamGameUndoR PUT
+          /undo/scenario ApiV1ArkhamGameUndoScenarioR PUT
+          /file-bug ApiV1ArkhamGameBugR POST
           /spectate ApiV1ArkhamGameSpectateR GET
           /export ApiV1ArkhamGameExportR GET
           /reload ApiV1ArkhamGameReloadR GET

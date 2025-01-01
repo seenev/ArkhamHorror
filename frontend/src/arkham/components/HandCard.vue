@@ -84,10 +84,7 @@ const abilities = computed(() => {
 })
 
 const classObject = computed(() => {
-  return {
-    'card--can-interact': cardAction.value !== -1,
-    // 'card--committed': uncommitCardAction.value !== -1,
-  }
+  return { 'card--can-interact': cardAction.value !== -1 }
 })
 
 const cardBack = computed(() => {
@@ -95,8 +92,9 @@ const cardBack = computed(() => {
 })
 
 const image = computed(() => {
-  const { cardCode } = cardContents.value;
-  return imgsrc(`cards/${cardCode.replace('c', '')}.jpg`);
+  const { cardCode, mutated } = cardContents.value;
+  const mutatedSuffix = mutated ? `_${mutated}` : ''
+  return imgsrc(`cards/${cardCode.replace('c', '')}${mutatedSuffix}.avif`);
 })
 
 /*
@@ -245,23 +243,19 @@ function oilPaintEffect(canvas, radius, intensity) {
 </template>
 
 <style scoped lang="scss">
-
 .card {
-  width: $card-width;
-  min-width: $card-width;
-  border-radius: 7px;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.23), 0 3px 6px rgba(0,0,0,0.53);
+  width: var(--card-width);
+  min-width: var(--card-width);
   border-radius: 6px;
-  display: flex;
-  border: 2px solid rgba(0, 0, 0, 0);
 
   &--can-interact {
-    border: 2px solid $select;
+    border: 2px solid var(--select);
     cursor: pointer;
   }
+}
 
-  &--committed {
-    margin-top: -10px;
-  }
+.card-container {
+  display: flex;
+  flex-direction: column;
 }
 </style>

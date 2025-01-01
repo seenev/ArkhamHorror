@@ -70,7 +70,6 @@ input {
   padding: 15px;
   background: #F2F2F2;
   width: 100%;
-  box-sizing: border-box;
   margin-bottom: 10px;
 }
 
@@ -83,7 +82,7 @@ button {
   border: 0;
   width: 100%;
   &:hover {
-    background: darken(#6E8640, 7%);
+    background: hsl(80, 35%, 32%);
   }
 }
 

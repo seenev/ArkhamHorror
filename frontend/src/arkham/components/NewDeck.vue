@@ -1,18 +1,29 @@
 <script lang="ts" setup>
-import { watch, ref } from 'vue'
+import { watch, ref, onMounted } from 'vue'
 import {imgsrc} from '@/arkham/helpers';
 import { fetchInvestigators, newDeck, validateDeck } from '@/arkham/api'
 import { CardDef } from '@/arkham/types/CardDef';
 import ArkhamDbDeck from '@/arkham/components/ArkhamDbDeck.vue';
 
+type Props = {
+  noPortrait?: boolean
+  setPortrait?: (src: string) => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  noPortrait: false
+})
+
 const ready = ref(false)
 const emit = defineEmits(['newDeck'])
 
-fetchInvestigators().then(async (response) => {
-  fetch("/cards.json").then(async (cardResponse) => {
-    cards.value = await cardResponse.json()
-    investigators.value = response
-    ready.value = true
+onMounted(async () => {
+  fetchInvestigators().then(async (response) => {
+    fetch("/cards.json").then(async (cardResponse) => {
+      cards.value = await cardResponse.json()
+      investigators.value = response
+      ready.value = true
+    })
   })
 })
 
@@ -67,12 +78,19 @@ function loadDeckFromFile(e: Event) {
       deckList.value = data
       investigator.value = null
       investigatorError.value = null
-      if (investigators.value.map(i => i.art).includes(data.investigator_code)) {
+      if (investigators.value.includes(data.investigator_code)) {
         if(data.meta && data.meta.alternate_front) {
           investigator.value = data.meta.alternate_front
+          if (props.setPortrait) {
+            props.setPortrait(imgsrc(`portraits/${data.meta.alternate_front.replace('c', '')}.jpg`))
+          }
         } else {
           investigator.value = data.investigator_code
+          if (props.setPortrait) {
+            props.setPortrait(imgsrc(`portraits/${data.investigator_code.replace('c', '')}.jpg`))
+          }
         }
+
       } else {
         investigatorError.value = `${data.investigator_name} is not yet implemented, please use a different deck`
       }
@@ -95,11 +113,17 @@ function loadDeck() {
 
   investigator.value = null
   investigatorError.value = null
-  if (investigators.value.map(i => i.art).includes(deckList.value.investigator_code)) {
+  if (investigators.value.includes(deckList.value.investigator_code)) {
     if(deckList.value.meta && deckList.value.meta.alternate_front) {
       investigator.value = deckList.value.meta.alternate_front
+      if (props.setPortrait) {
+        props.setPortrait(imgsrc(`portraits/${deckList.value.meta.alternate_front.replace('c', '')}.jpg`))
+      }
     } else {
       investigator.value = deckList.value.investigator_code
+      if (props.setPortrait) {
+        props.setPortrait(imgsrc(`portraits/${deckList.value.investigator_code.replace('c', '')}.jpg`))
+      }
     }
   } else {
     investigatorError.value = `${deckList.value.investigator_name} is not yet implemented, please use a different deck`
@@ -151,9 +175,9 @@ async function createDeck() {
 </script>
 
 <template>
-  <div v-if="ready" class="new-deck">
+  <div class="new-deck">
     <div class="form-body">
-      <img v-if="investigator" class="portrait" :src="imgsrc(`portraits/${investigator.replace('c', '')}.jpg`)" />
+      <img v-if="investigator && !noPortrait" class="portrait" :src="imgsrc(`portraits/${investigator.replace('c', '')}.jpg`)" />
       <div class="fields">
         <ArkhamDbDeck type="url" v-model="deckList" />
         <input type="file" @change="loadDeckFromFile" />
@@ -179,11 +203,11 @@ async function createDeck() {
 .new-deck {
   input {
     outline: 0;
-    border: 1px solid #000;
+    border: 1px solid var(--background);
     padding: 15px;
-    background: #F2F2F2;
+    color: #F2F2F2;
+    background: var(--background-dark);
     width: 100%;
-    box-sizing: border-box;
     margin-bottom: 10px;
   }
   .portrait {
@@ -201,7 +225,6 @@ async function createDeck() {
     width: 100%;
     margin-top: 10px;
     padding: 15px;
-    box-sizing: border-box;
   }
   button {
     outline: 0;
@@ -212,7 +235,7 @@ async function createDeck() {
     border: 0;
     width: 100%;
     &:hover {
-      background: darken(#6E8640, 7%);
+      background: hsl(80, 35%, 32%);
     }
   }
   button[disabled] {
@@ -225,9 +248,6 @@ async function createDeck() {
   display: flex;
   flex-direction: column;
   color: #FFF;
-  background-color: #15192C;
-  margin: 10px;
-  padding: 10px;
   border-radius: 3px;
   a {
     color: #365488;

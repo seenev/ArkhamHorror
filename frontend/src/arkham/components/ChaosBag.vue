@@ -59,6 +59,8 @@ function imageFor(tokenFace: string) {
       return imgsrc("ct_bless.png");
     case 'CurseToken':
       return imgsrc("ct_curse.png");
+    case 'FrostToken':
+      return imgsrc("ct_frost.png");
     default:
       return imgsrc("ct_blank.png");
   }
@@ -66,23 +68,18 @@ function imageFor(tokenFace: string) {
 
 const revealedChaosTokens = computed(() => {
   if (props.game.focusedChaosTokens.length > 0) {
-    return [...props.game.skillTestChaosTokens, ...props.game.focusedChaosTokens]
+    const tokens = [...props.game.skillTestChaosTokens, ...props.game.focusedChaosTokens]
+    return Array.from(new Set(tokens.map(JSON.stringify))).map(JSON.parse);
   }
 
   return props.game.skillTestChaosTokens;
 })
 
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
-
 const tokenAction = computed(() => choices.value.findIndex((c) => c.tag === MessageType.START_SKILL_TEST_BUTTON))
-
 const debug = useDebug()
-
-
 const allTokenFaces = computed(() => props.chaosBag.chaosTokens.map(t => t.face).sort(sortTokenFaces))
-const tokenFaces = computed(() => [...new Set(allTokenFaces.value)])
-
-const tokenOrder = ['PlusOne', 'Zero', 'MinusOne', 'MinusTwo', 'MinusThree', 'MinusFour', 'MinusFive', 'MinusSix', 'MinusSeven', 'MinusEight', 'Skull', 'Cultist', 'Tablet', 'ElderThing', 'AutoFail', 'ElderSign', 'CurseToken', 'BlessToken']
+const tokenOrder = ['PlusOne', 'Zero', 'MinusOne', 'MinusTwo', 'MinusThree', 'MinusFour', 'MinusFive', 'MinusSix', 'MinusSeven', 'MinusEight', 'Skull', 'Cultist', 'Tablet', 'ElderThing', 'AutoFail', 'ElderSign', 'CurseToken', 'BlessToken', 'FrostToken']
 
 function sortTokenFaces(a: string, b: string) {
   return tokenOrder.indexOf(a) - tokenOrder.indexOf(b)
@@ -117,6 +114,7 @@ const choose = (idx: number) => emit('choose', idx)
         v-for="(tokenFace, idx) in allTokenFaces"
         :key="`${tokenFace}${idx}`"
         class="token"
+        :class="{'token-big': skillTest === null}"
         :src="imageFor(tokenFace)"
       />
     </div>
@@ -137,7 +135,7 @@ const choose = (idx: number) => emit('choose', idx)
 }
 
 .portrait {
-  width: $card-width;
+  width: var(--card-width);
   height: auto;
 }
 
@@ -166,6 +164,9 @@ const choose = (idx: number) => emit('choose', idx)
   img {
     width: 30px;
     height: auto;
+    &.token-big {
+      width: 50px;
+    }
   }
 }
 
@@ -174,5 +175,6 @@ const choose = (idx: number) => emit('choose', idx)
   background: rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
+  gap: 10px;
 }
 </style>

@@ -77,10 +77,10 @@ h2 {
   border-radius: 3px;
   margin-bottom: 10px;
   a {
-    color: lighten(#365488, 10%);
+    color: #4a6594;
     font-weight: bolder;
     &:hover {
-      color: lighten(#365488, 20%);
+      color: #5e76a0;
     }
   }
 }
@@ -155,27 +155,27 @@ h2 {
   margin-right: 10px;
 
   &.survivor {
-    border: 3px solid $survivor;
+    border: 3px solid var(--survivor);
   }
 
   &.guardian {
-    border: 3px solid $guardian;
+    border: 3px solid var(--guardian);
   }
 
   &.mystic {
-    border: 3px solid $mystic;
+    border: 3px solid var(--mystic);
   }
 
   &.seeker {
-    border: 3px solid $seeker;
+    border: 3px solid var(--seeker);
   }
 
   &.rogue {
-    border: 3px solid $rogue;
+    border: 3px solid var(--rogue);
   }
 
   &.neutral {
-    border: 3px solid $neutral;
+    border: 3px solid var(--neutral);
   }
 }
 
@@ -207,7 +207,6 @@ h2 {
   flex-direction: row;
   align-items: center;
   padding: 10px;
-  box-sizing: border-box;
   position: relative;
   * {
     z-index: 1;

@@ -8,6 +8,7 @@ dist/*
 
 # local env files
 .env
+.envrc
 .env.erb
 .env.local
 .env.*.local
@@ -34,3 +35,5 @@ logfile
 *.eventlog
 *.eventlog.html
 *.hp
+
+.kamal/secrets

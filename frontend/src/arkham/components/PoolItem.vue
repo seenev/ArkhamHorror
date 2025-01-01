@@ -9,13 +9,15 @@ export interface Props {
 }
 const props = defineProps<Props>()
 
+const emit = defineEmits<{ choose: [] }>()
+
 const image = computed(() => {
   return imgsrc(`${props.type}.png`)
 })
 </script>
 
 <template>
-  <div class="poolItem" :class="`poolItem-${type}`" @click="$emit('choose')" v-tooltip="tooltip">
+  <div class="poolItem" :class="`poolItem-${type}`" @click="emit('choose')" v-tooltip="tooltip">
     <img :src="image" />
     <span>{{amount}}</span>
   </div>
@@ -24,7 +26,7 @@ const image = computed(() => {
 <style scoped lang="scss">
 
 .poolItem {
-  pointer-events: all;
+  pointer-events: inherit;
 }
 
 .poolItem.poolItem-resource {
@@ -39,19 +41,16 @@ const image = computed(() => {
   img {
     width: 30px;
   }
-  height: 35px;
-  width: 35px;
-  border-radius: 35px;
 }
 
 .poolItem {
   width: 30px;
   display: grid;
   place-items: center;
-  isolation: isolate;
   color: black;
   font-weight: 900;
   font-size: 1.7em;
+  img { filter: drop-shadow(1px 1px 2px rgb(0, 0, 0)); }
   & > * {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
@@ -65,13 +64,15 @@ const image = computed(() => {
     font-family: "Arkham";
     display: flex;
     position: relative;
-    background: rgba(255,255,255,0.5);
-    border-radius: 20px;
+    color: #F0F0F0;
+    text-shadow: 1px 0 0 rgba(0, 0, 0, 0.8), 0 -1px 0 rgba(0, 0, 0, 0.8), 0 1px 0 rgba(0, 0, 0, 0.8), -1px 0 0 rgba(0, 0, 0, 0.8);
     font-size: 0.8em;
-    width: 1.05em;
-    height: 1.05em;
     align-items: center;
     justify-content: center;
+    aspect-ratio: 1/1;
+    border-radius: 50%;
+    width: 1.2em;
+    height: auto;
   }
 }
 
@@ -79,7 +80,8 @@ const image = computed(() => {
   pointer-events: auto;
   padding: 0px;
   cursor: pointer;
-  background-color: $select;
+  background-color: var(--select);
+  img { filter: unset; }
 }
 
 .health--can-interact, .sanity--can-interact {
@@ -87,7 +89,7 @@ const image = computed(() => {
   > span {
     padding: 0px;
     cursor: pointer;
-    border: 2px solid $select;
+    border: 2px solid var(--select);
   }
 }
 </style>

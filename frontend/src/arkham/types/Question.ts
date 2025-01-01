@@ -1,10 +1,13 @@
 import { JsonDecoder } from 'ts.data.json';
 import { Message, messageDecoder } from '@/arkham/types/Message';
+import { flavorTextDecoder } from '@/arkham/types/FlavorText';
 
-export type Question = ChooseOne | ChooseUpToN | ChooseSome | ChooseSome1 | ChooseN | ChooseOneAtATime | ChooseDeck | ChooseUpgradeDeck | ChoosePaymentAmounts | ChooseAmounts | QuestionLabel | Read | PickSupplies | DropDown | PickScenarioSettings | PickCampaignSettings;
+export type Question = ChooseOne | ChooseUpToN | ChooseSome | ChooseSome1 | ChooseN | ChooseOneAtATime | ChooseDeck | ChooseUpgradeDeck | ChoosePaymentAmounts | ChooseAmounts | QuestionLabel | Read | PickSupplies | DropDown | PickScenarioSettings | PickCampaignSettings | ChooseOneFromEach;
 
 export enum QuestionType {
   CHOOSE_ONE = 'ChooseOne',
+  PLAYER_WINDOW_CHOOSE_ONE = 'PlayerWindowChooseOne',
+  CHOOSE_ONE_FROM_EACH = 'ChooseOneFromEach',
   CHOOSE_UP_TO_N = 'ChooseUpToN',
   CHOOSE_SOME = 'ChooseSome',
   CHOOSE_SOME_1 = 'ChooseSome1',
@@ -35,6 +38,12 @@ export type ChooseOne = {
   choices: Message[];
 }
 
+// The backend represents this as a nest list, but we flatten it and pass the flattened index
+export type ChooseOneFromEach = {
+  tag: QuestionType.CHOOSE_ONE_FROM_EACH;
+  choices: Message[];
+}
+
 export type QuestionLabel = {
   tag: QuestionType.QUESTION_LABEL
   card: string | null
@@ -42,15 +51,11 @@ export type QuestionLabel = {
   question: Question
 }
 
-export type FlavorText = {
-  title: string | null;
-  body: string[];
-}
-
 export type Read = {
   tag: QuestionType.READ
   flavorText: FlavorText
-  readChoices: Message[]
+  readChoices: ReadChoices
+  readCards: string[] | null;
 }
 
 type Supply
@@ -247,19 +252,29 @@ export const questionLabelDecoder: JsonDecoder.Decoder<QuestionLabel> = JsonDeco
   'QuestionLabel',
 );
 
-export const flavorTextDecoder: JsonDecoder.Decoder<FlavorText> = JsonDecoder.object<FlavorText>(
-  {
-    title: JsonDecoder.nullable(JsonDecoder.string),
-    body: JsonDecoder.array(JsonDecoder.string, 'string[]')
-  },
-  'FlavorText',
-);
+
+export type ReadChoices
+  = { tag: "BasicReadChoices", contents: Message[] }
+  | { tag: "LeadInvestigatorMustDecide", contents: Message [] }
+
+
+export const readChoicesDecoder: JsonDecoder.Decoder<ReadChoices> = JsonDecoder.oneOf<ReadChoices>( [
+  JsonDecoder.object({
+    tag: JsonDecoder.isExactly('BasicReadChoices'),
+    contents: JsonDecoder.array(messageDecoder, 'Message[]')
+  }, 'BasicReadChoices'),
+  JsonDecoder.object({
+    tag: JsonDecoder.isExactly('LeadInvestigatorMustDecide'),
+    contents: JsonDecoder.array(messageDecoder, 'Message[]')
+    }, 'LeadInvestigatorMustDecide')
+], 'ReadChoices');
 
 export const readDecoder: JsonDecoder.Decoder<Read> = JsonDecoder.object<Read>(
   {
     tag: JsonDecoder.isExactly(QuestionType.READ),
     flavorText: flavorTextDecoder,
-    readChoices: JsonDecoder.array(messageDecoder, 'Message[]')
+    readChoices: readChoicesDecoder,
+    readCards: JsonDecoder.optional(JsonDecoder.array(JsonDecoder.string, 'CardCodes[]'))
   },
   'Read',
 );
@@ -284,10 +299,21 @@ export const dropDownDecoder = JsonDecoder.object<DropDown>(
 
 export const chooseOneDecoder = JsonDecoder.object<ChooseOne>(
   {
-    tag: JsonDecoder.isExactly(QuestionType.CHOOSE_ONE),
+    tag: JsonDecoder.oneOf(
+        [JsonDecoder.isExactly(QuestionType.CHOOSE_ONE)
+        , JsonDecoder.isExactly(QuestionType.PLAYER_WINDOW_CHOOSE_ONE).map(() => QuestionType.CHOOSE_ONE)
+        ], "ChooseOne.tag"),
     choices: JsonDecoder.array<Message>(messageDecoder, 'Message[]'),
   },
   'ChooseOne',
+);
+
+export const chooseOneFromEachDecoder = JsonDecoder.object<ChooseOneFromEach>(
+  {
+    tag: JsonDecoder.isExactly(QuestionType.CHOOSE_ONE_FROM_EACH),
+    choices: JsonDecoder.array<Message[]>(JsonDecoder.array<Message>(messageDecoder, 'Message[]'), 'Message[][]').map(xs => xs.flat()),
+  },
+  'ChooseOneFromEach',
 );
 
 export const chooseSomeDecoder = JsonDecoder.object<ChooseSome>(
@@ -335,6 +361,7 @@ export const chooseOneAtATimeDecoder = JsonDecoder.object<ChooseOneAtATime>(
 export const questionDecoder = JsonDecoder.oneOf<Question>(
   [
     chooseOneDecoder,
+    chooseOneFromEachDecoder,
     chooseNDecoder,
     chooseSomeDecoder,
     chooseSome1Decoder,

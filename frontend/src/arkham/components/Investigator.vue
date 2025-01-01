@@ -1,6 +1,9 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import Draggable from '@/components/Draggable.vue';
+import CardView from '@/arkham/components/Card.vue';
 import { useDebug } from '@/arkham/debug'
+import { PaperClipIcon } from '@heroicons/vue/20/solid'
 import type { Game } from '@/arkham/types/Game'
 import { imgsrc } from '@/arkham/helpers'
 import { TokenType } from '@/arkham/types/Token'
@@ -9,9 +12,13 @@ import * as Arkham from '@/arkham/types/Investigator'
 import type { AbilityLabel, AbilityMessage, Message } from '@/arkham/types/Message'
 import { MessageType } from '@/arkham/types/Message'
 import type { Modifier } from '@/arkham/types/Modifier'
+import Token from '@/arkham/components/Token.vue';
 import PoolItem from '@/arkham/components/PoolItem.vue'
 import Key from '@/arkham/components/Key.vue';
 import AbilityButton from '@/arkham/components/AbilityButton.vue'
+import { useMenu } from '@/composeable/menu';
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
 export interface Props {
   choices: Message[]
@@ -26,6 +33,21 @@ const emit = defineEmits(['showCards', 'choose'])
 
 const id = computed(() => props.investigator.id)
 const debug = useDebug()
+const debugging = ref(false)
+
+const { addEntry, removeEntry } = useMenu()
+const showBonded = ref(false)
+
+if (props.playerId == props.investigator.playerId) {
+  addEntry({
+    id: "viewBonded",
+    icon: PaperClipIcon,
+    content: t('gameBar.viewBonded'),
+    shortcut: "b",
+    nested: 'view',
+    action: () => showBonded.value = !showBonded.value
+  })
+}
 
 function canActivateAbility(c: Message): boolean {
   if (c.tag  === MessageType.ABILITY_LABEL) {
@@ -132,10 +154,12 @@ const skipTriggersAction = computed(() => {
 
 const image = computed(() => {
   if (props.investigator.isYithian) {
-    return imgsrc("cards/04244.jpg");
+    return imgsrc("cards/04244.avif");
   }
 
-  return imgsrc(`cards/${props.investigator.art.replace('c', '')}.jpg`);
+  const mutated = props.investigator.mutated ? `_${props.investigator.mutated}` : ''
+  const classVariant = props.investigator.cardCode === 'c03006' && props.investigator.class !== 'Neutral' ? `_${props.investigator.class}` : ''
+  return imgsrc(`cards/${props.investigator.art.replace('c', '')}${classVariant}${mutated}.avif`);
 })
 
 const portraitImage = computed(() => {
@@ -148,11 +172,17 @@ const portraitImage = computed(() => {
 
 
 const cardsUnderneath = computed(() => props.investigator.cardsUnderneath)
-const cardsUnderneathLabel = computed(() => `Underneath (${cardsUnderneath.value.length})`)
+const cardsUnderneathLabel = computed(() => t('investigator.underneathCards', {count: cardsUnderneath.value.length}))
+const devoured = computed(() => props.investigator.devoured)
 
 const showCardsUnderneath = (e: Event) => emit('showCards', e, cardsUnderneath, "Cards Underneath", false)
+const showDevoured = (e: Event) => emit('showCards', e, devoured, "Devoured", false)
 
 const modifiers = computed(() => props.investigator.modifiers)
+
+const captured = computed(() => {
+  return modifiers.value?.some((m) => m.type.tag === "ScenarioModifier" && m.type.contents === "captured") ?? false
+})
 
 const ethereal = computed(() => {
   return modifiers.value?.some((m) => m.type.tag === "OtherModifier" && m.type.contents === "Ethereal") ?? false
@@ -191,7 +221,6 @@ function calculateSkill(base: number, skillType: string, modifiers: Modifier[]) 
 }
 
 function useEffectAction(action: { contents: string[] }) {
-  console.log(action, choices.value)
   const choice = choices.value.findIndex((c) => c.tag === 'EffectActionButton' && c.effectId == action.contents[1])
   if (choice !== -1) {
     emit('choose', choice)
@@ -218,16 +247,52 @@ const horror = computed(() => (props.investigator.tokens[TokenType.Horror] || 0)
 const damage = computed(() => (props.investigator.tokens[TokenType.Damage] || 0) + props.investigator.assignedHealthDamage)
 const alarmLevel = computed(() => props.investigator.tokens[TokenType.AlarmLevel] || 0)
 const leylines = computed(() => props.investigator.tokens[TokenType.Leyline] || 0)
+
+const dragging = ref(false)
+function startDrag(event: DragEvent) {
+  dragging.value = true
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', JSON.stringify({ "tag": "InvestigatorTarget", "contents": id.value }))
+  }
+}
+
+const dragover = (e: DragEvent) => {
+  e.preventDefault()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onDrop(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    const data = event.dataTransfer.getData('text/plain')
+    if (data) {
+      const json = JSON.parse(data)
+      if (json.tag === "KeyTarget") {
+        debug.send(props.game.id, {tag: 'PlaceKey', contents: [{ tag: "InvestigatorTarget", contents: id.value }, { "tag": json.contents }]})
+      }
+
+    }
+  }
+}
 </script>
 
 <template>
-  <img
-    v-if="portrait"
-    :src="portraitImage"
-    class="portrait"
-    :class="{ 'investigator--can-interact--portrait': investigatorAction !== -1, ethereal }"
-    @click="$emit('choose', investigatorAction)"
-  />
+  <div v-if="portrait">
+    <img
+      :src="portraitImage"
+      class="portrait"
+      :class="{ 'investigator--can-interact--portrait': investigatorAction !== -1, ethereal, dragging, captured }"
+      :draggable="debug.active"
+      @click="$emit('choose', investigatorAction)"
+      @dragstart="startDrag($event)"
+      @drop="onDrop($event)"
+      @dragover.prevent="dragover($event)"
+      @dragenter.prevent
+    />
+  </div>
   <div v-else>
     <div class="player-area">
       <div class="player-card">
@@ -237,12 +302,18 @@ const leylines = computed(() => props.investigator.tokens[TokenType.Leyline] || 
           <div class="combat combat-icon">{{combat}}</div>
           <div class="agility agility-icon">{{agility}}</div>
         </div>
-        <img
-          :class="{ 'investigator--can-interact': investigatorAction !== -1 }"
-          class="card"
-          :src="image"
-          @click="$emit('choose', investigatorAction)"
-        />
+        <div class="investigator-image">
+          <img
+            :class="{ 'investigator--can-interact': investigatorAction !== -1 }"
+            class="card card--sideways"
+            :src="image"
+            @click="$emit('choose', investigatorAction)"
+            @drop="onDrop($event)"
+            @dragover.prevent="dragover($event)"
+            @dragenter.prevent
+          />
+          <Token v-for="(sealedToken, index) in investigator.sealedChaosTokens" :key="index" :token="sealedToken" :playerId="playerId" :game="game" @choose="choose" class="sealed" />
+        </div>
       </div>
 
       <div class="player-buttons">
@@ -267,13 +338,18 @@ const leylines = computed(() => props.investigator.tokens[TokenType.Leyline] || 
         <button
           :disabled="endTurnAction == -1"
           @click="$emit('choose', endTurnAction)"
-        >End turn</button>
+        >{{ $t('investigator.endTurn') }}</button>
+
+        <button
+          v-if="devoured && devoured.length > 0"
+          @click="showDevoured"
+        >{{ $t('investigator.devouredCards', {count: devoured.length}) }}</button>
 
         <button
           :disabled="skipTriggersAction == -1"
           @click="$emit('choose', skipTriggersAction)"
           class="skip-triggers-button"
-        >Skip Triggers</button>
+        >{{ $t('investigator.skipTriggers') }}</button>
 
         <button v-if="cardsUnderneath.length > 0" class="view-discard-button" @click="showCardsUnderneath">{{cardsUnderneathLabel}}</button>
       </div>
@@ -345,6 +421,16 @@ const leylines = computed(() => props.investigator.tokens[TokenType.Leyline] || 
         tooltip="Leyline"
       />
     </div>
+
+    <Draggable v-if="showBonded">
+      <template #handle><header><h2>{{$t('gameBar.bonded')}}</h2></header></template>
+      <div class="card-row-cards">
+        <div v-for="card in investigator.bondedCards" :key="card.id" class="card-row-card">
+          <CardView :game="game" :card="card" :playerId="playerId" @choose="$emit('choose', $event)" />
+        </div>
+      </div>
+      <button class="close button" @click="showBonded = false">{{$t('close')}}</button>
+    </Draggable>
   </div>
 </template>
 
@@ -385,79 +471,80 @@ i.action {
 }
 
 .investigator--can-interact {
-  border: 2px solid $select;
+  border: 2px solid var(--select);
   cursor: pointer;
   &--portrait {
-    border: 3px solid $select;
+    cursor: pointer;
+    border: 3px solid var(--select);
   }
 }
 
 .card {
   width: auto;
-  height: $card-width;
+  height: var(--card-width);
 }
 
 .guardianAction {
-  color: $guardian !important;
+  color: var(--guardian-extra-dark) !important;
 }
 
 .survivorAction {
-  color: $survivor !important;
+  color: var(--survivor-extra-dark) !important;
 }
 
 .mysticAction {
-  color: $mystic !important;
+  color: var(--mystic-extra-dark) !important;
 }
 
 .seekerAction {
-  color: $seeker !important;
+  color: var(--seeker-extra-dark) !important;
 }
 
 .rogueAction {
-  color: $rogue !important;
+  color: var(--rogue-extra-dark) !important;
 }
 
 .neutralAction {
-  color: $neutral !important;
+  color: var(--neutral-extra-dark) !important;
 }
 
 .guardianActionButton {
-  background-color: $guardian !important;
+  background-color: var(--guardian) !important;
   border: 0;
   border-radius: 2px;
   margin: 0 2px;
 }
 
 .seekerActionButton {
-  background-color: $seeker !important;
+  background-color: var(--seeker) !important;
   border: 0;
   border-radius: 2px;
   margin: 0 2px;
 }
 
 .rogueActionButton {
-  background-color: $rogue !important;
+  background-color: var(--rogue) !important;
   border: 0;
   border-radius: 2px;
   margin: 0 2px;
 }
 
 .mysticActionButton {
-  background-color: $mystic !important;
+  background-color: var(--mystic) !important;
   border: 0;
   border-radius: 2px;
   margin: 0 2px;
 }
 
 .survivorActionButton {
-  background-color: $survivor !important;
+  background-color: var(--survivor) !important;
   border: 0;
   border-radius: 2px;
   margin: 0 2px;
 }
 
 .neutralActionButton {
-  background-color: $neutral !important;
+  background-color: var(--neutral) !important;
   border: 0;
   border-radius: 2px;
   margin: 0 2px;
@@ -466,13 +553,12 @@ i.action {
 .player-card {
   display: flex;
   flex-direction: column;
-  width: $card-width * 1.4;
+  width: calc(var(--card-width) * 1.4);
 }
 
 .portrait {
   border-radius: 3px;
-  width: $card-width * 0.6;
-  margin-right: 2px;
+  width: calc(var(--card-width) * 0.6);
 }
 
 .supplies {
@@ -489,26 +575,26 @@ i.action {
 }
 
 .willpower {
-  background-color: $guardian;
+  background-color: var(--guardian-dark);
   color: white;
   text-align: center;
   border-top-left-radius: 5px;
 }
 
 .intellect {
-  background-color: $mystic;
+  background-color: var(--mystic-dark);
   color: white;
   text-align: center;
 }
 
 .combat {
-  background-color: $survivor;
+  background-color: var(--survivor-dark);
   color: white;
   text-align: center;
 }
 
 .agility {
-  background-color: $rogue;
+  background-color: var(--rogue-dark);
   color: white;
   text-align: center;
   border-top-right-radius: 5px;
@@ -574,7 +660,7 @@ i.action {
 
 .skip-triggers-button {
   transition: all 0.2s ease-in;
-  background-color: $select;
+  background-color: var(--select);
   color: white;
   border: 0;
   border-radius: 2px;
@@ -585,7 +671,58 @@ i.action {
   }
 
   &:not([disabled]):hover {
-    background-color: darken($select, 17%);
+    background-color: var(--select-dark);
   }
+}
+
+.investigator-image {
+  position: relative;
+}
+
+.card-overlay {
+  width: auto;
+  height: var(--card-width);
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.investigator--can-interact ~ .card-overlay {
+  top: 2px;
+  left: 2px;
+}
+
+.card-row-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 10px;
+}
+
+.close {
+  width: 100%;
+  background: var(--button-2);
+  display: inline;
+  border: 0;
+  color: white;
+  padding: 0.5em;
+  text-transform: uppercase;
+
+  &:hover {
+    background: var(--button-2-highlight);
+  }
+}
+
+.sealed {
+  position: absolute;
+  width: calc(var(--card-width) / 2);
+  left: 0;
+  top: calc(var(--card-width) / 2);
+}
+
+.captured {
+  rotate: 90deg;
 }
 </style>
