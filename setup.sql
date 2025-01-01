@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.9 (Homebrew)
--- Dumped by pg_dump version 14.9 (Homebrew)
+-- Dumped from database version 14.13 (Homebrew)
+-- Dumped by pg_dump version 14.13 (Homebrew)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -17,18 +17,127 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: sqitch; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA sqitch;
-
-
---
 -- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
+
+--
+-- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+
+
+--
+-- Name: check_no_higher_step_exists(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_no_higher_step_exists() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Check if the game still exists
+    IF EXISTS (
+        SELECT 1
+        FROM arkham_games
+        WHERE id = OLD.arkham_game_id
+    ) THEN
+        -- If the game exists, check if there is any step with a higher step number for the same game
+        IF EXISTS (
+            SELECT 1
+            FROM arkham_steps
+            WHERE arkham_game_id = OLD.arkham_game_id
+              AND step > OLD.step
+        ) THEN
+            RAISE EXCEPTION 'Cannot delete step % because a higher step exists for the same game.', OLD.step;
+        END IF;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$;
+
+
+--
+-- Name: check_step_before_delete(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_step_before_delete() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Your logic here
+    RETURN OLD;
+END;
+$$;
+
+
+--
+-- Name: enforce_chronological_order_per_game(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enforce_chronological_order_per_game() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    violating_step RECORD;
+BEGIN
+    -- Only proceed if this is an AFTER DELETE statement-level trigger
+    IF (TG_OP = 'DELETE') AND (TG_LEVEL = 'STATEMENT') THEN
+        -- Check for any steps that now violate the chronological order
+        WITH affected_games AS (
+            SELECT DISTINCT arkham_game_id FROM oldtab
+        ), violating_steps AS (
+            SELECT s.arkham_game_id, s.step
+            FROM arkham_steps s
+            LEFT JOIN arkham_steps prev_s ON
+                prev_s.arkham_game_id = s.arkham_game_id AND
+                prev_s.step = s.step - 1
+            WHERE s.step > 0 AND prev_s.step IS NULL AND
+                s.arkham_game_id IN (SELECT arkham_game_id FROM affected_games)
+        )
+        SELECT * INTO violating_step FROM violating_steps LIMIT 1;
+
+        IF FOUND THEN
+            RAISE EXCEPTION 'Step % for game % exists without previous step', violating_step.step, violating_step.arkham_game_id;
+        END IF;
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+
+--
+-- Name: enforce_step_order_per_game(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enforce_step_order_per_game() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Enforce that the step being inserted follows the chronological order
+    IF NEW.step = 0 THEN
+        RETURN NEW;
+    END IF;
+
+    -- Ensure the previous step exists for the same game
+    IF NOT EXISTS (
+        SELECT 1 FROM arkham_steps
+        WHERE arkham_game_id = NEW.arkham_game_id
+          AND step = NEW.step - 1
+    ) THEN
+        RAISE EXCEPTION 'Cannot insert step % for game % without step %', NEW.step, NEW.arkham_game_id, NEW.step - 1;
+    END IF;
+
+    RETURN NEW;  -- Allow the insertion to proceed if the previous step exists
+END;
+$$;
+
+
+SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
@@ -42,7 +151,7 @@ CREATE TABLE public.arkham_decks (
     name text NOT NULL,
     investigator_name text NOT NULL,
     list jsonb NOT NULL,
-    url text NOT NULL
+    url text
 );
 
 
@@ -219,105 +328,6 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- Name: changes; Type: TABLE; Schema: sqitch; Owner: -
---
-
-CREATE TABLE sqitch.changes (
-    change_id text NOT NULL,
-    script_hash text,
-    change text NOT NULL,
-    project text NOT NULL,
-    note text DEFAULT ''::text NOT NULL,
-    committed_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
-    committer_name text NOT NULL,
-    committer_email text NOT NULL,
-    planned_at timestamp with time zone NOT NULL,
-    planner_name text NOT NULL,
-    planner_email text NOT NULL
-);
-
-
---
--- Name: dependencies; Type: TABLE; Schema: sqitch; Owner: -
---
-
-CREATE TABLE sqitch.dependencies (
-    change_id text NOT NULL,
-    type text NOT NULL,
-    dependency text NOT NULL,
-    dependency_id text,
-    CONSTRAINT dependencies_check CHECK ((((type = 'require'::text) AND (dependency_id IS NOT NULL)) OR ((type = 'conflict'::text) AND (dependency_id IS NULL))))
-);
-
-
---
--- Name: events; Type: TABLE; Schema: sqitch; Owner: -
---
-
-CREATE TABLE sqitch.events (
-    event text NOT NULL,
-    change_id text NOT NULL,
-    change text NOT NULL,
-    project text NOT NULL,
-    note text DEFAULT ''::text NOT NULL,
-    requires text[] DEFAULT '{}'::text[] NOT NULL,
-    conflicts text[] DEFAULT '{}'::text[] NOT NULL,
-    tags text[] DEFAULT '{}'::text[] NOT NULL,
-    committed_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
-    committer_name text NOT NULL,
-    committer_email text NOT NULL,
-    planned_at timestamp with time zone NOT NULL,
-    planner_name text NOT NULL,
-    planner_email text NOT NULL,
-    CONSTRAINT events_event_check CHECK ((event = ANY (ARRAY['deploy'::text, 'revert'::text, 'fail'::text, 'merge'::text])))
-);
-
-
---
--- Name: projects; Type: TABLE; Schema: sqitch; Owner: -
---
-
-CREATE TABLE sqitch.projects (
-    project text NOT NULL,
-    uri text,
-    created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
-    creator_name text NOT NULL,
-    creator_email text NOT NULL
-);
-
-
---
--- Name: releases; Type: TABLE; Schema: sqitch; Owner: -
---
-
-CREATE TABLE sqitch.releases (
-    version real NOT NULL,
-    installed_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
-    installer_name text NOT NULL,
-    installer_email text NOT NULL
-);
-
-
---
--- Name: tags; Type: TABLE; Schema: sqitch; Owner: -
---
-
-CREATE TABLE sqitch.tags (
-    tag_id text NOT NULL,
-    tag text NOT NULL,
-    project text NOT NULL,
-    change_id text NOT NULL,
-    note text DEFAULT ''::text NOT NULL,
-    committed_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
-    committer_name text NOT NULL,
-    committer_email text NOT NULL,
-    planned_at timestamp with time zone NOT NULL,
-    planner_name text NOT NULL,
-    planner_email text NOT NULL
-);
-
-
---
 -- Name: arkham_decks user_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -409,78 +419,6 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: changes changes_pkey; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.changes
-    ADD CONSTRAINT changes_pkey PRIMARY KEY (change_id);
-
-
---
--- Name: changes changes_project_script_hash_key; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.changes
-    ADD CONSTRAINT changes_project_script_hash_key UNIQUE (project, script_hash);
-
-
---
--- Name: dependencies dependencies_pkey; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.dependencies
-    ADD CONSTRAINT dependencies_pkey PRIMARY KEY (change_id, dependency);
-
-
---
--- Name: events events_pkey; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.events
-    ADD CONSTRAINT events_pkey PRIMARY KEY (change_id, committed_at);
-
-
---
--- Name: projects projects_pkey; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.projects
-    ADD CONSTRAINT projects_pkey PRIMARY KEY (project);
-
-
---
--- Name: projects projects_uri_key; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.projects
-    ADD CONSTRAINT projects_uri_key UNIQUE (uri);
-
-
---
--- Name: releases releases_pkey; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.releases
-    ADD CONSTRAINT releases_pkey PRIMARY KEY (version);
-
-
---
--- Name: tags tags_pkey; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.tags
-    ADD CONSTRAINT tags_pkey PRIMARY KEY (tag_id);
-
-
---
--- Name: tags tags_project_tag_key; Type: CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.tags
-    ADD CONSTRAINT tags_project_tag_key UNIQUE (project, tag);
-
-
---
 -- Name: log_entries_game_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -492,6 +430,27 @@ CREATE INDEX log_entries_game_id ON public.arkham_log_entries USING btree (arkha
 --
 
 CREATE UNIQUE INDEX steps_game_step_idx ON public.arkham_steps USING btree (arkham_game_id, step);
+
+
+--
+-- Name: arkham_steps enforce_chronological_order_per_game; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER enforce_chronological_order_per_game AFTER DELETE ON public.arkham_steps REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION public.enforce_chronological_order_per_game();
+
+
+--
+-- Name: arkham_steps enforce_step_order_per_game; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER enforce_step_order_per_game BEFORE INSERT ON public.arkham_steps FOR EACH ROW EXECUTE FUNCTION public.enforce_step_order_per_game();
+
+
+--
+-- Name: arkham_steps prevent_invalid_step_deletion; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER prevent_invalid_step_deletion BEFORE DELETE ON public.arkham_steps FOR EACH ROW EXECUTE FUNCTION public.check_step_before_delete();
 
 
 --
@@ -540,54 +499,6 @@ ALTER TABLE ONLY public.arkham_steps
 
 ALTER TABLE ONLY public.password_resets
     ADD CONSTRAINT password_resets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: changes changes_project_fkey; Type: FK CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.changes
-    ADD CONSTRAINT changes_project_fkey FOREIGN KEY (project) REFERENCES sqitch.projects(project) ON UPDATE CASCADE;
-
-
---
--- Name: dependencies dependencies_change_id_fkey; Type: FK CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.dependencies
-    ADD CONSTRAINT dependencies_change_id_fkey FOREIGN KEY (change_id) REFERENCES sqitch.changes(change_id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: dependencies dependencies_dependency_id_fkey; Type: FK CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.dependencies
-    ADD CONSTRAINT dependencies_dependency_id_fkey FOREIGN KEY (dependency_id) REFERENCES sqitch.changes(change_id) ON UPDATE CASCADE;
-
-
---
--- Name: events events_project_fkey; Type: FK CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.events
-    ADD CONSTRAINT events_project_fkey FOREIGN KEY (project) REFERENCES sqitch.projects(project) ON UPDATE CASCADE;
-
-
---
--- Name: tags tags_change_id_fkey; Type: FK CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.tags
-    ADD CONSTRAINT tags_change_id_fkey FOREIGN KEY (change_id) REFERENCES sqitch.changes(change_id) ON UPDATE CASCADE;
-
-
---
--- Name: tags tags_project_fkey; Type: FK CONSTRAINT; Schema: sqitch; Owner: -
---
-
-ALTER TABLE ONLY sqitch.tags
-    ADD CONSTRAINT tags_project_fkey FOREIGN KEY (project) REFERENCES sqitch.projects(project) ON UPDATE CASCADE;
 
 
 --

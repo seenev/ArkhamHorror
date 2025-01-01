@@ -1,5 +1,6 @@
 import { JsonDecoder } from 'ts.data.json';
 import { Card, cardDecoder } from '@/arkham/types/Card';
+import { BreachStatus, breachStatusDecoder } from '@/arkham/types/Breach';
 import { Modifier, modifierDecoder } from '@/arkham/types/Modifier';
 import { ArkhamKey, arkhamKeyDecoder } from '@/arkham/types/Key';
 import { Tokens, tokensDecoder } from '@/arkham/types/Token';
@@ -11,12 +12,14 @@ export const brazierDecoder: JsonDecoder.Decoder<Brazier> = JsonDecoder.oneOf<Br
   JsonDecoder.isExactly('Unlit'),
 ], 'Brazier');
 
-export type BreachStatus = { tag: "Breaches", contents: number } | { tag: "Incursion", contents: number }
 
-export const breachStatusDecoder: JsonDecoder.Decoder<BreachStatus> = JsonDecoder.oneOf<BreachStatus>([
-  JsonDecoder.object<BreachStatus>({ tag: JsonDecoder.isExactly("Breaches"), contents: JsonDecoder.number }, 'Breaches'),
-  JsonDecoder.object<BreachStatus>({ tag: JsonDecoder.isExactly("Incursion"), contents: JsonDecoder.number }, 'Incursion'),
-], 'BreachStatus');
+export type FloodLevel = "Unflooded" | "PartiallyFlooded" | "FullyFlooded"
+
+export const floodLevelDecoder: JsonDecoder.Decoder<FloodLevel> = JsonDecoder.oneOf<FloodLevel>([
+  JsonDecoder.isExactly('Unflooded'),
+  JsonDecoder.isExactly('PartiallyFlooded'),
+  JsonDecoder.isExactly('FullyFlooded'),
+], 'FloodLevel');
 
 export type Location = {
   cardCode: string;
@@ -37,6 +40,7 @@ export type Location = {
   inFrontOf: string | null;
   brazier: Brazier | null;
   breaches: BreachStatus | null;
+  floodLevel: FloodLevel | null;
   keys: ArkhamKey[];
 }
 
@@ -60,6 +64,7 @@ export const locationDecoder = JsonDecoder.object<Location>(
     inFrontOf: JsonDecoder.nullable(JsonDecoder.string),
     brazier: JsonDecoder.nullable(brazierDecoder),
     breaches: JsonDecoder.nullable(breachStatusDecoder),
+    floodLevel: JsonDecoder.nullable(floodLevelDecoder),
     keys: JsonDecoder.array<ArkhamKey>(arkhamKeyDecoder, 'Key[]'),
   },
   'Location',

@@ -6,42 +6,60 @@ import { imgsrc } from '@/arkham/helpers';
 import type { Game } from '@/arkham/types/Game';
 import * as ArkhamGame from '@/arkham/types/Game';
 import type { AbilityLabel, AbilityMessage, Message } from '@/arkham/types/Message';
+import type { AbilityType } from '@/arkham/types/Ability';
 import { MessageType } from '@/arkham/types/Message';
-import EditAsset from '@/arkham/components/EditAsset.vue';
+import DebugAsset from '@/arkham/components/debug/Asset.vue';
 import Key from '@/arkham/components/Key.vue';
+import Investigator from '@/arkham/components/Investigator.vue';
 import Event from '@/arkham/components/Event.vue';
+import Enemy from '@/arkham/components/Enemy.vue';
 import Treachery from '@/arkham/components/Treachery.vue';
 import PoolItem from '@/arkham/components/PoolItem.vue';
-import AbilityButton from '@/arkham/components/AbilityButton.vue'
+import AbilitiesMenu from '@/arkham/components/AbilitiesMenu.vue'
 import Story from '@/arkham/components/Story.vue';
 import Token from '@/arkham/components/Token.vue';
 import * as Arkham from '@/arkham/types/Asset';
 import {isUse} from '@/arkham/types/Token';
 import { Card } from '../types/Card';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   game: Game
   asset: Arkham.Asset
   playerId: string
-}>()
+  atLocation?: boolean
+}>(), { atLocation: false })
 
-const edit = ref(false)
+const debugging = ref(false)
+const frame = ref(null)
 
 const emits = defineEmits<{
   choose: [value: number]
   showCards: [e: Event, cards: ComputedRef<Card[]>, title: string, isDiscards: boolean]
 }>()
 
-const investigatorId = computed(() => Object.values(props.game.investigators).find(i => i.playerId === props.playerId)?.id)
 const id = computed(() => props.asset.id)
-
 const exhausted = computed(() => props.asset.exhausted)
 const cardCode = computed(() => props.asset.cardCode)
+const investigators = computed(() => Object.values(props.game.investigators).filter((i) => i.placement.tag === 'InVehicle' && i.placement.contents === id.value))
 const image = computed(() => {
+  const mutated = props.asset.mutated ? `_${props.asset.mutated}` : ''
   if (props.asset.flipped) {
+    if (cardCode.value === "c90052") {
+      return imgsrc(`cards/90052b.avif`)
+    }
     return imgsrc(`player_back.jpg`)
   }
-  return imgsrc(`cards/${cardCode.value.replace('c', '')}.jpg`)
+  return imgsrc(`cards/${cardCode.value.replace('c', '')}${mutated}.avif`)
+})
+
+const dataImage = computed(() => {
+  const mutated = props.asset.mutated ? `_${props.asset.mutated}` : ''
+  if (props.asset.flipped) {
+    if (cardCode.value === "c90052") {
+      return "90052b"
+    }
+  }
+  return cardCode.value.replace('c', '') + mutated
 })
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
 
@@ -73,6 +91,8 @@ const cardAction = computed(() => choices.value.findIndex(isCardAction))
 const canInteract = computed(() => abilities.value.length > 0 || cardAction.value !== -1)
 const healthAction = computed(() => choices.value.findIndex(canAdjustHealth))
 const sanityAction = computed(() => choices.value.findIndex(canAdjustSanity))
+
+const isSpirit = computed(() => (props.asset.modifiers ?? []).some((m) => m.type.contents === 'IsSpirit'))
 
 function isAbility(v: Message): v is AbilityLabel {
   if (v.tag !== MessageType.ABILITY_LABEL) {
@@ -152,7 +172,14 @@ async function chooseAbility(ability: number) {
 
 watch(abilities, (abilities) => {
   // ability is forced we must show
-  if (abilities.some(a => "ability" in a.contents && a.contents.ability.type.tag === "ForcedAbility")) {
+  let isForced = (type: AbilityType) => {
+    switch (type.tag) {
+      case "ForcedAbility": return true
+      case "DelayedAbility": return isForced(type.abilityType)
+      default: return false
+    }
+  }
+  if (abilities.some(a => "ability" in a.contents && isForced(a.contents.ability.type))) {
     showAbilities.value = true
   }
 
@@ -171,7 +198,7 @@ const assetStory = computed(() => {
   <div class="asset--outer">
     <Story v-if="assetStory" :story="assetStory" :game="game" :playerId="playerId" @choose="choose"/>
     <div v-else class="asset" :data-index="asset.cardId">
-      <div class="card-frame">
+      <div class="card-frame" ref="frame">
         <div v-if="asset.marketDeck" class="market-deck">
           <img
             class="deck card"
@@ -180,15 +207,36 @@ const assetStory = computed(() => {
           />
           <span class="deck-size">{{asset.marketDeck.length}}</span>
         </div>
-        <div class="card-wrapper" :class="{ 'asset--can-interact': canInteract, exhausted}">
+        <div v-if="asset.spiritDeck" class="spirit-deck">
+          <img
+            class="deck card"
+            :src="imgsrc('player_back.jpg')"
+            width="150px"
+          />
+          <span class="deck-size">{{asset.spiritDeck.length}}</span>
+        </div>
+        <div class="card-wrapper" :class="{ 'asset--can-interact': canInteract}">
           <img
             :data-id="id"
-            :data-image-id="cardCode.replace('c', '')"
+            :data-image-id="dataImage"
             :src="image"
             class="card"
+            :class="{ exhausted }"
             @click="clicked"
             :data-customizations="JSON.stringify(asset.customizations)"
           />
+          <div v-if="investigators.length > 0" class="in-vehicle">
+            <div v-for="investigator in investigators" :key="investigator.id">
+              <Investigator
+                :game="game"
+                :choices="choices"
+                :playerId="playerId"
+                :portrait="true"
+                :investigator="investigator"
+                @choose="$emit('choose', $event)"
+                />
+            </div>
+          </div>
         </div>
         <div v-if="hasPool" class="pool">
           <div class="keys" v-if="keys.length > 0">
@@ -203,14 +251,14 @@ const assetStory = computed(() => {
             />
           </template>
           <PoolItem
-            v-if="cardCode == 'c07189' || (asset.health !== null || (damage || 0) > 0)"
+            v-if="!isSpirit && (cardCode == 'c07189' || (asset.health !== null || (damage || 0) > 0))"
             type="health"
             :amount="damage || 0"
             :class="{ 'health--can-interact': healthAction !== -1 }"
             @choose="choose(healthAction)"
           />
           <PoolItem
-            v-if="cardCode == 'c07189' || (asset.sanity !== null || (horror || 0) > 0)"
+            v-if="!isSpirit && (cardCode == 'c07189' || (asset.sanity !== null || (horror || 0) > 0))"
             type="sanity"
             :amount="horror || 0"
             :class="{ 'sanity--can-interact': sanityAction !== -1 }"
@@ -220,15 +268,12 @@ const assetStory = computed(() => {
           <PoolItem v-if="clues && clues > 0" type="clue" :amount="clues" />
           <Token v-for="(sealedToken, index) in asset.sealedChaosTokens" :key="index" :token="sealedToken" :playerId="playerId" :game="game" @choose="choose" />
         </div>
-
-        <div v-if="showAbilities" class="abilities">
-          <AbilityButton
-            v-for="ability in abilities"
-            :key="ability.index"
-            :ability="ability.contents"
-            @click="chooseAbility(ability.index)"
-            />
-        </div>
+        <AbilitiesMenu
+          v-model="showAbilities"
+          :frame="frame"
+          :abilities="abilities"
+          @choose="chooseAbility"
+        />
       </div>
       <Event
         v-for="eventId in asset.events"
@@ -236,6 +281,7 @@ const assetStory = computed(() => {
         :game="game"
         :playerId="playerId"
         :key="eventId"
+        :attached="true"
         @choose="$emit('choose', $event)"
       />
       <Treachery
@@ -249,7 +295,7 @@ const assetStory = computed(() => {
       />
       <button v-if="cardsUnderneath.length > 0" class="view-discard-button" @click="showCardsUnderneath">{{cardsUnderneathLabel}}</button>
       <template v-if="debug.active">
-        <button @click="edit = true">Debug</button>
+        <button @click="debugging = true">Debug</button>
       </template>
       <Asset
         v-for="assetId in asset.assets"
@@ -259,15 +305,23 @@ const assetStory = computed(() => {
         :key="assetId"
         @choose="$emit('choose', $event)"
       />
+      <Enemy
+        v-for="enemyId in asset.enemies"
+        :enemy="game.enemies[enemyId]"
+        :game="game"
+        :playerId="playerId"
+        :key="enemyId"
+        @choose="$emit('choose', $event)"
+      />
     </div>
-    <EditAsset v-if="edit" :game="game" :asset="asset" :playerId="playerId" @close="edit = false" @choose="$emit('choose', $event)"/>
+    <DebugAsset v-if="debugging" :game="game" :asset="asset" :playerId="playerId" @close="debugging = false" @choose="$emit('choose', $event)"/>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .card {
-  width: $card-width;
-  max-width: $card-width;
+  width: var(--card-width);
+  max-width: var(--card-width);
   border-radius: 5px;
   transform: rotate(0deg);
   transition: transform 0.2s linear;
@@ -281,12 +335,12 @@ const assetStory = computed(() => {
 .exhausted {
   transition: transform 0.2s linear;
   transform: rotate(90deg);
-  padding: 0 30px;
+  margin: 0 30px;
 }
 
 .asset--can-interact {
   img {
-    border: 2px solid $select;
+    border: 2px solid var(--select);
     cursor:pointer;
   }
 }
@@ -324,9 +378,13 @@ const assetStory = computed(() => {
 
 :deep(.event img) {
   object-fit: cover;
-  object-position: 0 -72px;
+  object-position: bottom;
   height: 36px;
   margin-top: 2px;
+}
+
+:deep(.event .exhausted) {
+  padding: 0px;
 }
 
 .card-frame {
@@ -334,19 +392,6 @@ const assetStory = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.abilities {
-  position: absolute;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  bottom:100%;
-  left: 0;
-  z-index: 1000;
 }
 
 .deck-size {
@@ -368,4 +413,30 @@ const assetStory = computed(() => {
   margin-right: 5px;
 }
 
+.spirit-deck {
+  position: relative;
+  margin-right: 5px;
+}
+
+.in-vehicle {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  pointer-events: none;
+  gap: 4px;
+
+  .vehicle-investigator {
+    line-height: 0;
+    height: fit-content;
+  }
+
+  &:deep(.portrait) {
+    pointer-events: auto;
+    width: 100%;
+  }
+}
 </style>

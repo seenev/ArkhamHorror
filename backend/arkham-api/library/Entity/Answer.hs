@@ -2,12 +2,13 @@
 
 module Entity.Answer where
 
-import Import.NoFoundation
+import Import.NoFoundation hiding (get)
 
 import Arkham.Campaign.Option
 import Arkham.CampaignLog
 import Arkham.CampaignLogKey
 import Arkham.Campaigns.TheCircleUndone.Memento
+import Arkham.Campaigns.TheInnsmouthConspiracy.Memory
 import Arkham.Card
 import Arkham.Classes.Entity
 import Arkham.Decklist
@@ -88,6 +89,12 @@ makeStandaloneCampaignLog = foldl' applySetting mkCampaignLog
        in setCampaignLogRecorded k entries cl
     (SomeRecordableType RecordableMemento) ->
       let entries = mapMaybe (toEntry @Memento) vs
+       in setCampaignLogRecorded k entries cl
+    (SomeRecordableType RecordableMemory) ->
+      let entries = mapMaybe (toEntry @Memory) vs
+       in setCampaignLogRecorded k entries cl
+    (SomeRecordableType RecordableGeneric) ->
+      let entries = mapMaybe (toEntry @Value) vs
        in setCampaignLogRecorded k entries cl
   toEntry :: forall a. Recordable a => SetRecordedEntry -> Maybe SomeRecorded
   toEntry (SetAsRecorded e) = case fromJSON @a e of
@@ -194,6 +201,8 @@ makeCampaignLog settings =
     case rt of
       (SomeRecordableType RecordableCardCode) -> map (toEntry @CardCode) entries
       (SomeRecordableType RecordableMemento) -> map (toEntry @Memento) entries
+      (SomeRecordableType RecordableMemory) -> map (toEntry @Memory) entries
+      (SomeRecordableType RecordableGeneric) -> map (toEntry @Value) entries
   toEntry :: forall a. Recordable a => CampaignRecordedEntry -> SomeRecorded
   toEntry (CampaignEntryRecorded e) = case fromJSON @a e of
     Success a -> recorded a
@@ -221,16 +230,10 @@ handleAnswer :: (CanRunDB m, MonadHandler m) => Game -> PlayerId -> Answer -> m 
 handleAnswer Game {..} playerId = \case
   DeckAnswer deckId _ -> do
     deck <- runDB $ get404 deckId
-    player <- runDB $ get404 (coerce playerId)
-    when (arkhamDeckUserId deck /= arkhamPlayerUserId player) notFound
     let investigatorId = investigator_code $ arkhamDeckList deck
     runDB $ update (coerce playerId) [ArkhamPlayerInvestigatorId =. coerce investigatorId]
-
     let question' = Map.delete playerId gameQuestion
-
-    pure
-      $ [LoadDecklist playerId (arkhamDeckList deck)]
-      <> [AskMap question' | not (Map.null question')]
+    pure $ LoadDecklist playerId (arkhamDeckList deck) : [AskMap question' | not (Map.null question')]
   StandaloneSettingsAnswer settings' -> do
     let standaloneCampaignLog = makeStandaloneCampaignLog settings'
     pure [SetCampaignLog standaloneCampaignLog]
@@ -241,44 +244,41 @@ handleAnswer Game {..} playerId = \case
     Just (ChooseAmounts _ _ choices target) -> do
       let nameMap = Map.fromList $ map (\(AmountChoice cId lbl _ _) -> (cId, lbl)) choices
       let toNamedUUID uuid = NamedUUID (Map.findWithDefault (error "Missing key") uuid nameMap) uuid
+      let question' = Map.delete playerId gameQuestion
+      let amounts = map (first toNamedUUID) $ Map.toList $ arAmounts response
       pure
-        [ ResolveAmounts
-            (playerInvestigator gameEntities playerId)
-            (map (first toNamedUUID) $ Map.toList $ arAmounts response)
-            target
-        ]
+        $ ResolveAmounts (playerInvestigator gameEntities playerId) amounts target
+        : [AskMap question' | not (Map.null question')]
     Just (QuestionLabel _ _ (ChooseAmounts _ _ choices target)) -> do
       let nameMap = Map.fromList $ map (\(AmountChoice cId lbl _ _) -> (cId, lbl)) choices
       let toNamedUUID uuid = NamedUUID (Map.findWithDefault (error "Missing key") uuid nameMap) uuid
-
+      let question' = Map.delete playerId gameQuestion
+      let amounts = map (first toNamedUUID) $ Map.toList $ arAmounts response
       pure
-        [ ResolveAmounts
-            (playerInvestigator gameEntities playerId)
-            (map (first toNamedUUID) $ Map.toList $ arAmounts response)
-            target
-        ]
+        $ ResolveAmounts (playerInvestigator gameEntities playerId) amounts target
+        : [AskMap question' | not (Map.null question')]
     _ -> error "Wrong question type"
   PaymentAmountsAnswer response ->
     case Map.lookup playerId gameQuestion of
       Just (ChoosePaymentAmounts _ _ info) -> do
-        let
-          costMap =
-            Map.fromList
-              $ map (\(PaymentAmountChoice cId _ _ _ _ cost) -> (cId, cost)) info
+        let costMap = Map.fromList $ map (\(PaymentAmountChoice cId _ _ _ _ cost) -> (cId, cost)) info
         pure
-          $ concatMap
-            ( \(cId, n) ->
-                replicate n (Map.findWithDefault Noop cId costMap)
-            )
+          $ concatMap (\(cId, n) -> replicate n (Map.findWithDefault Noop cId costMap))
           $ Map.toList (parAmounts response)
       _ -> error "Wrong question type"
-  Raw message -> pure [message]
+  Raw message -> do
+    let isPlayerWindowChoose = \case
+          PlayerWindowChooseOne _ -> True
+          _ -> False
+    if not (Map.null gameQuestion) && not (any isPlayerWindowChoose $ toList gameQuestion)
+      then case message of
+        PassSkillTest -> pure [message]
+        FailSkillTest -> pure [message]
+        ForceChaosTokenDraw _ -> pure [message]
+        _ -> pure [message, AskMap gameQuestion]
+      else pure [message]
   Answer response -> do
-    let
-      q =
-        fromJustNote
-          "Invalid question type"
-          (Map.lookup playerId gameQuestion)
+    let q = fromJustNote "Invalid question type" (Map.lookup playerId gameQuestion)
     pure $ go id q response
  where
   go
@@ -288,12 +288,31 @@ handleAnswer Game {..} playerId = \case
     -> [Message]
   go f q response = case q of
     QuestionLabel lbl mCard q' -> go (QuestionLabel lbl mCard) q' response
-    Read t qs -> case qs !!? qrChoice response of
-      Nothing -> [Ask playerId $ f $ Read t qs]
+    Read t (BasicReadChoices qs) mcs -> case qs !!? qrChoice response of
+      Nothing -> [Ask playerId $ f $ Read t (BasicReadChoices qs) mcs]
+      Just msg -> [uiToRun msg]
+    Read t (LeadInvestigatorMustDecide qs) mcs -> case qs !!? qrChoice response of
+      Nothing -> [Ask playerId $ f $ Read t (LeadInvestigatorMustDecide qs) mcs]
       Just msg -> [uiToRun msg]
     ChooseOne qs -> case qs !!? qrChoice response of
       Nothing -> [Ask playerId $ f $ ChooseOne qs]
       Just msg -> [uiToRun msg]
+    PlayerWindowChooseOne qs -> case qs !!? qrChoice response of
+      Nothing -> [Ask playerId $ f $ PlayerWindowChooseOne qs]
+      Just msg -> [uiToRun msg]
+    ChooseOneFromEach qs -> case concat qs !!? qrChoice response of
+      Nothing -> [Ask playerId $ f $ ChooseOneFromEach qs]
+      Just msg ->
+        let
+          removeSublistAtIndex :: Int -> [[a]] -> [[a]]
+          removeSublistAtIndex idx xss = removeSublist idx xss 0
+          removeSublist _ [] _ = []
+          removeSublist n (ys : yss) currentIdx
+            | n < currentIdx + length ys = yss
+            | otherwise = ys : removeSublist n yss (currentIdx + length ys)
+          remaining = removeSublistAtIndex (qrChoice response) qs
+         in
+          uiToRun msg : [Ask playerId $ f $ ChooseOneFromEach remaining | not (null remaining)]
     ChooseN n qs -> do
       let (mm, msgs') = extract (qrChoice response) qs
       case (mm, msgs') of
@@ -352,5 +371,4 @@ handleAnswer Game {..} playerId = \case
     _ -> error "Wrong question type"
 
 extract :: Int -> [a] -> (Maybe a, [a])
-extract n xs =
-  let a = xs !!? n in (a, [x | (i, x) <- zip [0 ..] xs, i /= n])
+extract n xs = let a = xs !!? n in (a, [x | (i, x) <- zip [0 ..] xs, i /= n])

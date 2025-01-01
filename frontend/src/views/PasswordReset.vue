@@ -1,8 +1,10 @@
 <script lang="ts" setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { useToast } from "vue-toastification";
 import { useI18n } from 'vue-i18n';
 import api from '@/api';
+
+const submitted = ref(false)
 
 interface PasswordReset {
   email: string
@@ -15,6 +17,7 @@ const reset = reactive<PasswordReset>({
 const { t } = useI18n()
 
 async function resetPassword() {
+  submitted.value = true
   await api.post('password-reset', { email : reset.email })
   toast.success(t("passwordResetRequested"), { timeout: 3000 })
 }
@@ -23,7 +26,7 @@ const toast = useToast()
 </script>
 
 <template>
-  <form @submit.prevent="resetPassword">
+  <form v-if="!submitted" @submit.prevent="resetPassword">
     <header><i class="secret"></i></header>
     <section>
       <div>
@@ -38,20 +41,17 @@ const toast = useToast()
       </div>
     </section>
   </form>
+  <div v-else class="container box">
+    <p>Check your email inbox (and spam folder) for instructions on how to reset your password.</p>
+  </div>
 </template>
 
 <style scoped lang="scss">
-form {
+form, .container {
   margin: 0 auto;
   margin-top: 10vh;
   width: 50vw;
   max-width: 400px;
-}
-
-section {
-  background-color: #15192C;
-  border-radius: 3px;
-  padding: 10px;
 }
 
 header {
@@ -60,11 +60,10 @@ header {
 
 input {
   outline: 0;
-  border: 1px solid #000;
+  border: 0;
   padding: 15px;
-  background: #F2F2F2;
+  background: var(--background-dark);
   width: 100%;
-  box-sizing: border-box;
   margin-bottom: 10px;
 }
 
@@ -77,7 +76,7 @@ button {
   border: 0;
   width: 100%;
   &:hover {
-    background: darken(#6E8640, 7%);
+    background: hsl(80, 35%, 32%);
   }
 }
 

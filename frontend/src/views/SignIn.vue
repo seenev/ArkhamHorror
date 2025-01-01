@@ -54,6 +54,9 @@ async function authenticate() {
         <button>{{$t('logIn')}}</button>
       </div>
     </section>
+    <section>
+      <router-link to="/password-reset">{{$t('forgotPassword')}}</router-link>
+    </section>
   </form>
 </template>
 
@@ -66,7 +69,6 @@ form {
 }
 
 section {
-  background-color: #15192C;
   border-radius: 3px;
   padding: 10px;
 }
@@ -77,11 +79,10 @@ header {
 
 input {
   outline: 0;
-  border: 1px solid #000;
+  border: 0;
   padding: 15px;
-  background: #F2F2F2;
+  background: var(--background-dark);
   width: 100%;
-  box-sizing: border-box;
   margin-bottom: 10px;
 }
 
@@ -94,7 +95,7 @@ button {
   border: 0;
   width: 100%;
   &:hover {
-    background: darken(#6E8640, 7%);
+    background: hsl(80, 35%, 32%);
   }
 }
 

@@ -1,14 +1,15 @@
 <script lang="ts" setup>
-import { watch, computed, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useDebug } from '@/arkham/debug'
 import { Game } from '@/arkham/types/Game'
 import { TokenType } from '@/arkham/types/Token';
 import { imgsrc } from '@/arkham/helpers';
 import * as ArkhamGame from '@/arkham/types/Game'
 import { AbilityLabel, AbilityMessage, Message, MessageType } from '@/arkham/types/Message'
+import AbilitiesMenu from '@/arkham/components/AbilitiesMenu.vue'
+import DebugEnemy from '@/arkham/components/debug/Enemy.vue';
 import PoolItem from '@/arkham/components/PoolItem.vue'
 import Key from '@/arkham/components/Key.vue';
-import AbilityButton from '@/arkham/components/AbilityButton.vue'
 import Treachery from '@/arkham/components/Treachery.vue';
 import Asset from '@/arkham/components/Asset.vue';
 import Event from '@/arkham/components/Event.vue';
@@ -22,14 +23,17 @@ const props = withDefaults(defineProps<{
   enemy: Arkham.Enemy
   playerId: string
   atLocation?: boolean
-}>(), { atLocation: false })
+  attached?: boolean
+}>(), { atLocation: false, attached: false })
 
 const emits = defineEmits<{
   choose: [value: number]
 }>()
 
-const investigatorId = computed(() => Object.values(props.game.investigators).find((i) => i.playerId === props.playerId)?.id)
 
+const frame = ref(null)
+const debugging = ref(false)
+const dragging = ref(false)
 const enemyStory = computed(() => {
   const { stories } = props.game
   return Object.values(stories).find((s) => s.otherSide?.contents === props.enemy.id)
@@ -40,10 +44,14 @@ const isTrueForm = computed(() => {
   return cardCode === 'cxnyarlathotep'
 })
 
-const image = computed(() => {
+const imageId = computed(() => {
   const { cardCode, flipped } = props.enemy
   const suffix = flipped ? 'b' : ''
-  return imgsrc(`cards/${cardCode.replace('c', '')}${suffix}.jpg`)
+  return `${cardCode.replace('c', '')}${suffix}`
+})
+
+const image = computed(() => {
+  return imgsrc(`cards/${imageId.value}.avif`)
 })
 
 const id = computed(() => props.enemy.id)
@@ -60,9 +68,14 @@ function isCardAction(c: Message): boolean {
 const cardAction = computed(() => choices.value.findIndex(isCardAction))
 const canInteract = computed(() => abilities.value.length > 0 || cardAction.value !== -1)
 
+const inVoid = computed(() => props.enemy.placement.tag === 'OutOfPlay' && props.enemy.placement.contents === 'VoidZone')
+const global = computed(() => props.enemy.placement.tag === 'OtherPlacement' && props.enemy.placement.contents === 'Global')
+
 const swarmEnemies = computed(() =>
   Object.values(props.game.enemies).filter((e) => e.placement.tag === 'AsSwarm' && e.placement.swarmHost === props.enemy.id)
 )
+
+const isSwarm = computed(() => props.enemy.placement.tag === 'AsSwarm')
 
 function isAbility(v: Message): v is AbilityLabel {
   if (v.tag === MessageType.FIGHT_LABEL && v.enemyId === id.value) {
@@ -168,28 +181,26 @@ async function chooseAbility(ability: number) {
   emits('choose', ability)
 }
 
-watch(abilities, (abilities) => {
-  // ability is forced we must show
-  if (abilities.some(a => "ability" in a.contents && a.contents.ability.type.tag === "ForcedAbility")) {
-    showAbilities.value = true
+function startDrag(event: DragEvent, enemy: Arkham.Enemy) {
+  dragging.value = true
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', JSON.stringify({ "tag": "EnemyTarget", "contents": enemy.id }))
   }
-
-  if (abilities.length === 0) {
-    showAbilities.value = false
-  }
-})
+}
 
 </script>
 
 <template>
-  <div class="enemy--outer">
+  <div class="enemy--outer" :class="{showAbilities}">
     <div class="enemy">
       <Story v-if="enemyStory" :story="enemyStory" :game="game" :playerId="playerId" @choose="choose"/>
       <template v-else>
-        <div class="card-frame">
-          <div class="card-wrapper" :class="{ 'enemy--can-interact': canInteract, exhausted: isExhausted}">
+        <div class="card-frame" ref="frame">
+          <div class="card-wrapper" :class="{ exhausted: isExhausted }">
             <img v-if="isTrueForm" :src="image"
               class="card enemy"
+              :class="{ dragging, 'enemy--can-interact': canInteract, attached }"
               :data-id="id"
               :data-fight="enemy.fight"
               :data-evade="enemy.evade"
@@ -198,12 +209,18 @@ watch(abilities, (abilities) => {
               :data-horror="enemy.sanityDamage"
               :data-victory="gainedVictory"
               :data-keywords="addedKeywords"
+              :data-swarm="isSwarm"
               @click="clicked"
             />
             <img v-else
-              :src="image"
+              :draggable="debug.active"
+              @dragstart="startDrag($event, enemy)"
+              :src="isSwarm ? imgsrc('player_back.jpg') : image"
               class="card enemy"
+              :class="{ exhausted: isExhausted, 'enemy--can-interact': canInteract, attached}"
               :data-id="id"
+              :data-image-id="imageId"
+              :data-swarm="isSwarm || undefined"
               @click="clicked"
             />
           </div>
@@ -212,7 +229,7 @@ watch(abilities, (abilities) => {
             <div class="keys" v-if="keys.length > 0">
               <Key v-for="key in keys" :key="key" :name="key" />
             </div>
-            <PoolItem v-if="!omnipotent" type="health" :amount="enemyDamage" />
+            <PoolItem v-if="!omnipotent && !attached" type="health" :amount="enemyDamage" />
             <PoolItem v-if="doom && doom > 0" type="doom" :amount="doom" />
             <PoolItem v-if="clues && clues > 0" type="clue" :amount="clues" />
             <PoolItem v-if="resources && resources > 0" type="resource" :amount="resources" />
@@ -220,6 +237,7 @@ watch(abilities, (abilities) => {
             <PoolItem v-if="lostSouls && lostSouls > 0" type="resource" :amount="lostSouls" />
             <PoolItem v-if="bounties && bounties > 0" type="resource" :amount="bounties" />
             <PoolItem v-if="evidence && evidence > 0" type="resource" tooltip="Evidence" :amount="evidence" />
+            <PoolItem v-if="enemy.cardsUnderneath.length > 0" type="card" :amount="enemy.cardsUnderneath.length" />
             <Token
               v-for="(sealedToken, index) in enemy.sealedChaosTokens"
               :key="index"
@@ -227,17 +245,17 @@ watch(abilities, (abilities) => {
               :playerId="playerId"
               :game="game"
               @choose="choose"
+              class="sealed"
             />
           </div>
 
-          <div v-if="showAbilities" class="abilities">
-            <AbilityButton
-              v-for="ability in abilities"
-              :key="ability.index"
-              :ability="ability.contents"
-              @click="chooseAbility(ability.index)"
-              />
-          </div>
+          <AbilitiesMenu
+            :frame="frame"
+            v-model="showAbilities"
+            :abilities="abilities"
+            :position="atLocation ? 'right' : (inVoid || global) ? 'left' : 'top'"
+            @choose="chooseAbility"
+            />
         </div>
 
       </template>
@@ -257,6 +275,7 @@ watch(abilities, (abilities) => {
         :asset="game.assets[assetId]"
         :game="game"
         :playerId="playerId"
+        :attached="true"
         @choose="$emit('choose', $event)"
       />
       <Event
@@ -265,6 +284,7 @@ watch(abilities, (abilities) => {
         :event="game.events[eventId]"
         :game="game"
         :playerId="playerId"
+        :attached="true"
         @choose="$emit('choose', $event)"
       />
       <Skill
@@ -273,12 +293,11 @@ watch(abilities, (abilities) => {
         :skill="game.skills[skillId]"
         :game="game"
         :playerId="playerId"
+        :attached="true"
         @choose="$emit('choose', $event)"
       />
       <template v-if="debug.active">
-        <button @click="debug.send(game.id, {tag: 'DefeatEnemy', contents: [id, investigatorId, {tag: 'InvestigatorSource', contents:investigatorId}]})">Defeat</button>
-        <button @click="debug.send(game.id, {tag: 'EnemyEvaded', contents: [investigatorId, id]})">Evade</button>
-        <button @click="debug.send(game.id, {tag: 'EnemyDamage', contents: [id, {damageAssignmentSource: {tag: 'InvestigatorSource', contents:investigatorId}, damageAssignmentAmount: 1, damageAssignmentDirect: true, damageAssignmentDelayed: false, damageAssignmentDamageEffect: 'NonAttackDamageEffect'}]})">Add Damage</button>
+        <button @click="debugging = true">Debug</button>
       </template>
     </div>
 
@@ -289,21 +308,29 @@ watch(abilities, (abilities) => {
         :enemy="enemy"
         :game="game"
         :playerId="playerId"
-        :atLocation="true"
+        :atLocation="atLocation"
         @choose="$emit('choose', $event)"
         class="enemy--swarming"
       />
     </div>
+    <DebugEnemy v-if="debugging" :game="game" :enemy="enemy" :playerId="playerId" @close="debugging = false" />
   </div>
 </template>
 
 <style scoped lang="scss">
 .small-treachery :deep(.card) {
-  height: $card-width * 0.35;
+  height: calc(var(--card-width) * 0.35);
+}
+
+:deep(.event) img {
+  object-fit: cover;
+  object-position: bottom;
+  height: calc(var(--card-width) * 0.6);
+  margin-top: 2px;
 }
 
 .enemy--can-interact {
-  border: 3px solid $select;
+  border: 2px solid var(--select);
   border-radius: 5px;
   cursor: pointer;
 }
@@ -312,13 +339,13 @@ watch(abilities, (abilities) => {
   display: flex;
   flex-direction: column;
   position: relative;
-  z-index: 0;
+  z-index: 5;
   isolation: isolate;
 }
 
 .card {
-  width: $card-width;
-  max-width: $card-width;
+  width: var(--card-width);
+  max-width: var(--card-width);
   border-radius: 5px;
 }
 
@@ -327,21 +354,27 @@ watch(abilities, (abilities) => {
   top: 10%;
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   align-self: flex-start;
   align-items: flex-end;
-  * {
-    transform: scale(0.6);
+  z-index: 15;
+  :deep(img) {
+    width: 20px;
+    height: auto;
+  }
+
+  :deep(.token-container) {
+    width: 20px;
   }
 
   pointer-events: none;
 }
 
 .exhausted {
-  transform: rotate(90deg);
-  margin-left: 2px;
-  margin-bottom: -10px;
-  height: fit-content;
-  width: auto;
+  :deep(img) {
+    transition: transform 0.2s linear;
+    transform: rotate(90deg) translateX(-10px);
+  }
 }
 
 :deep(.token) {
@@ -367,22 +400,61 @@ watch(abilities, (abilities) => {
   bottom:100%;
   left: 0;
   z-index: 20000000000;
+
+  &.right {
+    bottom:50%;
+    left: 100%;
+    transform: translateY(50%) translateZ(0);
+    z-index: 20000000000;
+    //z-index: 0;
+  }
+
+  &.left {
+    bottom:0%;
+    right: 100%;
+    left: unset;
+    transform: unset;
+  }
 }
 
 .swarm {
   display: flex;
   flex-direction: row-reverse;
+  width: fit-content;
   justify-content: space-evenly;
-  z-index: -1000;
+  :has(.exhausted) {
+    gap: 10px;
+    margin-left: 5px;
+  }
+  &:hover {
+    flex-wrap: wrap;
+
+    .enemy--swarming {
+      margin-left: 5px;
+    }
+  }
+
+  &:has(.enemy--swarming.showAbilities) {
+    .enemy--swarming {
+      margin-left: 5px;
+    }
+  }
+
+  .enemy--swarming {
+    margin-left: calc((var(--card-width) / 1.5) * -1);
+  }
 }
 
-.enemy--swarming {
-  margin-left: calc(($card-width / 1.5) * -1);
-}
 
 .enemy--outer {
   isolation: isolate;
   display: flex;
   justify-content: space-evenly;
+}
+
+.attached.card {
+  object-fit: cover;
+  object-position: left bottom;
+  height: calc(var(--card-width)*0.6);
 }
 </style>

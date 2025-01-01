@@ -12,7 +12,6 @@ import PoolItem from '@/arkham/components/PoolItem.vue';
 import Treachery from '@/arkham/components/Treachery.vue';
 import * as Arkham from '@/arkham/types/Agenda';
 
-
 const props = defineProps<{
   agenda: Arkham.Agenda
   game: Game
@@ -29,9 +28,9 @@ const emit = defineEmits<{
 const id = computed(() => props.agenda.id)
 const image = computed(() => {
   if (props.agenda.flipped) {
-    return imgsrc(`cards/${id.value.replace('c', '').replace(/a$/, '')}b.jpg`);
+    return imgsrc(`cards/${id.value.replace('c', '').replace(/a$/, '')}b.avif`);
   }
-  return imgsrc(`cards/${id.value.replace('c', '')}.jpg`);
+  return imgsrc(`cards/${id.value.replace('c', '')}.avif`);
 })
 
 const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
@@ -79,63 +78,79 @@ const abilities = computed(() => {
 const cardsUnder = computed(() => props.cardsUnder)
 const showCardsUnderAgenda = () => emit('show', cardsUnder, 'Cards Under Agenda', false)
 
-const imageForCard = (card: Card) => {
-  return imgsrc(cardImage(card))
-}
-
-const treacheries = computed(() => Object.values(props.game.treacheries).
+const nextToTreacheries = computed(() => Object.values(props.game.treacheries).
   filter((t) => t.placement.tag === "NextToAgenda").
   map((t) => t.id))
+
+function groupBy<T, K extends string | number | symbol>(
+  array: T[],
+  getKey: (item: T) => K
+): Record<K, T[]> {
+  return array.reduce((result, item) => {
+    const key = getKey(item);
+    if (!result[key]) {
+      result[key] = [];
+    }
+    result[key].push(item);
+    return result;
+  }, {} as Record<K, T[]>);
+}
+
+const groupedTreacheries = computed(() => Object.entries(groupBy([...props.agenda.treacheries, ...nextToTreacheries.value], (t) => props.game.treacheries[t].cardCode)))
 
 const debug = useDebug()
 </script>
 
 <template>
   <div class="agenda-container">
-    <img
-      :class="{ 'agenda--can-progress': interactAction !== -1 }"
-      class="card card--sideways"
-      @click="$emit('choose', interactAction)"
-      :src="image"
-    />
+    <div class="agenda-card">
+      <img
+        :class="{ 'agenda--can-progress': interactAction !== -1 }"
+        class="card card--sideways card--agenda"
+        @click="$emit('choose', interactAction)"
+        :src="image"
+      />
+      <div class="pool" v-if="!agenda.flipped">
+        <template v-if="debug.active">
+          <button @click="debug.send(game.id, {tag: 'RemoveTokens', contents: [{'tag': 'GameSource'}, {'tag': 'AgendaTarget', 'contents': id}, 'Doom', 1]})">-</button>
+        </template>
+
+        <PoolItem
+          type="doom"
+          :amount="agenda.doom"
+        />
+
+        <template v-if="debug.active">
+          <button @click="debug.send(game.id, {tag: 'PlaceTokens', contents: [{'tag': 'GameSource'}, {'tag': 'AgendaTarget', 'contents': id}, 'Doom', 1]})">+</button>
+        </template>
+      </div>
+    </div>
     <img
       v-for="(card, idx) in cardsNextTo"
       class="card card--sideways"
       :key="idx"
-      :src="imageForCard(card)"
-    />
-    <Treachery
-      v-for="treacheryId in treacheries"
-      :key="treacheryId"
-      :treachery="game.treacheries[treacheryId]"
-      :game="game"
-      :playerId="playerId"
-      @choose="$emit('choose', $event)"
+      :src="imgsrc(cardImage(card))"
     />
     <AbilityButton
       v-for="ability in abilities"
       :key="ability.index"
       :ability="ability.contents"
       :data-image="image"
+      class="sideways"
       @click="$emit('choose', ability.index)"
       />
-    <Treachery
-      v-for="treacheryId in agenda.treacheries"
-      :key="treacheryId"
-      :treachery="game.treacheries[treacheryId]"
-      :game="game"
-      :playerId="playerId"
-      @choose="$emit('choose', $event)"
-    />
-    <div class="pool">
-      <PoolItem
-        type="doom"
-        :amount="agenda.doom"
-      />
-
-      <template v-if="debug.active">
-        <button @click="debug.send(game.id, {tag: 'PlaceTokens', contents: [{'tag': 'GameSource'}, {'tag': 'AgendaTarget', 'contents': id}, 'Doom', 1]})">+</button>
-      </template>
+    <div v-if="groupedTreacheries.length > 0" class="treacheries">
+      <div v-for="([cCode, treacheries], idx) in groupedTreacheries" :key="cCode" class="treachery-group" :style="{ zIndex: (groupedTreacheries.length - idx) * 10 }">
+        <div v-for="treacheryId in treacheries" class="treachery-card" :key="treacheryId" >
+          <Treachery
+            :treachery="game.treacheries[treacheryId]"
+            :game="game"
+            :playerId="playerId"
+            @choose="$emit('choose', $event)"
+            :overlay-delay="310"
+          />
+        </div>
+      </div>
     </div>
 
     <button v-if="cardsUnder.length > 0" class="view-cards-under-button" @click="showCardsUnderAgenda">{{viewUnderLabel}}</button>
@@ -144,16 +159,19 @@ const debug = useDebug()
 
 <style scoped lang="scss">
 .card {
-  width: $card-width;
-  -webkit-box-shadow: 0 3px 6px rgba(0, 0, 0, 0.23), 0 3px 6px rgba(0, 0, 0, 0.53);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.23), 0 3px 6px rgba(0, 0, 0, 0.53);
+  width: var(--card-width);
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
   border-radius: 6px;
-  margin: 2px;
 }
 
 .card--sideways {
   width: auto;
-  height: $card-width;
+  height: var(--card-width);
+  max-width: max-content;
+}
+
+.card--agenda {
+  z-index: 100;
 }
 
 .agenda-container {
@@ -187,5 +205,61 @@ const debug = useDebug()
   object-position: 0 -74px;
   height: 68px;
   margin-top: 2px;
+}
+
+.treacheries {
+  position:relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.treachery-group {
+  display: flex;
+  gap: 5px;
+  flex-direction: row;
+  margin-top: -50px;
+  //position: inherit;
+  transition: margin-top 0.3s;
+  position: relative;
+
+  &:hover {
+    margin-top: 0px;
+    .treachery-card {
+      margin-left: 0;
+    }
+  }
+}
+
+.treachery {
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+.treachery-card {
+  margin-left: -50px;
+  transition: margin-left 0.3s;
+  &:first-of-type {
+    margin-left: 0;
+  }
+}
+
+.agenda-card {
+  > img {
+    box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.8);
+  }
+  z-index: 100;
+  position: relative;
+  .pool {
+    z-index: 101;
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+}
+
+.agenda-container :deep(.card--sideways) {
+  width: auto;
+  height: var(--card-width);
+  aspect-ratio: var(--card-sideways-aspect);
 }
 </style>

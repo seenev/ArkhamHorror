@@ -1,5 +1,8 @@
 <script lang="ts" setup>
+import UpgradeDeck from '@/arkham/components/UpgradeDeck.vue';
+import { EyeIcon, QuestionMarkCircleIcon, ViewColumnsIcon } from '@heroicons/vue/20/solid'
 import {
+  watchEffect,
   onMounted,
   onUpdated,
   computed,
@@ -9,11 +12,18 @@ import {
 } from 'vue';
 import { type Game } from '@/arkham/types/Game';
 import { type Scenario } from '@/arkham/types/Scenario';
-import { type Card, toCardContents } from '@/arkham/types/Card';
+import { type Card } from '@/arkham/types/Card';
 import { TarotCard, tarotCardImage } from '@/arkham/types/TarotCard';
 import { TokenType } from '@/arkham/types/Token';
-import { imgsrc, pluralize } from '@/arkham/helpers';
+import { Source } from '@/arkham/types/Source';
+import { Message } from '@/arkham/types/Message';
+import { waitForImagesToLoad, imgsrc, pluralize } from '@/arkham/helpers';
+import { useMenu } from '@/composeable/menu';
+import { useSettings } from '@/stores/settings';
 import Act from '@/arkham/components/Act.vue';
+import CardView from '@/arkham/components/Card.vue';
+import Draggable from '@/components/Draggable.vue';
+import ChaosBag from '@/arkham/components/ChaosBag.vue';
 import Agenda from '@/arkham/components/Agenda.vue';
 import Enemy from '@/arkham/components/Enemy.vue';
 import CardRow from '@/arkham/components/CardRow.vue';
@@ -29,18 +39,49 @@ import Story from '@/arkham/components/Story.vue';
 import Location from '@/arkham/components/Location.vue';
 import * as ArkhamGame from '@/arkham/types/Game';
 import { useDebug } from '@/arkham/debug'
+import { storeToRefs } from 'pinia';
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
+// types
+interface RefWrapper<T> {
+  ref: ComputedRef<T>
+}
+
+// Setup
 export interface Props {
   game: Game
   scenario: Scenario
   playerId: string
 }
-
 const props = defineProps<Props>()
 const emit = defineEmits(['choose'])
 const debug = useDebug()
-const needsInit = ref(true)
+const { addEntry, removeEntry } = useMenu()
 
+const upgradeDeck = computed(() => Object.values(props.game.question).some((q) => q.tag === 'ChooseUpgradeDeck'))
+
+// emit helpers
+const choose = async (idx: number) => emit('choose', idx)
+
+//Refs
+const settingsStore = useSettings()
+const { splitView } = storeToRefs(settingsStore)
+const { toggleSplitView } = settingsStore
+const needsInit = ref(true)
+const showChaosBag = ref(false)
+const showOutOfPlay = ref(false)
+const forcedShowOutOfPlay = ref(false)
+const locationMap = ref<Element | null>(null)
+const viewingDiscard = ref(false)
+const cardRowTitle = ref("")
+// Atlach Nacha specific refs
+const previousRotation = ref(0)
+const legsSet = ref(["legs1", "legs2", "legs3", "legs4"])
+
+const locationsZoom = ref(1);
+
+// callbacks
 onMounted(() => {
   if(props.scenario.id === "c06333") {
     waitForImagesToLoad(() => {
@@ -49,46 +90,261 @@ onMounted(() => {
   }
 });
 
-function waitForImagesToLoad(callback) {
-  const images = document.querySelectorAll('img')
-  const totalImages = images.length
-  let loadedCount = 0
-
-  if (totalImages === 0) {
-    callback()
-    return
-  }
-
-  const checkIfAllLoaded = () => {
-    loadedCount++
-    if (loadedCount === totalImages) {
-      callback()
-    }
-  };
-
-  images.forEach(image => {
-    if (image.complete) {
-      checkIfAllLoaded()
-    } else {
-      image.addEventListener('load', checkIfAllLoaded)
-      image.addEventListener('error', checkIfAllLoaded)
-    }
-  });
-}
-
 onUpdated(() => {
   if(props.scenario.id === "c06333") {
     rotateImages(needsInit.value)
   }
 });
 
-const previousRotation = ref(0)
-const legsSet = ref(["legs1", "legs2", "legs3", "legs4"])
+// Menu
+addEntry({
+  id: "viewChaosBag",
+  icon: QuestionMarkCircleIcon,
+  content: t('gameBar.viewChaosBag'),
+  shortcut: "c",
+  nested: 'view',
+  action: () => showChaosBag.value = !showChaosBag.value
+})
 
-function rotateImages(init) {
+addEntry({
+  id: "splitView",
+  icon: ViewColumnsIcon,
+  content: t('gameBar.splitView'),
+  nested: 'view',
+  action: toggleSplitView
+})
+
+// Computed
+const scenarioGuide = computed(() => {
+  const { reference, difficulty } = props.scenario
+  const difficultySuffix = difficulty === 'Hard' || difficulty === 'Expert'
+    ? 'b'
+    : ''
+  return imgsrc(`cards/${reference.replace('c', '')}${difficultySuffix}.avif`)
+})
+const scenarioDecks = computed(() => {
+  if (!props.scenario.decks) return null
+  return Object.entries(props.scenario.decks)
+})
+
+const isVertical = function(area: string) {
+  const [start, end] = area.split('--')
+  const startLocation = locations.value.find((l) => l.id === start);
+  const endLocation = locations.value.find((l) => l.id === end);
+
+  if (!startLocation || !endLocation) return false
+
+  return startLocation.label[startLocation.label.length - 1] !== endLocation.label[endLocation.label.length - 1]
+}
+
+const barriers = computed(() => props.scenario.meta?.barriers)
+
+const locationStyles = computed(() => {
+  const { locationLayout } = props.scenario
+  if (!locationLayout) return null
+  let cleaned = locationLayout
+
+  if (barriers.value) {
+    let grid = {};
+    locationLayout.forEach((row) => {
+      row.split(' ').forEach((cell) => {
+        const location = locations.value.find((l) => l.label === cell);
+        if (!location) return;
+        grid[cell] = location.id;
+      });
+    });
+
+    // Process rows to insert barriers
+    const cleanedRows = locationLayout.map((row) => row.split(' '));
+    let newCleanedRows = [];
+
+    for (let rowIndex = 0; rowIndex < cleanedRows.length; rowIndex++) {
+      const row = cleanedRows[rowIndex];
+      let newRow = [];
+
+      for (let colIndex = 0; colIndex < row.length; colIndex++) {
+        const cell = row[colIndex];
+        newRow.push(cell);
+
+        // Check for horizontal barriers
+        if (colIndex < row.length - 1) {
+          const cellA = cell;
+          const cellB = row[colIndex + 1];
+          const idA = grid[cellA];
+          const idB = grid[cellB];
+          if (idA && idB) {
+            const ids = `barrier-${[idA, idB].sort().join('--')}`;
+            newRow.push(ids); // Insert barrier
+          } else {
+            newRow.push('.'); // Insert period
+          }
+        }
+      }
+      newCleanedRows.push(newRow);
+    }
+
+    // Now process columns to insert vertical barriers
+    let finalRows = [];
+
+    for (let rowIndex = 0; rowIndex < newCleanedRows.length; rowIndex++) {
+      const row = newCleanedRows[rowIndex];
+      finalRows.push(row);
+
+      // Check if we need to insert a row of barriers below this row
+      if (rowIndex < newCleanedRows.length - 1) {
+        const nextRow = newCleanedRows[rowIndex + 1];
+        let barrierRow = [];
+        let needBarrierRow = false;
+
+        for (let colIndex = 0; colIndex < row.length; colIndex++) {
+          const cellA = row[colIndex];
+          const cellB = nextRow[colIndex];
+          const idA = grid[cellA];
+          const idB = grid[cellB];
+
+          if (idA && idB) {
+            const ids = `barrier-${[idA, idB].sort().join('--')}`;
+            barrierRow.push(ids); // Insert vertical barrier
+            needBarrierRow = true;
+          } else {
+            barrierRow.push('.'); // Insert period
+          }
+        }
+
+        if (needBarrierRow) {
+          finalRows.push(barrierRow);
+        }
+      }
+    }
+
+    // Update the 'cleaned' variable
+    cleaned = finalRows.map((row) => row.join(' '));
+  }
+
+  return {
+    display: 'grid',
+    gap: '20px',
+    'grid-template-areas': cleaned.map((row) => `"${row}"`).join(' '),
+    zoom: locationsZoom.value
+  }
+})
+const scenarioDeckStyles = computed(() => {
+  const { decksLayout } = props.scenario
+  return {
+    display: 'grid',
+    'grid-template-areas': decksLayout.map((row) => `"${row}"`).join(' '),
+    'grid-row-gap': '10px',
+  }
+})
+const players = computed(() => props.game.investigators)
+const playerOrder = computed(() => props.game.playerOrder)
+const discards = computed<Card[]>(() => props.scenario.discard.map(c => ({ tag: 'EncounterCard', contents: c })))
+const outOfPlayEnemies = computed(() => Object.values(props.game.enemies).filter(e => e.placement.tag === 'OutOfPlay'))
+const outOfPlay = computed(() => props.scenario?.setAsideCards || [])
+const removedFromPlay = computed(() => props.game.removedFromPlay)
+const noCards = computed<Card[]>(() => [])
+const viewUnderScenarioReference = computed(() => `${cardsUnderScenarioReference.value.length} Cards Underneath`)
+const viewDiscardLabel = computed(() => pluralize(t('scenario.discardCard'), discards.value.length))
+const topOfEncounterDiscard = computed(() => {
+  if (!props.scenario.discard[0]) return null
+  const { cardCode } = props.scenario.discard[0]
+  return imgsrc(`cards/${cardCode.replace('c', '')}.avif`)
+})
+const spectralEncounterDeck = computed(() => props.scenario.encounterDecks['SpectralEncounterDeck']?.[0])
+const spectralDiscard = computed(() => props.scenario.encounterDecks['SpectralEncounterDeck']?.[1])
+const topOfSpectralDiscard = computed(() => {
+  if (!spectralDiscard.value || !spectralDiscard.value[0]) return null
+  const { cardCode } = spectralDiscard.value[0]
+  return imgsrc(`cards/${cardCode.replace('c', '')}.avif`)
+})
+const topEnemyInVoid = computed(() => {
+  const inVoidEnemy = Object.values(props.game.enemies).filter((e) => e.placement.tag === 'OutOfPlay' && (['VoidZone', 'TheDepths'] as string[]).includes(e.placement.contents))[0]
+  return inVoidEnemy
+})
+const activePlayerId = computed(() => props.game.activeInvestigatorId)
+const pursuit = computed(() => Object.values(outOfPlayEnemies.value).filter((enemy) =>
+  enemy.placement.tag === 'OutOfPlay' && enemy.placement.contents === 'PursuitZone'
+))
+const globalEnemies = computed(() => Object.values(props.game.enemies).filter((enemy) =>
+  enemy.placement.tag === "OtherPlacement" && enemy.placement.contents === "Global" && enemy.asSelfLocation === null
+))
+const globalStories = computed(() => Object.values(props.game.stories).filter((story) =>
+  story.placement.tag === "OtherPlacement" && story.placement.contents === "Global"
+))
+const enemiesAsLocations = computed(() => Object.values(props.game.enemies).filter((enemy) => enemy.asSelfLocation !== null))
+const cardsUnderScenarioReference = computed(() => props.scenario.cardsUnderScenarioReference)
+const cardsUnderAgenda = computed(() => props.scenario.cardsUnderAgendaDeck)
+const cardsUnderAct = computed(() => props.scenario.cardsUnderActDeck)
+const cardsNextToAct = computed(() => props.scenario.cardsNextToActDeck)
+const cardsNextToAgenda = computed(() => props.scenario.cardsNextToAgendaDeck)
+const keys = computed(() => props.scenario.setAsideKeys)
+const spentKeys = computed(() => props.scenario.keys)
+// TODO: not showing cosmos should be more specific, as there could be a cosmos location in the future?
+const locations = computed(() => Object.values(props.game.locations).
+  filter((a) => a.inFrontOf === null && a.label !== "cosmos"))
+const usedLabels = computed(() => locations.value.map((l) => l.label))
+const unusedLabels = computed(() => {
+  const { locationLayout, usesGrid } = props.scenario;
+  if (!locationLayout || !usesGrid) return []
+  return locationLayout.flatMap((row) => row.split(' ')).filter((x) => !usedLabels.value.includes(x) && x !== '.')
+})
+const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
+const resources = computed(() => props.scenario.tokens[TokenType.Resource])
+const hasPool = computed(() => resources.value && resources.value > 0)
+const tarotCards = computed(() => props.scenario.tarotCards.filter((c) => c.scope.tag === 'GlobalTarot'))
+const phase = computed(() => props.game.phase)
+const phaseStep = computed(() => props.game.phaseStep)
+const currentDepth = computed(() => props.scenario.counts["CurrentDepth"])
+const signOfTheGods = computed(() => props.scenario.counts["SignOfTheGods"])
+const gameOver = computed(() => props.game.gameState.tag === "IsOver")
+
+// Reactive
+const showCards = reactive<RefWrapper<any>>({ ref: noCards })
+
+// Watchers
+watchEffect(() => {
+  const oop = outOfPlay.value.length + outOfPlayEnemies.value.length
+  if (oop == 0) {
+    removeEntry("showOutOfPlay")
+    showOutOfPlay.value = false
+  } else {
+    addEntry({
+      id: "showOutOfPlay",
+      icon: EyeIcon,
+      content: t('gameBar.showOutOfPlay'),
+      nested: 'view',
+      shortcut: 'o',
+      action: () => showOutOfPlay.value = !showOutOfPlay.value
+    })
+  }
+})
+
+watchEffect(() => {
+  const isOutOfPlaySource = (source: Source) => {
+    switch (source.tag) {
+      case "TreacherySource": {
+       return outOfPlayEnemies.value.some((e) => {
+          if (source.contents) return e.treacheries.includes(source.contents)
+          return false
+       })
+      }
+      default: return false
+    }
+  }
+  const isOutOfPlayChoice = (c: Message) => {
+    if (c.tag !== "AbilityLabel") return false
+    return isOutOfPlaySource(c.ability.source)
+  }
+  const needsShowOutOfPlay = choices.value.some(isOutOfPlayChoice)
+  forcedShowOutOfPlay.value = needsShowOutOfPlay
+})
+
+
+// Helpers
+function rotateImages(init: boolean) {
   const atlachNacha = document.querySelector('[data-label=atlachNacha]')
   const locationCards = document.querySelector('.location-cards')
-  if (atlachNacha) {
+  if (atlachNacha && locationCards) {
     needsInit.value = false
     const inLocation = locationCards.querySelector('[data-label=atlachNacha]')
 
@@ -116,9 +372,7 @@ function rotateImages(init) {
     const originX = middleCardImgRect.left + middleCardImgRect.width / 2 - middleCardRect.left
     const originY = middleCardImgRect.top + middleCardImgRect.height / 2 - middleCardRect.top
 
-    if (init) {
-      atlachNacha.style.transformOrigin = `${originX}px ${originY}px`
-    }
+    if (init) atlachNacha.style.transformOrigin = `${originX}px ${originY}px`
     atlachNacha.style.transition = 'none'
     atlachNacha.style.transform = `rotate(${previousRotation.value}deg)`
     const oX = middleCardImgRect.left + middleCardImgRect.width / 2
@@ -163,173 +417,18 @@ function beforeLeave(e: Element) {
   el.style.width = width
   el.style.height = height
 }
-
-async function choose(idx: number) {
-  emit('choose', idx)
-}
-
-interface RefWrapper<T> {
-  ref: ComputedRef<T>
-}
-
-const locationMap = ref<Element | null>(null)
-
-const scenarioGuide = computed(() => {
-  const { reference, difficulty } = props.scenario
-  const difficultySuffix = difficulty === 'Hard' || difficulty === 'Expert'
-    ? 'b'
-    : ''
-
-  return imgsrc(`cards/${reference.replace('c', '')}${difficultySuffix}.jpg`)
-})
-
-const scenarioDecks = computed(() => {
-  if (!props.scenario.decks) return null
-
-  return Object.entries(props.scenario.decks)
-})
-
-const transpose = (matrix: any[][]) => matrix[0].map((_col, i) => matrix.map(row => row[i]))
-
-// Removed empty rows and columns from the location layout
-const cleanLocationLayout = (locationLayout: string[]) => {
-  const labels = [...locations.value.map((location) => location.label),...enemiesAsLocations.value.map((enemy) => enemy.asSelfLocation), ...unusedLabels.value]
-
-  if(labels.length === 0) return locationLayout
-
-  const rows = locationLayout.map((r) => r.split(/\s+/).filter((c) => c !== ''))
-  const cleanedRows = rows.filter((row) => row.some(cell => labels.some(l => l === cell)))
-  const transposed = transpose(cleanedRows)
-  const cleanedCols = transposed.filter((col) => col.some(cell => labels.some(l => l === cell)))
-
-  return transpose(cleanedCols).map((row) => row.join(' '))
-}
-
-const locationStyles = computed(() => {
-  const { locationLayout } = props.scenario
-  if (!locationLayout) return null
-
-  const cleaned = locationLayout
-  return {
-    display: 'grid',
-    'grid-template-areas': cleaned.map((row) => `"${row}"`).join(' '),
-  }
-})
-
-const scenarioDeckStyles = computed(() => {
-  const { decksLayout } = props.scenario
-  return {
-    display: 'grid',
-    'grid-template-areas': decksLayout.map((row) => `"${row}"`).join(' '),
-    'grid-row-gap': '10px',
-  }
-})
-
-const activeCard = computed(() => {
-  if (!props.game.activeCard) return null
-
-  const { cardCode } = toCardContents(props.game.activeCard)
-  return imgsrc(`cards/${cardCode.replace('c', '')}.jpg`)
-})
-
-const players = computed(() => props.game.investigators)
-const playerOrder = computed(() => props.game.playerOrder)
-const discards = computed<Card[]>(() => props.scenario.discard.map(c => ({ tag: 'EncounterCard', contents: c })))
-const outOfPlayEnemies = computed(() => Object.values(props.game.outOfPlayEnemies).map(e => ({...props.game.cards[e.cardId], tokens: e.tokens})))
-const outOfPlay = computed(() => (props.scenario?.setAsideCards || []).concat(outOfPlayEnemies.value))
-const removedFromPlay = computed(() => props.game.removedFromPlay)
-const noCards = computed<Card[]>(() => [])
-
-// eslint-disable-next-line
-const showCards = reactive<RefWrapper<any>>({ ref: noCards })
-const viewingDiscard = ref(false)
-const cardRowTitle = ref("")
-
 const doShowCards = (cards: ComputedRef<Card[]>, title: string, isDiscards: boolean) => {
   cardRowTitle.value = title
   showCards.ref = cards
   viewingDiscard.value = isDiscards
 }
-
-const showOutOfPlay = () => doShowCards(outOfPlay, 'Out of Play', true)
-const showRemovedFromPlay = () => doShowCards(removedFromPlay, 'Removed from Play', true)
-const showDiscards = () => doShowCards(discards, 'Discards', true)
+const showRemovedFromPlay = () => doShowCards(removedFromPlay, t('scenario.removedFromPlay'), true)
+const showDiscards = () => doShowCards(discards, t('scenario.discards'), true)
 const hideCards = () => showCards.ref = noCards
-
-const showCardsUnderScenarioReference = () => doShowCards(cardsUnderScenarioReference, 'Cards Under Scenario Reference', false)
-
-const viewUnderScenarioReference = computed(() => `${cardsUnderScenarioReference.value.length} Cards Underneath`)
-
-const viewDiscardLabel = computed(() => pluralize('Card', discards.value.length))
-const topOfEncounterDiscard = computed(() => {
-  if (!props.scenario.discard[0]) return null
-
-  const { cardCode } = props.scenario.discard[0]
-
-  return imgsrc(`/cards/${cardCode.replace('c', '')}.jpg`)
-})
-
-const spectralEncounterDeck = computed(() => props.scenario.encounterDecks['SpectralEncounterDeck']?.[0])
-
-const spectralDiscard = computed(() => props.scenario.encounterDecks['SpectralEncounterDeck']?.[1])
-
-const topOfSpectralDiscard = computed(() => {
-  if (!spectralDiscard.value || !spectralDiscard.value[0]) return null
-
-  const { cardCode } = spectralDiscard.value[0]
-  return imgsrc(`cards/${cardCode.replace('c', '')}.jpg`)
-})
-
-const topEnemyInVoid = computed(() => Object.values(props.game.enemiesInVoid)[0])
-const activePlayerId = computed(() => props.game.activeInvestigatorId)
-
-const pursuit = computed(() => Object.values(props.game.outOfPlayEnemies).filter((enemy) =>
-  enemy.placement.tag === 'OtherPlacement' && enemy.placement.contents === 'Pursuit'
-))
-
-const globalEnemies = computed(() => Object.values(props.game.enemies).filter((enemy) =>
-  enemy.placement.tag === "OtherPlacement" && enemy.placement.contents === "Global" && enemy.asSelfLocation === null
-))
-
-const globalStories = computed(() => Object.values(props.game.stories).filter((story) =>
-  story.placement.tag === "OtherPlacement" && story.placement.contents === "Global"
-))
-
-const enemiesAsLocations = computed(() => Object.values(props.game.enemies).filter((enemy) => enemy.asSelfLocation !== null))
-
-const cardsUnderScenarioReference = computed(() => props.scenario.cardsUnderScenarioReference)
-const cardsUnderAgenda = computed(() => props.scenario.cardsUnderAgendaDeck)
-
-const cardsUnderAct = computed(() => props.scenario.cardsUnderActDeck)
-
-const cardsNextToAct = computed(() => props.scenario.cardsNextToActDeck)
-const cardsNextToAgenda = computed(() => props.scenario.cardsNextToAgendaDeck)
-
-const keys = computed(() => props.scenario.setAsideKeys)
-
-// TODO: not showing cosmos should be more specific, as there could be a cosmos location in the future?
-const locations = computed(() => Object.values(props.game.locations).
-  filter((a) => a.inFrontOf === null && a.label !== "cosmos"))
-
-const usedLabels = computed(() => locations.value.map((l) => l.label))
-const unusedLabels = computed(() => {
-  const { locationLayout, usesGrid } = props.scenario;
-  if (!locationLayout || !usesGrid) return []
-
-  return locationLayout.flatMap((row) => row.split(' ')).filter((x) => !usedLabels.value.includes(x) && x !== '.')
-})
-
-const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
-
+const showCardsUnderScenarioReference = () => doShowCards(cardsUnderScenarioReference, t('scenario.cardsUnderScenarioReference'), false)
 const unusedCanInteract = (u: string) => choices.value.findIndex((c) =>
   c.tag === "GridLabel" && c.gridLabel === u
 )
-
-const resources = computed(() => props.scenario.tokens[TokenType.Resource])
-const hasPool = computed(() => resources.value && resources.value > 0)
-
-const tarotCards = computed(() => props.scenario.tarotCards.filter((c) => c.scope.tag === 'GlobalTarot'))
-
 const tarotCardAbility = (card: TarotCard) => {
   return choices.value.findIndex((c) => {
     if (c.tag === "AbilityLabel") {
@@ -340,20 +439,45 @@ const tarotCardAbility = (card: TarotCard) => {
   })
 }
 
-const phase = computed(() => props.game.phase)
-const phaseStep = computed(() => props.game.phaseStep)
-const currentDepth = computed(() => props.scenario.counts["CurrentDepth"])
-const signOfTheGods = computed(() => props.scenario.counts["SignOfTheGods"])
-const gameOver = computed(() => props.game.gameState.tag === "IsOver")
+const victoryDisplay = computed(() => props.scenario.victoryDisplay)
+
+const showVictoryDisplay = () => doShowCards(victoryDisplay, t('scenario.victoryDisplay'), true)
+
 </script>
 
 <template>
-  <div v-if="!gameOver" id="scenario" class="scenario" :data-scenario="scenario.id">
-    <div class="scenario-body">
-      <div v-if="debug.active">
-        <button @click="debug.send(game.id, {tag: 'AddChaosToken', contents: 'BlessToken'})">Add Bless Token</button>
-        <button @click="debug.send(game.id, {tag: 'AddChaosToken', contents: 'CurseToken'})">Add Curse Token</button>
-      </div>
+  <div v-if="upgradeDeck" id="game" class="game">
+    <UpgradeDeck :game="game" :key="playerId" :playerId="playerId" @choose="choose"/>
+  </div>
+  <div v-else-if="!gameOver" id="scenario" class="scenario" :data-scenario="scenario.id">
+    <div class="scenario-body" :class="{'split-view': splitView }">
+      <Draggable v-if="showOutOfPlay || forcedShowOutOfPlay">
+        <template #handle><header><h2>{{ $t('gameBar.outOfPlay') }}</h2></header></template>
+        <div class="card-row-cards">
+          <div v-for="card in outOfPlay" :key="card.id" class="card-row-card">
+            <CardView :game="game" :card="card" :playerId="playerId" @choose="$emit('choose', $event)" />
+          </div>
+          <Enemy
+            v-for="enemy in outOfPlayEnemies"
+            :key="enemy.id"
+            :enemy="enemy"
+            :game="game"
+            :playerId="playerId"
+            @choose="choose"
+          />
+        </div>
+        <button v-if="!forcedShowOutOfPlay" class="close button" @click="showOutOfPlay = false">{{$t('close')}}</button>
+      </Draggable>
+      <Draggable v-if="showChaosBag">
+        <template #handle><header><h2>{{$t('gameBar.chaosBag')}}</h2></header></template>
+        <ChaosBag :game="game" :skillTest="null" :chaosBag="scenario.chaosBag" :playerId="playerId" @choose="choose" />
+        <div v-if="debug.active" class="buttons buttons-row">
+          <button class="button blessed" @click="debug.send(game.id, {tag: 'AddChaosToken', contents: 'BlessToken'})">{{$t('gameBar.add')}} <span class="bless-icon"></span></button>
+          <button class="button cursed" @click="debug.send(game.id, {tag: 'AddChaosToken', contents: 'CurseToken'})">{{$t('gameBar.add')}} <span class="curse-icon"></span></button>
+          <button class="button frost" @click="debug.send(game.id, {tag: 'AddChaosToken', contents: 'FrostToken'})">{{$t('gameBar.add')}} <span class="frost-icon"></span></button>
+        </div>
+        <button class="button" @click="showChaosBag = false">{{$t('close')}}</button>
+      </Draggable>
       <CardRow
         v-if="showCards.ref.length > 0"
         :game="game"
@@ -373,7 +497,7 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
             :class="{ [tarotCard.facing]: true, 'can-interact': tarotCardAbility(tarotCard) !== -1 }"
             @click="choose(tarotCardAbility(tarotCard))"
           >
-            <img :src="imgsrc(`tarot/${tarotCardImage(tarotCard)}`)" class="card tarot-card" />
+            <img :src="imgsrc(`tarot/${tarotCardImage(tarotCard)}`)" :class="tarotCard.facing" class="card tarot-card" />
           </div>
         </div>
         <div v-if="topEnemyInVoid">
@@ -389,20 +513,24 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
           :key="scenarioDeck[0]"
           v-for="[,scenarioDeck] in scenarioDecks"
         />
-        <VictoryDisplay :game="game" :victoryDisplay="scenario.victoryDisplay" @show="doShowCards" :playerId="playerId" />
+        <VictoryDisplay :game="game" :victoryDisplay="victoryDisplay" @show="showVictoryDisplay" @choose="choose" :playerId="playerId" />
         <div class="scenario-encounter-decks">
 
           <div v-if="topOfEncounterDiscard" class="discard" style="grid-area: encounterDiscard">
-            <img
-              :src="topOfEncounterDiscard"
-              class="card"
-            />
+            <div class="discard-card">
+              <img
+                :src="topOfEncounterDiscard"
+                class="card"
+              />
+            </div>
 
 
-            <button v-if="discards.length > 0" class="view-discard-button" @click="showDiscards">{{viewDiscardLabel}}</button>
-            <template v-if="debug.active">
-              <button @click="debug.send(game.id, {tag: 'ShuffleEncounterDiscardBackIn'})">Shuffle Back In</button>
-            </template>
+            <div v-if="discards.length > 0" class="buttons">
+              <button v-if="discards.length > 0" class="view-discard-button" @click="showDiscards">{{viewDiscardLabel}}</button>
+              <template v-if="debug.active">
+                <button @click="debug.send(game.id, {tag: 'ShuffleEncounterDiscardBackIn'})">Shuffle Back In</button>
+              </template>
+            </div>
           </div>
 
           <EncounterDeck
@@ -488,12 +616,18 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
         />
 
         <div class="scenario-guide">
-          <img
-            class="card"
-            :src="scenarioGuide"
-          />
-          <PoolItem class="depth" v-if="currentDepth" type="resource" :amount="currentDepth" />
-          <PoolItem class="signOfTheGods" v-if="signOfTheGods" type="resource" :amount="signOfTheGods" />
+          <div class="scenario-guide-card">
+            <img
+              class="card"
+              :src="scenarioGuide"
+              :data-spent-keys="JSON.stringify(spentKeys)"
+            />
+            <PoolItem class="depth" v-if="currentDepth" type="resource" :amount="currentDepth" />
+            <div class="spent-keys" v-if="spentKeys.length > 0">
+              <Key v-for="key in spentKeys" :key="key" :name="key" />
+            </div>
+            <PoolItem class="signOfTheGods" v-if="signOfTheGods" type="resource" :amount="signOfTheGods" />
+          </div>
           <div class="pool" v-if="hasPool">
             <PoolItem v-if="resources && resources > 0" type="resource" :amount="resources" />
           </div>
@@ -513,13 +647,12 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
         </SkillTest>
 
         <button v-if="removedFromPlay.length > 0" class="view-removed-from-play-button" @click="showRemovedFromPlay"><font-awesome-icon icon="eye" /> Removed from Play</button>
-
-        <button v-if="outOfPlay.length > 0" class="view-out-of-play-button" @click="showOutOfPlay"><font-awesome-icon icon="eye" /> Out of Play</button>
       </div>
 
-      <Connections :game="game" :playerId="playerId" />
 
       <div class="location-cards-container">
+        <Connections :game="game" :playerId="playerId" />
+        <input v-model="locationsZoom" type="range" min="1" max="3" step="0.25" class="zoomer" />
         <transition-group name="map" tag="div" ref="locationMap" class="location-cards" :style="locationStyles" @before-leave="beforeLeave">
           <Location
             v-for="location in locations"
@@ -542,6 +675,13 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
             :style="{ 'grid-area': enemy.asSelfLocation, 'justify-self': 'center', 'align-items': 'center' }"
             @choose="choose"
           />
+
+          <template v-if="barriers">
+            <div v-for="[area, amount] in Object.entries(barriers)" :key="area" class="barrier" :class="{ vertical: isVertical(area) }" :style="{ 'grid-area': `barrier-${area}` }">
+              <img v-for="n in amount" :key="n" :src="imgsrc('resource.png')" />
+              <button v-if="debug.active && (amount as number > 0)" @click="debug.send(game.id, {tag: 'ScenarioCountDecrementBy', contents: [{ 'tag': 'Barriers', 'contents': area.split('--') }, 1]})">x</button>
+            </div>
+          </template>
 
           <template v-if="scenario.usesGrid">
             <template v-for="u in unusedLabels" :key="u">
@@ -571,49 +711,49 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
     <div class="phases">
       <div class="phase" :class="{ 'active-phase': phase == 'MythosPhase' }">
         <div class="subphases">
-          <div v-tooltip="'Round begins. Mythos phase begins.'" :class="{'current': phaseStep?.contents === 'MythosPhaseBeginsStep' }">1.1</div>
-          <div v-tooltip="'Place 1 doom on the current agenda.'" :class="{'current': phaseStep?.contents === 'PlaceDoomOnAgendaStep'}">1.2</div>
-          <div v-tooltip="'Check doom threshold.'" :class="{'current': phaseStep?.contents === 'CheckDoomThresholdStep'}">1.3</div>
-          <div v-tooltip="'Each investigator draws 1 encounter card.'" :class="{'current': phaseStep?.contents === 'EachInvestigatorDrawsEncounterCardStep'}">1.4</div>
-          <div v-tooltip="'PLAYER WINDOW'" :class="{'current': phaseStep?.contents === 'MythosPhaseWindow'}"><i class="fast-icon" /></div>
-          <div v-tooltip="'Mythos phase ends.'" :class="{'current': phaseStep?.contents === 'MythosPhaseEndsStep'}">1.5</div>
+          <div v-tooltip.left="$t('phase.mythosPhaseBeginsStep')" :class="{'current': phaseStep?.contents === 'MythosPhaseBeginsStep' }">1.1</div>
+          <div v-tooltip.left="$t('phase.placeDoomOnAgendaStep')" :class="{'current': phaseStep?.contents === 'PlaceDoomOnAgendaStep'}">1.2</div>
+          <div v-tooltip.left="$t('phase.checkDoomThresholdStep')" :class="{'current': phaseStep?.contents === 'CheckDoomThresholdStep'}">1.3</div>
+          <div v-tooltip.left="$t('phase.eachInvestigatorDrawsEncounterCardStep')" :class="{'current': phaseStep?.contents === 'EachInvestigatorDrawsEncounterCardStep'}">1.4</div>
+          <div v-tooltip.left="$t('phase.playerWindow')" :class="{'current': phaseStep?.contents === 'MythosPhaseWindow'}"><i class="fast-icon" /></div>
+          <div v-tooltip.left="$t('phase.mythosPhaseEndsStep')" :class="{'current': phaseStep?.contents === 'MythosPhaseEndsStep'}">1.5</div>
         </div>
-        <div>Mythos</div>
+        <div>{{$t('phase.mythosPhase')}}</div>
       </div>
       <div class="phase" :class="{ 'active-phase': phase == 'InvestigationPhase' }">
         <div class="subphases">
-          <div v-tooltip="'Investigation phase begins.'" :class="{'current': phaseStep?.contents === 'InvestigationPhaseBeginsStep'}">2.1</div>
-          <div v-tooltip="'PLAYER WINDOW'" :class="{'current': phaseStep?.contents === 'InvestigationPhaseBeginsWindow'}"><i class="fast-icon" /></div>
-          <div v-tooltip="'Next investigator\'s turn begins.'" :class="{'current': phaseStep?.contents === 'NextInvestigatorsTurnBeginsStep'}">2.2</div>
-          <div v-tooltip="'PLAYER WINDOW'" :class="{'current': phaseStep?.contents === 'NextInvestigatorsTurnBeginsWindow'}"><i class="fast-icon" /></div>
-          <div v-tooltip="'Active investigator may take an action, if able. If an action was taken, return to previous player window. If no action was taken, proceed to 2.2.2.'" :class="{'current': phaseStep?.contents === 'InvestigatorTakesActionStep'}">2.2.1</div>
-          <div v-tooltip="'Investigator\'s turn ends. If an investigator has not yet taken a turn this phase, return to 2.2. If each investigator has taken a turn this phase, proceed to 2.3.'" :class="{'current': phaseStep?.contents === 'InvestigatorsTurnEndsStep'}">2.2.2</div>
-          <div v-tooltip="'Investigation phase ends.'" :class="{'current': phaseStep?.contents === 'InvestigationPhaseEndsStep'}">2.3</div>
+          <div v-tooltip.left="$t('phase.investigationPhaseBeginsStep')" :class="{'current': phaseStep?.contents === 'InvestigationPhaseBeginsStep'}">2.1</div>
+          <div v-tooltip.left="$t('phase.playerWindow')" :class="{'current': phaseStep?.contents === 'InvestigationPhaseBeginsWindow'}"><i class="fast-icon" /></div>
+          <div v-tooltip.left="$t('phase.nextInvestigatorsTurnBeginsStep')" :class="{'current': phaseStep?.contents === 'NextInvestigatorsTurnBeginsStep'}">2.2</div>
+          <div v-tooltip.left="$t('phase.playerWindow')" :class="{'current': phaseStep?.contents === 'NextInvestigatorsTurnBeginsWindow'}"><i class="fast-icon" /></div>
+          <div v-tooltip.left="$t('phase.investigatorTakesActionStep')" :class="{'current': phaseStep?.contents === 'InvestigatorTakesActionStep'}">2.2.1</div>
+          <div v-tooltip.left="$t('phase.investigatorsTurnEndsStep')" :class="{'current': phaseStep?.contents === 'InvestigatorsTurnEndsStep'}">2.2.2</div>
+          <div v-tooltip.left="$t('phase.investigationPhaseEndsStep')" :class="{'current': phaseStep?.contents === 'InvestigationPhaseEndsStep'}">2.3</div>
         </div>
-        <div>Investigation</div>
+        <div>{{$t('phase.investigationPhase')}}</div>
       </div>
       <div class="phase" :class="{ 'active-phase': phase == 'EnemyPhase' }">
         <div class="subphases">
-          <div v-tooltip="'Enemy phase begins.'" :class="{'current': phaseStep?.contents === 'EnemyPhaseBeginsStep'}">3.1</div>
-          <div v-tooltip="'Hunter enemies move.'" :class="{'current': phaseStep?.contents === 'HunterEnemiesMoveStep'}">3.2</div>
-          <div v-tooltip="'PLAYER WINDOW'" :class="{'current': phaseStep?.contents === 'ResolveAttacksWindow'}"><i class="fast-icon" /></div>
-          <div v-tooltip="'Next investigator resolves engaged enemy attacks. If an investigator has not yet resolved enemy attacks this phase, return to previous player window. After final investigator resolves engaged enemy attacks, proceed to next player window.'" :class="{'current': phaseStep?.contents === 'ResolveAttacksStep'}">3.3</div>
-          <div v-tooltip="'PLAYER WINDOW'" :class="{'current': phaseStep?.contents === 'AfterResolveAttacksWindow'}"><i class="fast-icon" /></div>
-          <div v-tooltip="'Enemy phase ends.'" :class="{'current': phaseStep?.contents === 'EnemyPhaseEndsStep'}">3.4</div>
-        </div>
-        <div>Enemy</div>
+          <div v-tooltip.left="$t('phase.enemyPhaseBeginsStep')" :class="{'current': phaseStep?.contents === 'EnemyPhaseBeginsStep'}">3.1</div>
+          <div v-tooltip.left="$t('phase.hunterEnemiesMoveStep')" :class="{'current': phaseStep?.contents === 'HunterEnemiesMoveStep'}">3.2</div>
+          <div v-tooltip.left="$t('phase.playerWindow')" :class="{'current': phaseStep?.contents === 'ResolveAttacksWindow'}"><i class="fast-icon" /></div>
+          <div v-tooltip.left="$t('phase.resolveAttacksStep')" :class="{'current': phaseStep?.contents === 'ResolveAttacksStep'}">3.3</div>
+          <div v-tooltip.left="$t('phase.playerWindow')" :class="{'current': phaseStep?.contents === 'AfterResolveAttacksWindow'}"><i class="fast-icon" /></div>
+          <div v-tooltip.left="$t('phase.enemyPhaseEndsStep')" :class="{'current': phaseStep?.contents === 'EnemyPhaseEndsStep'}">3.4</div>
+        </div>  
+        <div>{{$t('phase.enemyPhase')}}</div>
       </div>
       <div class="phase" :class="{ 'active-phase': phase == 'UpkeepPhase' }">
         <div class="subphases">
-          <div v-tooltip="'Upkeep phase begins.'" :class="{'current': phaseStep?.contents === 'UpkeepPhaseBeginsStep'}">4.1</div>
-          <div v-tooltip="'PLAYER WINDOW'" :class="{'current': phaseStep?.contents === 'UpkeepPhaseBeginsWindow'}"><i class="fast-icon" /></div>
-          <div v-tooltip="'Reset actions.'" :class="{'current': phaseStep?.contents === 'ResetActionsStep'}">4.2</div>
-          <div v-tooltip="'Ready each exhausted card.'" :class="{'current': phaseStep?.contents === 'ReadyExhaustedStep'}">4.3</div>
-          <div v-tooltip="'Each investigator draws 1 card and gains 1 resource.'" :class="{'current': phaseStep?.contents === 'DrawCardAndGainResourceStep'}">4.4</div>
-          <div v-tooltip="'Each investigator checks hand size.'" :class="{'current': phaseStep?.contents === 'CheckHandSizeStep'}">4.5</div>
-          <div v-tooltip="'Upkeep phase ends. Round ends.'" :class="{'current': phaseStep?.contents === 'UpkeepPhaseEndsStep'}">4.6</div>
+          <div v-tooltip.left="$t('phase.upkeepPhaseBeginsStep')" :class="{'current': phaseStep?.contents === 'UpkeepPhaseBeginsStep'}">4.1</div>
+          <div v-tooltip.left="$t('phase.playerWindow')" :class="{'current': phaseStep?.contents === 'UpkeepPhaseBeginsWindow'}"><i class="fast-icon" /></div>
+          <div v-tooltip.left="$t('phase.resetActionsStep')" :class="{'current': phaseStep?.contents === 'ResetActionsStep'}">4.2</div>
+          <div v-tooltip.left="$t('phase.readyExhaustedStep')" :class="{'current': phaseStep?.contents === 'ReadyExhaustedStep'}">4.3</div>
+          <div v-tooltip.left="$t('phase.drawCardAndGainResourceStep')" :class="{'current': phaseStep?.contents === 'DrawCardAndGainResourceStep'}">4.4</div>
+          <div v-tooltip.left="$t('phase.checkHandSizeStep')" :class="{'current': phaseStep?.contents === 'CheckHandSizeStep'}">4.5</div>
+          <div v-tooltip.left="$t('phase.upkeepPhaseEndsStep')" :class="{'current': phaseStep?.contents === 'UpkeepPhaseEndsStep'}">4.6</div>
         </div>
-        <div>Upkeep</div>
+        <div>{{$t('phase.upkeepPhase')}}</div>
       </div>
     </div>
   </div>
@@ -621,15 +761,17 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
 
 <style scoped lang="scss">
 .card {
-  /*box-shadow: 0 3px 6px rgba(0,0,0,0.23), 0 3px 6px rgba(0,0,0,0.53);*/
-  border-radius: 6px;
-  margin: 2px;
-  width: $card-width;
+  border-radius: 5px;
+  width: var(--card-width);
+  height: auto;
+  aspect-ratio: var(--card-aspect);
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
 }
 
 .card--sideways {
   width: auto;
-  height: $card-width * 2;
+  height: calc(var(--card-width) * 2);
+  aspect-ratio: var(--card-sideways-ratio);
 }
 
 .scenario-cards {
@@ -637,18 +779,11 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   align-self: center;
   align-items: flex-start;
   justify-content: center;
-  padding-bottom: 10px;
+  padding: 10px 0;
   position: relative;
   width: 100%;
-  gap: 2px;
-  background: darken(#282A36, 2%);
+  gap: 10px;
   z-index: -2;
-}
-
-.clue--can-investigate {
-  border: 3px solid #ff00ff;
-  border-radius: 100px;
-  cursor: pointer;
 }
 
 .clue {
@@ -673,34 +808,89 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   }
 }
 
+@mixin splitView {
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: 1fr 3fr;
+    padding-bottom: 10px;
+    row-gap: 30px;
+
+    &:deep(.player-info) {
+      grid-column: 1;
+      grid-row: 2 / 5;
+      display: flex;
+      flex-direction: column;
+
+      .tab {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        border-top-right-radius: 10px;
+        overflow: hidden;
+      }
+
+      .player-cards {
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        border-top-right-radius: 10px;
+      }
+
+      .player {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+        flex: 1;
+      }
+    }
+
+    .scenario-cards {
+      grid-column: 1;
+      grid-row: 1 / 2;
+      flex-wrap: wrap;
+    }
+
+    .location-cards-container {
+      grid-column: 2;
+      grid-row: 1 / 5;
+    }
+}
+
 .scenario-body {
   display: flex;
   flex-direction: column;
-  background-image: linear-gradient(darken(#E5EAEC, 10), #E5EAEC);
-
-  @media (prefers-color-scheme: dark) {
-    background-image: linear-gradient(#282A36, darken(#282A36, 2));
-  }
-
+  background: var(--background);
   z-index: 1;
   width: 100%;
-  height: calc(100vh - 40px);
   flex: 1;
+  inset: 0;
+
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+
+  &.split-view {
+    @include splitView;
+  }
 }
 
 .location-cards {
   display: flex;
-  width: fit-content;
-  height: fit-content;
+  width: 100%;
+  height: 100%;
   margin: auto;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  place-content: safe center;
 }
 
 .location-cards-container {
   display: flex;
+  overflow: hidden;
   flex: 1;
-  overflow-y: auto;
   padding-top: 32px;
   padding-bottom: 32px;
+  position: relative;
 }
 
 .portrait {
@@ -709,11 +899,11 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
 
 .portrait--can-move {
   cursor: pointer;
-  border: 3px solid $select;
+  border: 3px solid var(--select);
 }
 
 .location--can-move-to {
-  border: 3px solid $select;
+  border: 3px solid var(--select);
   cursor: pointer;
 }
 
@@ -726,21 +916,33 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: 5px;
   &:deep(.card) {
     margin: 0;
     box-shadow: none;
+  }
+  .buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+.discard-card {
+  position: relative;
+  width: fit-content;
+  line-height: 0;
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
+  .card {
+    box-shadow: unset;
   }
   &::after {
     border-radius: 6px;
     pointer-events: none;
     content: "";
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background-color: #FFF;
-    /* background-image: linear-gradient(120deg, #eaee44, #33d0ff); */
     opacity: .85;
     mix-blend-mode: saturation;
   }
@@ -759,7 +961,7 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   right: 0px;
   border: 0;
   color: white;
-  background: #a5b5bc;
+  background: var(--background-mid);
   font-size: 1.2em;
   padding: 5px 15px;
 }
@@ -804,11 +1006,13 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
 }
 
 .subphases {
+  position: relative;
   font-size: 0.7em;
   flex: 1;
   writing-mode: lr-tb;
   text-orientation: revert;
   display: flex;
+  min-width: min-content;
   flex-direction: column;
   height: 100%;
   justify-content: space-around;
@@ -822,7 +1026,6 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   > div {
     width: 100%;
     padding: 0 5px;
-    box-sizing: border-box;
     display: flex;
     justify-content: center;
     flex: 1;
@@ -832,7 +1035,7 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
     }
   }
   > div:nth-of-type(2n) {
-    background: lighten(#484E51, 10%);
+    background: #5a6062;
     &:hover {
       background: rgba(0, 0, 0, 0.5);
     }
@@ -843,6 +1046,7 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   display: flex;
   user-select: none;
   width: 100%;
+  height: 100%;
   flex: 1;
 }
 
@@ -855,16 +1059,19 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   display: flex;
   flex-direction: column;
   position: relative;
+
   .depth {
     position: absolute;
     bottom: 0;
     right: 0;
+    pointer-events: none;
   }
 
   .signOfTheGods {
     position: absolute;
     bottom: 0;
     right: 0;
+    pointer-events: none;
   }
 }
 
@@ -881,12 +1088,13 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
 }
 
 .scenario-decks {
-  gap: 2px;
+  gap: 5px;
 }
 
 .scenario-encounter-decks {
   display: grid;
   grid-template: "encounterDiscard encounterDeck" "spectralDiscard spectralDeck";
+  gap: 10px;
 }
 
 .empty-grid-position {
@@ -895,9 +1103,8 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
 }
 
 .can-interact {
-  aspect-ratio: 5 / 7;
   background: rgba(0, 0, 0, 0.5);
-  border: 2px solid $select;
+  outline: 2px solid var(--select);
   cursor: pointer;
 }
 
@@ -908,17 +1115,17 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   display: flex;
   align-self: flex-start;
   align-items: flex-end;
+  pointer-events: none;
+
   * {
     transform: scale(0.6);
   }
-
-  pointer-events: none;
 }
 
 .tarot-card {
-  width: $card-width;
-  aspect-ratio: 8 / 14;
-
+  width: var(--card-width);
+  aspect-ratio: var(--card-tarot-aspect);
+  margin: 0;
 }
 
 .tarot-card-choices {
@@ -936,29 +1143,11 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
   padding: 10px;
 }
 
-.tarot-card {
-  margin: 0;
-}
-
 .tarot-card-container {
   transition: transform 0.5s ease-in-out;
   display:flex;
   position: relative;
-  &:before {
-    z-index: -1;
-    background: black;
-    filter: blur(3px);
-    position: absolute;
-    inset: 10px 5px;
-    content: "";
-    transform: translate(0, 12px);
-    transition: inherit;
-  }
-
-  .can-interact {
-    aspect-ratio: 8 / 14;
-    box-sizing: border-box;
-  }
+  border-radius: 5px;
 
   &.Reversed {
     transform: rotateZ(180deg);
@@ -997,7 +1186,114 @@ const gameOver = computed(() => props.game.gameState.tag === "IsOver")
 
 // We lower the margin so things line up a bit better.
 [data-scenario='c06333'] .location-cards:deep(.location-container) {
-margin: 20px !important;
+  margin: 20px !important;
 }
 
+.buttons-row {
+  display: flex;
+  flex-direction: row;
+
+  .blessed {
+    background-color: var(--blessed);
+  }
+
+  .cursed {
+    background-color: var(--cursed);
+  }
+
+  .frost {
+    background-color: var(--frost);
+  }
+
+}
+
+.button {
+  padding: 5px 10px;
+  font-size: 1em;
+}
+
+.card-row-cards {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  gap: 2px;
+  flex-wrap: wrap;
+
+  .card-row-card {
+    position: relative;
+  }
+}
+
+.location {
+  &:hover {
+    z-index: 100;
+  }
+}
+
+.button{
+  border: 0;
+  margin-top: 2px;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 4px;
+  background-color: #555;
+  z-index: 1000;
+  width: 100%;
+  min-width: max-content;
+}
+
+.keys {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+}
+
+.scenario-guide-card {
+  position: relative;
+}
+
+.spent-keys {
+  pointer-events: none;
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  position: absolute;
+  bottom: 20px;
+  inset-inline: 5px;
+  margin-inline: auto;
+
+  &:deep(img) {
+    width: 10px;
+  }
+}
+
+.zoomer {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+}
+
+.barrier {
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--card-width) / 4);
+  height: calc(var(--card-width) / var(--card-aspect));
+  align-self: flex-start;
+  justify-content: center;
+
+  img {
+    width: 20px;
+  }
+
+  &.vertical {
+    flex-direction: row;
+    height: 40px;
+    width: 100px;
+    justify-self: center;
+    img {
+      height: 20px;
+    }
+  }
+}
 </style>

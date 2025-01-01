@@ -1,7 +1,17 @@
 .PHONY: api.watch
 api.watch:
 	cd arkham-api && \
-	stack build --test --no-run-tests --fast arkham-api \
+	stack build --test --no-run-tests --pedantic --fast arkham-api \
+	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
+	  --interleaved-output \
+	  --file-watch \
+		$(EXTRA_STACK_FLAGS) \
+	  --exec "bash -c \"pkill arkham-api; DEVELOPMENT=true stack exec arkham-api &\"" \
+
+.PHONY: api.watch.test
+api.watch.test:
+	cd arkham-api && \
+	stack build --test --pedantic --fast arkham-api \
 	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
 	  --interleaved-output \
 	  --file-watch \
@@ -20,25 +30,16 @@ api.prof:
 	  --interleaved-output \
 	  --file-watch \
 		$(EXTRA_STACK_FLAGS) \
-	  --exec "bash -c \"pkill arkham-api; DEVELOPMENT=true stack exec --profile -- arkham-api +RTS -p -s -l -hT &\"" \
+	  --exec "bash -c \"pkill arkham-api; DEVELOPMENT=true stack exec --profile -- arkham-api +RTS -p &\"" \
 
 ## Generate a tags file for source-code navigation
 .PHONY: tags
 tags:
 	stack exec -- fast-tags --qualified -Rv --nomerge .
 
-.PHONY: core
-core:
-	cd arkham-core && \
-	stack build --pedantic --fast arkham-core \
-	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
-	  --interleaved-output \
-	  --file-watch \
-		$(EXTRA_STACK_FLAGS)
-
-.PHONY: core.ghci
-core.ghci:
-	stack ghci --test --no-run-tests arkham-core:lib \
+.PHONY: ghci
+ghci:
+	stack ghci arkham-api:exe:arkham-api --test --no-run-tests \
 	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
 	  --interleaved-output \
 		$(EXTRA_STACK_FLAGS)
@@ -54,7 +55,7 @@ validate:
 .PHONY: validate.watch
 validate.watch:
 	cd validate && \
-	stack build --test --no-run-tests --fast validate \
+	stack build --test --no-run-tests --pedantic --fast validate \
 	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
 	  --interleaved-output \
 		--file-watch \
@@ -63,8 +64,8 @@ validate.watch:
 
 .PHONY: revalidate
 revalidate:
-	cd arkham-core && \
-	stack build --pedantic --fast arkham-core \
+	cd arkham-api && \
+	stack build --test --no-run-tests --pedantic --fast arkham-api \
 	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
 	  --interleaved-output \
 		$(EXTRA_STACK_FLAGS)
@@ -72,8 +73,8 @@ revalidate:
 
 .PHONY: test
 test:
-	cd arkham-core && \
-	stack build --pedantic --test --fast arkham-core \
+	cd arkham-api && \
+	stack build --pedantic --test --fast arkham-api \
 	  --ghc-options "-DDEVELOPMENT $(GHC_OPTIONS)" \
 	  --interleaved-output \
 	  --file-watch \

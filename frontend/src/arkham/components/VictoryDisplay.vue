@@ -1,8 +1,12 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import type { Game } from '@/arkham/types/Game';
 import type { Card } from '@/arkham/types/Card';
 import CardView from '@/arkham/components/Card.vue'
+import Enemy from '@/arkham/components/Enemy.vue';
+import { pluralize } from '@/arkham/helpers';
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
 export interface Props {
   game: Game
@@ -11,20 +15,36 @@ export interface Props {
 }
 
 const props = defineProps<Props>()
-const emit = defineEmits(['show'])
-const reference = ref(props.victoryDisplay)
+const emit = defineEmits(['show', 'choose'])
+
+const choose = async (idx: number) => emit('choose', idx)
+
+const enemiesInVictoryDisplay = computed(() => {
+  return Object.values(props.game.enemies).filter((e) => e.placement.tag === 'OutOfPlay' && (['VictoryDisplayZone'] as string[]).includes(e.placement.contents))
+})
 const topOfVictoryDisplay = computed(() => props.victoryDisplay[0])
 
-const viewVictoryDisplayLabel = computed(() => `${props.victoryDisplay.length} Card${props.victoryDisplay.length === 1 ? '' : 's'}`)
-
-const showVictoryDisplay = () => emit('show', reference, 'Victory Display', true)
+const viewVictoryDisplayLabel = computed(() => pluralize(t('scenario.discardCard'), props.victoryDisplay.length))
+const showVictoryDisplay = () => emit('show')
 </script>
-
+i
 <template>
-  <div v-if="topOfVictoryDisplay" class="victory-display">
-    <CardView :game="game" :card="topOfVictoryDisplay" :playerId="playerId" />
+  <div v-if="topOfVictoryDisplay || enemiesInVictoryDisplay.length > 0" class="victory-display">
+    <div v-if="topOfVictoryDisplay" class="victory-display-card">
+      <CardView :game="game" :card="topOfVictoryDisplay" :playerId="playerId" />
 
-    <button @click="showVictoryDisplay">{{viewVictoryDisplayLabel}}</button>
+    </div>
+
+    <Enemy
+      v-for="enemy in enemiesInVictoryDisplay"
+      :enemy="enemy"
+      :game="game"
+      :playerId="playerId"
+      @choose="choose"
+    />
+
+
+    <button v-if="topOfVictoryDisplay" @click="showVictoryDisplay">{{viewVictoryDisplayLabel}}</button>
   </div>
 </template>
 
@@ -32,24 +52,33 @@ const showVictoryDisplay = () => emit('show', reference, 'Victory Display', true
 .card {
   width: 100px;
   border-radius: 6px;
-  margin: 2px;
+  box-shadow: unset;
 }
 
 .victory-display {
-  height: 100%;
-  position: relative;
   display: flex;
   flex-direction: column;
+  gap: 5px;
+
+  &:deep(.card) {
+    box-shadow: unset;
+    margin: 0;
+  }
+}
+
+.victory-display-card {
+  position: relative;
+  width: fit-content;
+  line-height: 0;
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
+
   &::after {
+    border-radius: 6px;
     pointer-events: none;
     content: "";
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background-color: #FFF;
-    /* background-image: linear-gradient(120deg, #eaee44, #33d0ff); */
     opacity: .85;
     mix-blend-mode: saturation;
   }

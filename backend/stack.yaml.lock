@@ -15,9 +15,144 @@ packages:
     version: 1.2.0.1
   original:
     url: https://github.com/halogenandtoast/monad-validate/archive/e5f36d4a82875c09c6000fed8f8ced50e21b75ce.tar.gz
+- completed:
+    hackage: mailtrap-0.1.2.1@sha256:fb9e75649e67c99ced2f8bf64d4005f7713328c0981449fcf5d22dfdba4da533,1017
+    pantry-tree:
+      sha256: 9525f3941a153f912a099be29ae7807be06d5c8fa1c40678a0e2539a6f36f528
+      size: 276
+  original:
+    hackage: mailtrap-0.1.2.1
+- completed:
+    name: amazonka
+    pantry-tree:
+      sha256: fc1bb41150c88a2920d12a058578ad11d827fa43b16274391015260b2fe8c56d
+      size: 1528
+    sha256: 2383a31782b75b13f52b2032b53a03d0e969eb4f075649868d48817a0765915f
+    size: 34732929
+    subdir: lib/amazonka
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+    version: '2.0'
+  original:
+    subdir: lib/amazonka
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+- completed:
+    name: amazonka-core
+    pantry-tree:
+      sha256: e560d220c73068da280e8532d27f4cee341c2c05efd2f5d5b1b0336cb24ccb1b
+      size: 3222
+    sha256: 2383a31782b75b13f52b2032b53a03d0e969eb4f075649868d48817a0765915f
+    size: 34732929
+    subdir: lib/amazonka-core
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+    version: '2.0'
+  original:
+    subdir: lib/amazonka-core
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+- completed:
+    name: amazonka-sso
+    pantry-tree:
+      sha256: f8897d82072d662605f60dc3d18e921c04bbb337b5d7caaeaece36fc8aee7fb9
+      size: 1817
+    sha256: 2383a31782b75b13f52b2032b53a03d0e969eb4f075649868d48817a0765915f
+    size: 34732929
+    subdir: lib/services/amazonka-sso
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+    version: '2.0'
+  original:
+    subdir: lib/services/amazonka-sso
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+- completed:
+    name: amazonka-sts
+    pantry-tree:
+      sha256: b2a18c0a04c999f9f32e114ad94bf76a89e463dbb16063ebf0899ee28808f898
+      size: 2880
+    sha256: 2383a31782b75b13f52b2032b53a03d0e969eb4f075649868d48817a0765915f
+    size: 34732929
+    subdir: lib/services/amazonka-sts
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+    version: '2.0'
+  original:
+    subdir: lib/services/amazonka-sts
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+- completed:
+    name: amazonka-s3
+    pantry-tree:
+      sha256: 50bb47db3771d94ee26711bad9d91b1dc32e6466a9a580e9333af434728052b1
+      size: 38690
+    sha256: 2383a31782b75b13f52b2032b53a03d0e969eb4f075649868d48817a0765915f
+    size: 34732929
+    subdir: lib/services/amazonka-s3
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+    version: '2.0'
+  original:
+    subdir: lib/services/amazonka-s3
+    url: https://github.com/brendanhay/amazonka/archive/4873cc451113147d071721c97704ac648d71e9ee.tar.gz
+- completed:
+    hackage: jwt-0.11.0@sha256:0602735ee4093c6c5bc918461855bcd55499099363bad34eb7a227aeef3cde29,4265
+    pantry-tree:
+      sha256: 0b3155d79cc7d44285762b2012debe8ec70ac377163a8e5f29581bacaf50179e
+      size: 1029
+  original:
+    hackage: jwt-0.11.0@sha256:0602735ee4093c6c5bc918461855bcd55499099363bad34eb7a227aeef3cde29,4265
+- completed:
+    hackage: cryptostore-0.3.1.0@sha256:ce4762361b509d1719b5d500604a5a1f2d75c2c53f4fe75f7c4ef2faec4f8352,4219
+    pantry-tree:
+      sha256: afc133eaba1d8645e8df28fd28beddc8dffa7e182ac91f43da8922b8507c93d1
+      size: 8529
+  original:
+    hackage: cryptostore-0.3.1.0@sha256:ce4762361b509d1719b5d500604a5a1f2d75c2c53f4fe75f7c4ef2faec4f8352,4219
+- completed:
+    hackage: x509-1.7.7@sha256:90eef2d745a654146fc1c325e035eaddac531e4d2145d4bc1dcf4b8fad439d34,2276
+    pantry-tree:
+      sha256: d81ffd09633c0417bcedbfc29f870cc843ec0750edd2f73c8fd60a5e5df278d2
+      size: 1124
+  original:
+    hackage: x509-1.7.7@sha256:90eef2d745a654146fc1c325e035eaddac531e4d2145d4bc1dcf4b8fad439d34,2276
+- completed:
+    hackage: x509-store-1.6.9@sha256:1f1abeab5bacf1407b920d0f34f4c35a5ad450ff0d8121cd3dc76460f81e711d,1716
+    pantry-tree:
+      sha256: 9fc5a6a997af3569c79d5062534cc9836721b39df86bef56308f209164ab500d
+      size: 398
+  original:
+    hackage: x509-store-1.6.9@sha256:1f1abeab5bacf1407b920d0f34f4c35a5ad450ff0d8121cd3dc76460f81e711d,1716
+- completed:
+    hackage: x509-validation-1.6.12@sha256:4f4af20ec77f02c042ecd4726c195bb0e0b694b336de81e7bd4515b2917bd9bc,2169
+    pantry-tree:
+      sha256: f95c21aa9671b10f9384b89c018874246f68220b63266172b47a747b62695e23
+      size: 631
+  original:
+    hackage: x509-validation-1.6.12@sha256:4f4af20ec77f02c042ecd4726c195bb0e0b694b336de81e7bd4515b2917bd9bc,2169
+- completed:
+    hackage: monoidal-containers-0.6.5.0@sha256:ff06e22c520b540dbf3bede0df723810a9d144ecb92e8d97845465fac86b0fc1,2247
+    pantry-tree:
+      sha256: ede05b02adb8c33dfecfc6f225b31b84584f975dfe2304f991637bd536339cb9
+      size: 569
+  original:
+    hackage: monoidal-containers-0.6.5.0@sha256:ff06e22c520b540dbf3bede0df723810a9d144ecb92e8d97845465fac86b0fc1,2247
+- completed:
+    hackage: websockets-0.13.0.0@sha256:d59873dce91721d398d578f51c49b71b8fb352d8571acf7a8bd5bebf1333d2f2,7817
+    pantry-tree:
+      sha256: daf51e2913dca006e96a3774484c6d7870dda157022707ec903577301ddbbb0f
+      size: 2736
+  original:
+    hackage: websockets-0.13.0.0@sha256:d59873dce91721d398d578f51c49b71b8fb352d8571acf7a8bd5bebf1333d2f2,7817
+- completed:
+    hackage: yesod-websockets-0.3.0.3@sha256:99f49618f7cbb944c928d2870872b6ff867602c80af5d83421a68feb2ad94186,1068
+    pantry-tree:
+      sha256: c5d20966fa615a5f11d7759ebb7b408b9ab69b3503c71e4d29dbd3e095bddff4
+      size: 320
+  original:
+    hackage: yesod-websockets-0.3.0.3@sha256:99f49618f7cbb944c928d2870872b6ff867602c80af5d83421a68feb2ad94186,1068
+- completed:
+    hackage: wai-websockets-3.0.1.2@sha256:0e713ddb8c28d47be76cefeab3a73b6876477d648ddcd873ba6b15d08691aa7f,1905
+    pantry-tree:
+      sha256: 81b4067c7fefad29f632f3e3b97096f1b16753afb3f6052beb5350dd4943e67f
+      size: 558
+  original:
+    hackage: wai-websockets-3.0.1.2@sha256:0e713ddb8c28d47be76cefeab3a73b6876477d648ddcd873ba6b15d08691aa7f,1905
 snapshots:
 - completed:
-    sha256: 3a9e2e78fabe2b407da707136d33c9a293b5d78186aea9ab13c552902807e543
-    size: 640466
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2024/5/20.yaml
-  original: nightly-2024-05-20
+    sha256: b0933eba5b921a0e96a54fa7ea43fd0ca73288edb836d44fea32420419c02a8f
+    size: 603055
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2024/12/12.yaml
+  original: nightly-2024-12-12

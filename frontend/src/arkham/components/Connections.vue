@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { onMounted, onBeforeUnmount, computed, ref } from 'vue';
+import { watch, onMounted, onBeforeUnmount, computed, ref } from 'vue';
 import { type Game } from '@/arkham/types/Game';
 
 export interface Props {
@@ -12,7 +12,7 @@ const props = defineProps<Props>()
 const locations = computed(() => Object.values(props.game.locations).
   filter((a) => a.inFrontOf === null && a.label !== "cosmos"))
 
-const toConnection = (div1: HTMLElement, div2: HTMLElement) => {
+const toConnection = (div1: HTMLElement, div2: HTMLElement): string | undefined => {
   const [leftDiv, rightDiv] = [div1, div2].sort((a, b) => {
     const { id: div1Id } = a.dataset
     const { id: div2Id } = b.dataset
@@ -69,40 +69,38 @@ const makeLine = function(div1: HTMLElement, div2: HTMLElement) {
 
   if (!leftDivId || !rightDivId) return
 
+  const thisEl = document.getElementById("svg")
+  if(!thisEl) return
   const line = document.querySelector<HTMLElement>(".line")
   const parentNode = line?.parentNode
 
   if (!line || !parentNode) return
 
   const connection = leftDivId + ":" + rightDivId
-  const {left: bodyLeft, top: bodyTop} = document.body.getBoundingClientRect()
-  const {left: leftDivLeft, top: leftDivTop, right: leftDivRight } = leftDiv.getBoundingClientRect();
-  const {left: rightDivLeft, top: rightDivTop, right: rightDivRight } = rightDiv.getBoundingClientRect();
+  const {left: bodyLeft, top: bodyTop} = thisEl.getBoundingClientRect()
+  const {left: leftDivLeft, top: leftDivTop, right: leftDivRight, bottom: leftDivBottom } = leftDiv.getBoundingClientRect();
+  const {left: rightDivLeft, top: rightDivTop, right: rightDivRight, bottom: rightDivBottom } = rightDiv.getBoundingClientRect();
   const leftDivWidth = leftDivRight - leftDivLeft;
   const rightDivWidth = rightDivRight - rightDivLeft;
+  const leftDivHeight = leftDivTop - leftDivBottom;
+  const rightDivHeight = rightDivTop - rightDivBottom;
   const x1 = (leftDivLeft - bodyLeft) + (leftDivWidth/2)
-  const y1 = (leftDivTop - bodyTop)
+  const y1 = (leftDivTop - bodyTop) - (leftDivHeight/2)
   const x2 = (rightDivLeft - bodyLeft) + (rightDivWidth/2)
-  const y2 = (rightDivTop - bodyTop)
+  const y2 = (rightDivTop - bodyTop) - (rightDivHeight/2)
   const existingNode = document.querySelector(`[data-connection="${connection}"]`)
 
-  if (existingNode) {
-    const ex1 = existingNode.getAttribute("x1") || "-1"
-    const ey1 = existingNode.getAttribute("y1") || "-1"
-    const ex2 = existingNode.getAttribute("x2") || "-1"
-    const ey2 = existingNode.getAttribute("y2") || "-1"
 
-    if (closeEnough(ex1, x1) && closeEnough(ey1, y1) && closeEnough(ex2, x2) && closeEnough(ey2, y2)) {
-      return
-    }
+  const isNodeClose = (node: Element) => {
+    const ex1 = node.getAttribute("x1") || "-1"
+    const ey1 = node.getAttribute("y1") || "-1"
+    const ex2 = node.getAttribute("x2") || "-1"
+    const ey2 = node.getAttribute("y2") || "-1"
 
-    parentNode.removeChild(existingNode);
+    return closeEnough(ex1, x1) && closeEnough(ey1, y1) && closeEnough(ex2, x2) && closeEnough(ey2, y2)
   }
 
-  const node = line.cloneNode(true) as HTMLElement
-  node.dataset.connection = connection
-  node.classList.remove("original")
-
+  const close = existingNode ? isNodeClose(existingNode) : false
   const investigator = Object.values(props.game.investigators).find(i => i.playerId == props.playerId)
   if (!investigator) return
   const { connectedLocations } = investigator
@@ -110,21 +108,42 @@ const makeLine = function(div1: HTMLElement, div2: HTMLElement) {
   const atRight = rightDivId == investigator.location && connectedLocations.includes(leftDivId)
   const activeLine = atLeft || atRight
 
-  if (activeLine) node.classList.add("active")
+  if (close) {
+    if (activeLine) {
+      existingNode?.classList.add("active")
+    }
+  } else {
+    if (existingNode && !close) {
+      const ex1 = existingNode.getAttribute("x1") || "-1"
+      const ey1 = existingNode.getAttribute("y1") || "-1"
+      const ex2 = existingNode.getAttribute("x2") || "-1"
+      const ey2 = existingNode.getAttribute("y2") || "-1"
 
-  parentNode.insertBefore(node, line.nextSibling)
+      if (closeEnough(ex1, x1) && closeEnough(ey1, y1) && closeEnough(ex2, x2) && closeEnough(ey2, y2)) {
+        return
+      }
 
-  node.setAttribute('x1',x1.toString())
-  node.setAttribute('y1',y1.toString())
-  node.setAttribute('x2',x2.toString())
-  node.setAttribute('y2',y2.toString())
+      parentNode.removeChild(existingNode);
+    }
+
+    const node = line.cloneNode(true) as HTMLElement
+    node.dataset.connection = connection
+    node.classList.remove("original")
+    node.classList.add("connection")
+
+    if (activeLine) node.classList.add("active")
+
+    parentNode.insertBefore(node, line.nextSibling)
+
+    node.setAttribute('x1',x1.toString())
+    node.setAttribute('y1',y1.toString())
+    node.setAttribute('x2',x2.toString())
+    node.setAttribute('y2',y2.toString())
+  }
 }
 
 function handleConnections() {
-  let allConnections: string[] = []
-
-  document.querySelectorAll<HTMLElement>(".line:not(.original").forEach((node) => node.parentNode?.removeChild(node))
-
+  let activeConnections = [] as string[]
   for(const location of locations.value) {
     const { id, connectedLocations } = location
     const connections = typeof connectedLocations == "object"
@@ -138,9 +157,22 @@ function handleConnections() {
 
       const conn = toConnection(start, end)
       if (!conn) return
-      allConnections.push(conn)
+      if (location.modifiers.some((m) => m.type.tag == "DoNotDrawConnection" && conn == `${m.type.contents[0]}:${m.type.contents[1]}`)) return
+
+      activeConnections.push(conn)
       makeLine(start, end)
     })
+  }
+
+  const rendered = document.querySelectorAll(".connection")
+
+  for(const node of rendered) {
+    const connection = (node as HTMLElement).dataset.connection
+    if (!connection) node.parentNode?.removeChild(node)
+
+    if (connection && !activeConnections.includes(connection)) {
+      node.parentNode?.removeChild(node)
+    }
   }
 
 }
@@ -154,6 +186,8 @@ const drawHandler = () => {
 
 onBeforeUnmount(() => { if (requestId.value) window.cancelAnimationFrame(requestId.value) })
 onMounted(() => requestId.value = window.requestAnimationFrame(drawHandler))
+
+watch(locations, () => drawHandler())
 </script>
 
 <template>

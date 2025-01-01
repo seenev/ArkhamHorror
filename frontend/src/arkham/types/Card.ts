@@ -41,7 +41,7 @@ export function cardImage(card: Card) {
   const side = cardIsFlipped(card) ? 'b' : ''
   // TODO, send art with cards next to
   const art = cardArt(card) || asCardCode(card).replace('c', '')
-  return `cards/${art}${side}.jpg`
+  return `cards/${art}${side}.avif`
 }
 
 export function toCardContents(card: Card | CardContents): CardContents {
@@ -67,6 +67,7 @@ export type CardContents = {
   tokens: Tokens
   art?: string
   customizations?: Customization[]
+  mutated?: string
 }
 
 export type VengeanceCard = {
@@ -93,6 +94,7 @@ export const cardContentsDecoder = JsonDecoder.object<CardContents>(
     tokens: JsonDecoder.constant({}),
     art: JsonDecoder.optional(JsonDecoder.string),
     customizations: JsonDecoder.optional(customizationsDecoder),
+    mutated: JsonDecoder.optional(JsonDecoder.string),
   },
   'CardContents',
 );

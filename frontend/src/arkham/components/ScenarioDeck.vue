@@ -12,13 +12,17 @@ const props = defineProps<Props>()
 const deckImage = computed(() => {
   switch(props.deck[0]) {
     case 'UnknownPlacesDeck':
-      return imgsrc("cards/05134b.jpg");
+      return imgsrc("cards/05134b.avif");
     case 'ExhibitDeck':
-      return imgsrc("cards/02132b.jpg");
+      return imgsrc("cards/02132b.avif");
     case 'CosmosDeck':
-      return imgsrc("cards/05333b.jpg");
+      return imgsrc("cards/05333b.avif");
     case 'CatacombsDeck':
-      return imgsrc("cards/03247b.jpg");
+      return imgsrc("cards/03247b.avif");
+    case 'TidalTunnelDeck':
+      return imgsrc("cards/07048b.avif");
+    case 'TekeliliDeck':
+      return imgsrc("player_back.jpg");
     default:
       return imgsrc("back.png");
   }
@@ -56,7 +60,7 @@ const deckLabel = computed(() => {
   box-shadow: 0 3px 6px rgba(0,0,0,0.23), 0 3px 6px rgba(0,0,0,0.53);
   border-radius: 6px;
   margin: 2px;
-  width: $card-width;
+  width: var(--card-width);
 }
 
 .deck {

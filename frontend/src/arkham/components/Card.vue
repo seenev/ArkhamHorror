@@ -27,13 +27,14 @@ const cardContents = computed<CardContents>(() => props.card.tag === "CardConten
 
 const image = computed(() => {
   if (props.card.tag === 'VengeanceCard') {
-    const back = props.card.contents.tag === 'PlayerCard' ? 'player_back' : 'encounter/back'
+    const back = props.card.contents.tag === 'PlayerCard' ? 'player_back' : 'encounter_back'
     return imgsrc(`${back}.jpg`);
   }
 
-  const { cardCode, isFlipped } = cardContents.value
+  const { cardCode, isFlipped, mutated } = cardContents.value
   const suffix = !props.revealed && isFlipped ? 'b' : ''
-  return imgsrc(`cards/${cardCode.replace(/^c/, '')}${suffix}.jpg`)
+  const mutatedSuffix = mutated ? `_${mutated}` : ''
+  return imgsrc(`cards/${cardCode.replace(/^c/, '')}${suffix}${mutatedSuffix}.avif`)
 })
 
 const id = computed(() => props.card.tag === 'VengeanceCard' ? props.card.contents.contents.id : cardContents.value.id)
@@ -41,6 +42,11 @@ const choices = computed(() => ArkhamGame.choices(props.game, props.playerId))
 
 function canInteract(c: Message): boolean {
   if (c.tag === MessageType.TARGET_LABEL) {
+    if (c.target.tag === 'SkillTarget') {
+      if (props.game.skills[c.target.contents].cardId == id.value) {
+        return true
+      }
+    }
     return c.target.contents === id.value
   }
 
@@ -81,14 +87,7 @@ const abilities = computed<AbilityMessage[]>(() => {
     }, []);
 })
 
-const outOfPlayEnemy = computed<Enemy | null>(() => {
-  return Object.values(props.game.outOfPlayEnemies).find(e => e.cardId === id.value) ?? null
-})
-
 const tokens = computed(() => {
-  if (outOfPlayEnemy.value) {
-    return outOfPlayEnemy.value.tokens
-  }
   return cardContents.value.tokens || {}
 })
 
@@ -115,7 +114,7 @@ const hasPool = computed(() => {
       :data-customizations="JSON.stringify(cardContents.customizations)"
       @click="emit('choose', cardAction)"
     />
-    <span class="vengeance" v-if="card.tag === 'VengeanceCard'">Vengeance 1</span>
+    <span class="vengeance" v-if="card.tag === 'VengeanceCard'">{{$t('card.vengeance', {value: 1})}}</span>
     <div class="pool" v-if="hasPool">
       <PoolItem v-if="damage" type="doom" :amount="damage" />
       <PoolItem v-if="horror" type="horror" :amount="horror" />
@@ -138,8 +137,8 @@ const hasPool = computed(() => {
 <style scoped lang="scss">
 
 .card {
-  width: $card-width;
-  min-width: $card-width;
+  width: var(--card-width);
+  min-width: var(--card-width);
   border-radius: 7px;
   box-shadow: 0 3px 6px rgba(0,0,0,0.23), 0 3px 6px rgba(0,0,0,0.53);
   border-radius: 6px;
@@ -147,7 +146,7 @@ const hasPool = computed(() => {
   display: inline-block;
 
   &--can-interact {
-    border: 2px solid $select;
+    border: 2px solid var(--select);
     cursor: pointer;
   }
 }

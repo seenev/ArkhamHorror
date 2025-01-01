@@ -46,22 +46,17 @@ watch(truncatedGameLog, async () => {
     <ul ref="messages">
       <li class="log-entry" v-for="(msg, i) in truncatedGameLog" :key="i"><GameMessage :game="game" :msg="msg" /></li>
     </ul>
-    <div>
-      <input type="text">
-      <button @click="emit('undo')">Undo</button>
-    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 .game-log {
-  background: #5e7b73;
+  background: var(--neutral-dark);
   width: calc(100% - 20px);
   border-radius: 5px;
   margin: 10px;
   height: calc(100vh - 60px);
   padding: 10px 10px;
-  box-sizing: border-box;
   flex: 1 1 50%;
   overflow-x: hidden;
   ul {
@@ -81,5 +76,6 @@ watch(truncatedGameLog, async () => {
   border-radius: 5px;
   color: white;
   font-weight: 700;
+  font-size: 0.8em;
 }
 </style>

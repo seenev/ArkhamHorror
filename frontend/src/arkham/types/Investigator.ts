@@ -1,5 +1,6 @@
 import { JsonDecoder } from 'ts.data.json';
 import { LogContents, logContentsDecoder } from '@/arkham/types/Log';
+import { ChaosToken, chaosTokenDecoder } from '@/arkham/types/ChaosToken';
 import { Name, nameDecoder } from '@/arkham/types/Name';
 import { Target, targetDecoder } from '@/arkham/types/Target';
 import { Modifier, modifierDecoder } from '@/arkham/types/Modifier';
@@ -54,13 +55,55 @@ export const additionalActionTypeDecoder = JsonDecoder.oneOf<AdditionalActionTyp
 export const additionalActionDecoder = JsonDecoder.object<AdditionalAction>(
   { kind: additionalActionTypeDecoder }, 'AdditionalAction')
 
-type InvestigatorSearch = {
-  searchingFoundCards: Record<string, Card[]>;
+type Search = {
+  searchFoundCards: Record<string, Card[]>;
 }
 
-export const investigatorSearchDecoder = JsonDecoder.object<InvestigatorSearch>({
-  searchingFoundCards: JsonDecoder.dictionary<Card[]>(JsonDecoder.array(cardDecoder, 'Card[]'), 'Dict<string, Card[]>'),
-}, 'InvestigatorSearch');
+export const searchDecoder = JsonDecoder.object<Search>({
+  searchFoundCards: JsonDecoder.dictionary<Card[]>(JsonDecoder.array(cardDecoder, 'Card[]'), 'Dict<string, Card[]>'),
+}, 'Search');
+
+export type InvestigatorDetails = {
+  id: string;
+  classSymbol: ClassSymbol;
+}
+
+// data CardSettings = CardSettings
+//   { globalSettings :: GlobalSettings
+//   , perCardSettings :: Map CardCode PerCardSettings
+//   }
+//   deriving stock (Show, Eq, Generic, Data)
+//   deriving anyclass (ToJSON, FromJSON)
+//
+// data GlobalSettings = GlobalSettings
+//   { ignoreUnrelatedSkillTestTriggers :: Bool
+//   }
+//   deriving stock (Show, Eq, Generic, Data)
+//   deriving anyclass (ToJSON, FromJSON)
+//
+// data PerCardSettings = PerCardSettings
+//   { cardIgnoreUnrelatedSkillTestTriggers :: Bool
+//   }
+//   deriving stock (Show, Eq, Generic, Data)
+//   deriving anyclass (ToJSON, FromJSON)
+
+type CardSettings = {
+  globalSettings: {
+    ignoreUnrelatedSkillTestTriggers: boolean;
+  };
+  perCardSettings: Record<string, {
+    cardIgnoreUnrelatedSkillTestTriggers: boolean;
+  }>;
+}
+
+export const cardSettingsDecoder = JsonDecoder.object<CardSettings>({
+  globalSettings: JsonDecoder.object({
+    ignoreUnrelatedSkillTestTriggers: JsonDecoder.boolean,
+  }, 'GlobalSettings'),
+  perCardSettings: JsonDecoder.dictionary(JsonDecoder.object({
+    cardIgnoreUnrelatedSkillTestTriggers: JsonDecoder.boolean,
+  }, 'PerCardSettings'), 'Dict<string, PerCardSettings>'),
+}, 'CardSettings');
 
 export type Investigator = {
   deckSize?: number;
@@ -82,6 +125,7 @@ export type Investigator = {
   assignedHealthDamage: number;
   assignedSanityDamage: number;
   location: string;
+  placement: Placement;
   remainingActions: number;
   endedTurn: boolean;
   engagedEnemies: string[];
@@ -90,6 +134,7 @@ export type Investigator = {
   skills: string[];
   discard: CardContents[];
   hand: Card[];
+  bondedCards: Card[];
   deck: CardContents[];
   decks: [string, Card[]][];
   treacheries: string[];
@@ -97,16 +142,22 @@ export type Investigator = {
   resigned: boolean;
   additionalActions: AdditionalActionType[];
   cardsUnderneath: Card[];
+  sealedChaosTokens: ChaosToken[];
   foundCards: Record<string, Card[]>;
   xp: number;
   supplies: string[];
   keys: ArkhamKey[];
   hunchDeck?: CardContents[];
   revealedHunchCard?: string | null;
+  devoured?: Card[]
   isYithian: boolean;
+  mutated?: string;
+  taboo?: string;
+  deckUrl?: string;
   slots: Slot[];
   log: LogContents;
   meta: any;
+  settings: CardSettings;
 }
 
 type SlotType = 'HandSlot' | 'BodySlot' | 'AccessorySlot' | 'ArcaneSlot' | 'TarotSlot' | 'AllySlot'
@@ -150,6 +201,11 @@ export const slotsDecoder = JsonDecoder.
         value.map((contents) => ({ tag: key , empty: contents.assets.length === 0})
   )))
 
+export const investigatorDetailsDecoder = JsonDecoder.object<InvestigatorDetails>({
+  id: JsonDecoder.string,
+  classSymbol: classSymbolDecoder,
+}, 'InvestigatorDetails');
+
 export const investigatorDecoder = JsonDecoder.object<Investigator>({
   name: nameDecoder,
   id: JsonDecoder.string,
@@ -167,6 +223,7 @@ export const investigatorDecoder = JsonDecoder.object<Investigator>({
   assignedHealthDamage: JsonDecoder.number,
   assignedSanityDamage: JsonDecoder.number,
   location: placementDecoder.map((placement) => placement.tag === "AtLocation" ? placement.contents : "00000000-0000-0000-0000-000000000000"),
+  placement: placementDecoder,
   remainingActions: JsonDecoder.number,
   endedTurn: JsonDecoder.boolean,
   engagedEnemies: JsonDecoder.array<string>(JsonDecoder.string, 'EnemyId[]'),
@@ -176,17 +233,20 @@ export const investigatorDecoder = JsonDecoder.object<Investigator>({
   // deck: Deck PlayerCard,
   discard: JsonDecoder.array<CardContents>(cardContentsDecoder, 'PlayerCardContents[]'),
   hand: JsonDecoder.array<Card>(cardDecoder, 'Card[]'),
+  bondedCards: JsonDecoder.array<Card>(cardDecoder, 'Card[]'),
   deck: JsonDecoder.array<CardContents>(cardContentsDecoder, 'PlayerCardContents[]'),
   decks: JsonDecoder.array<[string, Card[]]>(JsonDecoder.tuple([JsonDecoder.string, JsonDecoder.array<Card>(cardDecoder, 'Card[]')], '[string, Card[]]'), '[string, Card[]][]'),
   hunchDeck: JsonDecoder.optional(JsonDecoder.array<CardContents>(cardContentsDecoder, 'PlayerCardContents[]')),
   revealedHunchCard: JsonDecoder.optional(JsonDecoder.nullable(JsonDecoder.string)),
+  devoured: JsonDecoder.optional(JsonDecoder.array<Card>(cardDecoder, 'Card[]')),
   // traits: HashSet Trait,
   treacheries: JsonDecoder.array<string>(JsonDecoder.string, 'TreacheryId[]'),
   defeated: JsonDecoder.boolean,
   resigned: JsonDecoder.boolean,
   additionalActions: JsonDecoder.array<AdditionalAction>(additionalActionDecoder, 'AdditionalAction').map((arr) => arr.map((action) => action.kind)),
   cardsUnderneath: JsonDecoder.array<Card>(cardDecoder, 'CardUnderneath'),
-  foundCards: JsonDecoder.nullable(investigatorSearchDecoder).map((search) => search?.searchingFoundCards || {}),
+  sealedChaosTokens: JsonDecoder.array<ChaosToken>(chaosTokenDecoder, 'ChaosToken[]'),
+  foundCards: JsonDecoder.nullable(searchDecoder).map((search) => search?.searchFoundCards || {}),
   xp: JsonDecoder.number,
   supplies: JsonDecoder.array<string>(JsonDecoder.string, 'supplies'),
   keys: JsonDecoder.array<ArkhamKey>(arkhamKeyDecoder, 'Key[]'),
@@ -194,7 +254,11 @@ export const investigatorDecoder = JsonDecoder.object<Investigator>({
   connectedLocations: JsonDecoder.array<string>(JsonDecoder.string, 'LocationId[]'),
   modifiers: JsonDecoder.optional(JsonDecoder.array<Modifier>(modifierDecoder, 'Modifier[]')),
   isYithian: JsonDecoder.boolean,
+  mutated: JsonDecoder.optional(JsonDecoder.string),
+  taboo: JsonDecoder.optional(JsonDecoder.string),
+  deckUrl: JsonDecoder.optional(JsonDecoder.string),
   slots: slotsDecoder,
   log: logContentsDecoder,
   meta: JsonDecoder.succeed,
+  settings: cardSettingsDecoder,
 }, 'Investigator', { foundCards: 'search', location: 'placement' });

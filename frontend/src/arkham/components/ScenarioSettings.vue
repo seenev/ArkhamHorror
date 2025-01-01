@@ -95,7 +95,10 @@ const activeSettings = computed(() => {
 
 <template>
   <div class="container">
-    <p>Standalone Settings</p>
+    <h2>Standalone Settings</h2>
+    <div v-if="activeSettings.length == 0">
+      <p>There are currently no standalone settings available for this scenario.</p>
+    </div>
     <div v-for="setting in activeSettings" :key="setting.key">
       <div v-if="setting.type === 'ChooseRecord'" class="options">
         <fieldset>
@@ -174,13 +177,37 @@ const activeSettings = computed(() => {
   </div>
 </template>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .container {
   width: 100%;
+  height: fit-content;
   max-width: 800px;
   margin: 0 auto;
   margin-top: 10px;
+  padding: 10px;
+  background-color: #3E485C;
+  border-radius: 5px;
+  font-size: 1.5em;
+  color: #B6B6B6;
+  box-shadow: 1px 1px 6px rgba(15,17,23,0.45)
 }
+
+h2 {
+  padding: 0;
+  margin: 0;
+  text-transform: uppercase;
+  font-family: Teutonic;
+}
+
+button {
+  width: 100%;
+  background-color: var(--button-1);
+  border: 0;
+  text-transform: uppercase;
+  color: white;
+  padding: 10px;
+}
+
 .options {
   display: flex;
   margin-bottom: 10px;
@@ -202,11 +229,11 @@ input[type=radio] {
 input[type=radio] + label {
   display:inline-block;
   padding: 4px 12px;
-  background-color: desaturate(#6E8640, 30%);
-  &:hover {
-    background-color: desaturate(#6E8640, 20%);
-  }
+  background-color: hsl(80, 5%, 39%);
   border-color: #ddd;
+  &:hover {
+    background-color: hsl(80, 15%, 39%);
+  }
 }
 
 input[type=radio]:checked + label {
@@ -221,9 +248,9 @@ input[type=checkbox] {
 input[type=checkbox] + label {
   display:inline-block;
   padding: 4px 12px;
-  background-color: desaturate(#6E8640, 30%);
+  background-color: hsl(80, 5%, 39%);
   &:hover {
-    background-color: desaturate(#6E8640, 20%);
+    background-color: hsl(80, 15%, 39%);
   }
 
   &.invert {
@@ -238,7 +265,7 @@ input[type=checkbox] + label {
 input[type=checkbox]:checked + label {
   background: #6E8640;
   &.invert {
-    background-color: desaturate(#6E8640, 30%);
+    background-color: hsl(80, 5%, 39%);
   }
 }
 
@@ -250,6 +277,6 @@ input[type=checkbox]:checked + label {
 }
 
 .invert[type=checkbox]:checked + label {
-  background-color: desaturate(#6E8640, 30%);
+  background-color: hsl(80, 15%, 39%);
 }
 </style>

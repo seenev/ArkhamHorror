@@ -7,8 +7,7 @@ import * as Arkham from '@/arkham/types/CardDef';
 import sets from '@/arkham/data/sets.json'
 import cycles from '@/arkham/data/cycles.json'
 
-const allCards = ref<Arkham.CardDef[]>([])
-const ready = ref(false)
+const allCards = ref<Arkham.CardDef[] | null>(null)
 const includeEncounter = ref(false)
 
 interface Filter {
@@ -18,6 +17,7 @@ interface Filter {
   cycle: number | null
   set: string | null
   classes: string[]
+  traits: string[]
 }
 
 interface CardSet {
@@ -41,24 +41,18 @@ enum View {
   List = "LIST",
 }
 
-watchEffect(() => {
-  fetchCards(includeEncounter.value).then((response) => {
+watchEffect(async () => {
+  await fetchCards(includeEncounter.value).then(async (response) => {
     allCards.value = response.sort((a, b) => {
-      if (a.art < b.art) {
-        return -1
-      }
-
-      if (a.art > b.art) {
-        return 1
-      }
-
+      if (a.art < b.art) return -1
+      if (a.art > b.art) return 1
       return 0
     })
-    ready.value = true
   })
 })
 
 const cycleCount = (cycle: CardCycle) => {
+  if (!allCards.value) return 0
   const cycleSets = sets.filter((s) => s.cycle == cycle.cycle)
   return allCards.value.filter((c) => {
     const cSet = cardSet(c)
@@ -67,6 +61,7 @@ const cycleCount = (cycle: CardCycle) => {
 }
 
 const cycleCountText = (cycle: CardCycle) => {
+  if (!allCards.value) return 0
   const implementedCount = cycleCount(cycle)
   const cycleSets = sets.filter((s) => s.cycle == cycle.cycle)
   const total = cycleSets.reduce((acc, set) => acc + (includeEncounter.value ? set.max - set.min + 1 + (set.encounterDuplicates ? set.encounterDuplicates : 0) : set.playerCards), 0)
@@ -79,6 +74,7 @@ const cycleCountText = (cycle: CardCycle) => {
 }
 
 const setCount = (set: CardSet) => {
+  if (!allCards.value) return 0
   return allCards.value.filter((c) => cardSet(c) == set).length
 }
 
@@ -93,16 +89,17 @@ const setCountText = (set: CardSet) => {
   return ` (${implementedCount}/${total})`
 }
 
-const image = (card: Arkham.CardDef) => imgsrc(`cards/${card.art}.jpg`)
+const image = (card: Arkham.CardDef) => imgsrc(`cards/${card.art}.avif`)
 const view = ref(View.List)
 
-const query = ref("")
-const filter = ref<Filter>({ cardType: null, text: [], level: null, cycle: null, set: null, classes: [] })
+const query = ref("e:core")
+const filter = ref<Filter>({ cardType: null, text: [], level: null, cycle: null, set: "core", classes: [], traits: [] })
 
 const cards = computed(() => {
+  if (!allCards.value) return []
   let all = allCards.value
 
-  const { classes, cycle, set, text, level, cardType: cardTypeText } = filter.value
+  const { classes, traits, cycle, set, text, level, cardType: cardTypeText } = filter.value
 
   if (cycle) {
     const cycleSets = sets.filter((s) => s.cycle == cycle)
@@ -118,6 +115,10 @@ const cards = computed(() => {
 
   if (classes.length > 0) {
     all = all.filter((c) => c.classSymbols.some((cs) => classes.includes(cs.toLowerCase())))
+  }
+
+  if (traits.length > 0) {
+    all = all.filter((c) => c.cardTraits.some((cs) => traits.includes(cs.toLowerCase())))
   }
 
   if (text.length > 0) {
@@ -147,6 +148,7 @@ const setFilter = () => {
   let cycle = null
   let set = null
   let classes : string[] = []
+  let traits : string[] = []
 
   // const matchCardType = queryString.match(/t:("(?:[^"\\]|\\.)*"|[^ ]*)/)
   const matchCardType = queryString.match(/t:([^ ]*)/)
@@ -184,7 +186,15 @@ const setFilter = () => {
     set = matchSet[1]
   }
 
-  filter.value = { classes, cycle, set, cardType, level, text: queryString.trim() !== "" ? queryString.trim().split('|') : []}
+
+  const matchTraits = queryString.match(/k:([^ ]*)/)
+
+  if (matchTraits) {
+    queryString = queryString.replace(/k:([^ ]*)/, '')
+    traits = matchTraits[1].split('|')
+  }
+
+  filter.value = { classes, cycle, set, cardType, level, traits, text: queryString.trim() !== "" ? queryString.trim().split('|') : []}
 }
 
 const cardName = (card: Arkham.CardDef) => {
@@ -274,12 +284,12 @@ const cycleSets = (cycle: CardCycle) => {
 
 const setCycle = (cycle: CardCycle) => {
   query.value = `y:${cycle.cycle}`
-  filter.value = { cardType: null, text: [], level: null, cycle: cycle.cycle, set: null, classes: [] }
+  filter.value = { cardType: null, text: [], level: null, cycle: cycle.cycle, set: null, classes: [], traits: [] }
 }
 
 const setSet = (set: CardSet) => {
   query.value = `e:${set.code}`
-  filter.value = { cardType: null, text: [], level: null, cycle: null, set: set.code, classes: [] }
+  filter.value = { cardType: null, text: [], level: null, cycle: null, set: set.code, classes: [], traits: [] }
 }
 </script>
 
@@ -317,7 +327,7 @@ const setSet = (set: CardSet) => {
           <img class="card" :src="image(card)" />
         </a>
       </div>
-      <table class="list" v-if="view == View.List">
+      <table class="box" v-if="view == View.List">
         <thead>
           <tr><th>Name</th><th>Class</th><th>Cost</th><th>Type</th><th>Icons</th><th>Traits</th><th>Set</th></tr>
         </thead>
@@ -344,6 +354,7 @@ const setSet = (set: CardSet) => {
   display: flex;
   height: calc(100% - 40px);
   max-width: unset;
+  margin: 0;
 }
 
 .results {
@@ -361,80 +372,54 @@ const setSet = (set: CardSet) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   padding: 10px;
-  box-sizing: border-box;
-}
-
-table {
-  width: calc(100% - 40px);
-  box-sizing: border-box;
-  padding: 20px 0;
-  margin: 20px;
-  border-radius: 10px;
-  background-color: rgba(255,255,255,0.9);
-  border-collapse: collapse;
-}
-
-th {
-  text-align: left;
-}
-
-tr td:nth-child(1){
-  padding-left: 20px;
-}
-
-tr th:nth-child(1){
-  padding-left: 20px;
-}
-
-tbody td {
-  border-top: 1px solid #111;
-  padding: 2px 0;
-}
-
-tr {
-  color: #ccc;
-}
-
-tr:nth-child(odd) {
-  background-color: #333;
-}
-
-tr:nth-child(even) {
-  background-color: #222;
 }
 
 .willpower {
-  color: $guardian;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--willpower);
 }
 
 .intellect {
-  color: $mystic;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--intellect);
 }
 
 .combat {
-  color: $survivor;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--combat);
 }
 
 .agility {
-  color: $rogue;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--agility);
 }
 
 .wild {
-  color: $seeker;
+  font-size: 1.5em;
+  margin: 0 2px;
+  color: var(--wild);
 }
 
 a {
   font-weight: bold;
-  color: $spooky-green;
+  color: var(--spooky-green);
   text-decoration: none;
   &:hover {
-    color: $spooky-green-light;
+    color: var(--spooky-green)-light;
   }
 }
 
 .cycles {
-  color: #999;
+  color: #CECECE;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-block: 10px;
 }
 
 button {
@@ -450,23 +435,12 @@ i {
   color: white;
 }
 
-thead tr th {
-  background-color: #111;
-  color: #aaa;
-
-  &:nth-child(1) {
-    border-top-left-radius: 10px;
-  }
-
-  &:last-child {
-    border-top-right-radius: 10px;
-  }
-}
-
 header {
-  margin-left: 20px;
-  margin-right: 20px;
-  background: rgba(0,0,0,0.3);
+  position: sticky;
+  position: -webkit-sticky;
+  width: 100%;
+  top: -1px;
+  background: color-mix(in srgb, var(--background) 90%, transparent);
   display: flex;
   align-items: center;
   color: white;
@@ -493,7 +467,6 @@ header {
   form button {
     border: 0;
     height: 100%;
-    box-sizing: content-box;
     padding: 5px;
   }
 
@@ -503,11 +476,67 @@ header {
     border: 0;
     height: 100%;
     margin: 0;
-    box-sizing: content-box;
   }
 }
 
 #include-encounter {
   display: inline;
+}
+
+table.box {
+  width: calc(100% - 40px);
+  padding: 0;
+  margin: 20px;
+  margin-top: 0;
+  border-radius: 10px;
+  border-spacing: 0;
+  background-color: rgba(255,255,255,0.05);
+  box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+th {
+  text-align: left;
+}
+
+tr td:nth-child(1){
+  padding-left: 20px;
+}
+
+tr th:nth-child(1){
+  padding-left: 20px;
+}
+
+tbody td {
+  padding: 5px;
+}
+
+thead tr th {
+  color: #aaa;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 5px 5px;
+
+  &:nth-child(1) {
+    border-top-left-radius: 10px;
+  }
+
+  &:last-child {
+    border-top-right-radius: 10px;
+  }
+}
+
+tr {
+  color: #cecece;
+}
+
+tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+ol {
+  list-style-position: inside;
+  margin-left: 10px;
+  > li ol {
+    margin-left: 40px;
+  }
 }
 </style>

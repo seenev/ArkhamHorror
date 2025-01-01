@@ -7,6 +7,9 @@ servers:
       - 159.89.182.110
 
 builder:
+  arch:
+    - arm64
+    - amd64
   cache:
     type: registry
 
@@ -16,12 +19,17 @@ registry:
     - KAMAL_REGISTRY_PASSWORD
 
 env:
+  clear:
+    NODE_ENV: production 
+    PORT: 3000
+    ASSET_HOST: https://assets.arkhamhorror.app
   secret:
-    - NODE_ENV
     - DATABASE_URL
-    - ASSET_HOST
-    - PORT
+    - MAILTRAP_API_TOKEN
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
 
-# Configure a custom healthcheck (default is /up on port 3000)
-healthcheck:
-  path: /health
+proxy:
+  app_port: 3000
+  healthcheck:
+    path: /health
